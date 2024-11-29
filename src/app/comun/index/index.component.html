@@ -1,0 +1,65 @@
+
+<div class="contenedorIndex">
+
+  <img class="vodafone-icono" src="./assets/general/Icono.png"  alt="Icono Vodafone">
+
+  <button class="version" mat-stroked-button (click)="appService.buscarActualizacion()">v{{appService.version}}</button>
+
+  <div  class="titulo">Proyectos</div>
+  <div  class="subtitulo">Seleccione un proyecto</div>
+
+  <mat-drawer-container class="example-container" autosize>
+
+    <mat-drawer #drawer class="example-sidenav" mode="side" opened="false">
+      <p> <b>{{appService.nombreProyectoActivo}}</b></p>
+      @if (showFiller) {
+        <p>No hay detalles disponibles</p>
+      }
+    </mat-drawer>
+
+    <mat-drawer-content>
+
+      <button mat-icon-button class="botonNav" color="warn" (click)="drawer.toggle()">
+        <mat-icon>notes</mat-icon>
+      </button>
+
+      <div  class="contenedorCargarProyecto">
+
+        <div class="row">
+
+          @for (proyecto of listaProyectos; track proyecto; let i = $index) {
+            <mat-card appearance="outlined" class="proyecto">
+              <mat-card-header>
+                <mat-card-title>{{listaProyectos[i].nombre}}</mat-card-title>
+                <mat-card-subtitle>{{listaProyectos[i].autor}} [ID: {{listaProyectos[i].idSincronizacion}}]</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <p>
+                  {{listaProyectos[i].descripcion}}
+                </p>
+              </mat-card-content>
+              <mat-card-actions>
+                <button mat-raised-button color="primary" (click)="cargarProyecto(listaProyectos[i].nombre)">CARGAR</button>
+                <button mat-button color="warn" (click)="eliminarProyecto(listaProyectos[i].nombre)">ELIMINAR</button>
+              </mat-card-actions>
+            </mat-card>
+          }
+
+        </div>
+        <button mat-fab color="warn" class="botonAddProyecto" (click)="crearProyecto()">
+          <mat-icon>add</mat-icon>
+        </button>
+
+      </div>
+
+
+
+    </mat-drawer-content>
+  </mat-drawer-container>
+
+</div>
+
+
+
+
+

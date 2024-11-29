@@ -1,0 +1,160 @@
+
+<!-- Crear Plantilla -->
+
+@if (data.opciones.herramienta=='crearPlantilla') {
+  <div>
+    <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+    <h1 mat-dialog-title>Importar Plantilla</h1>
+    <div mat-dialog-content>
+      <mat-button-toggle-group #tipoImportacion="matButtonToggleGroup" aria-label="Tipo importación">
+        <mat-button-toggle value="docx" checked>Docx</mat-button-toggle>
+        <mat-button-toggle value="excel">Excel</mat-button-toggle>
+      </mat-button-toggle-group>
+      <!--Importacion Libre -->
+      @if (tipoImportacion.value=='docx') {
+        <div class="contenedorImportacionLibre">
+          <mat-horizontal-stepper [linear]="true" #rawLibreStepper>
+            <mat-step [stepControl]="rutaArchivoGroup" completed="false">
+              <form [formGroup]="rutaArchivoGroup">
+                <ng-template matStepLabel>Cargar</ng-template>
+                <div class="tituloFormulario"> Seleccione un archivo:</div>
+                <label mat-button class="labelUrl" for="ruta">
+                  Seleccione un archivo
+                </label>
+                <input class="inputUrl"  type="file" name="file" id="ruta"  (change)="incluirRuta($event,'rutaArchivoControl')" multiple="false" accept=".docx">
+                <mat-form-field class="campoFormulario campoArchivo">
+                  <mat-label>Ruta archivo... </mat-label>
+                  <input matInput formControlName="rutaArchivoControl">
+                </mat-form-field>
+                <div>
+                  <button mat-button (click)="avanzarStepper()">Siguiente</button>
+                </div>
+              </form>
+            </mat-step>
+            <mat-step [stepControl]="hojasArchivoGroup">
+              <ng-template matStepLabel>Hojas</ng-template>
+              <div class="tituloFormulario">Seleccione los campos para importar:</div>
+              <mat-selection-list #hojasArchivo>
+                @for (campo of camposPlantilla; track campo) {
+                  <mat-list-option  checked value="campo">
+                    {{campo.code}}
+                  </mat-list-option>
+                }
+                <mat-form-field>
+                  <mat-label>Añadir Parametro: </mat-label>
+                  <input matInput type="text" (keydown)="pulsarTecla($event)" [(ngModel)]="addParametro">
+                </mat-form-field>
+              </mat-selection-list>
+              <div>
+                <button mat-button matStepperPrevious>Atras</button>
+                <button mat-button (click)="seleccionCampos(hojasArchivo);">Siguiente</button>
+              </div>
+            </mat-step>
+            <mat-step [stepControl]="opcionesArchivoGroup">
+              <ng-template matStepLabel>Opciones</ng-template>
+              <mat-accordion class="example-headers-align">
+                @for (opcionesHoja of hojasSeleccionadasTemporal; track opcionesHoja) {
+                  <mat-expansion-panel>
+                    <mat-expansion-panel-header>
+                      <mat-panel-title>
+                        {{opcionesHoja.campo}}
+                      </mat-panel-title>
+                      <mat-panel-description>
+                        Click para abrir opciones
+                      </mat-panel-description>
+                    </mat-expansion-panel-header>
+                    <mat-form-field>
+                      <mat-label>Tipo Parametro: </mat-label>
+                      <input matInput type="text" placeholder="texto" [(ngModel)]="opcionesHoja.opciones.tipo">
+                    </mat-form-field>
+                    <mat-form-field>
+                      <mat-label>Descripción: </mat-label>
+                      <input matInput type="text" [(ngModel)]="opcionesHoja.opciones.descripcion">
+                    </mat-form-field>
+                  </mat-expansion-panel>
+                }
+              </mat-accordion>
+              <div>
+                <button mat-button matStepperPrevious>Atras</button>
+                <button mat-button (click)="seleccionOpciones();">Siguiente</button>
+              </div>
+            </mat-step>
+            <mat-step [stepControl]="guardadoArchivoGroup">
+              <form [formGroup]="guardadoArchivoGroup">
+                <ng-template matStepLabel>Guardar</ng-template>
+                <div class="tituloFormulario">Nombre guardado:  </div>
+                <mat-form-field class="campoFormulario campoArchivo">
+                  <mat-label>Nombre Guardado </mat-label>
+                  <input matInput formControlName="nombreGuardadoArchivoControl">
+                </mat-form-field>
+                <div>
+                  <button mat-button (click)="guardarArchivoRaw()">Siguiente</button>
+                </div>
+              </form>
+            </mat-step>
+          </mat-horizontal-stepper>
+        </div>
+        } <!-- Fin creación Plantilla Docx  -->
+        <!--Creación plantilla Excel -->
+        @if (tipoImportacion.value=='Excel') {
+          <div class="contenedorImportacionDefinida">
+            Opción no disponible.
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ADD SPOOL -->
+
+  @if (data.opciones.herramienta=='spool') {
+    <div>
+      <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+      <h1 mat-dialog-title>Importación de SPOOL</h1>
+      <div mat-dialog-content>
+        <div  class="contenedorImportacionLibre">
+          <mat-horizontal-stepper [linear]="true" #spoolStepper>
+            <mat-step [stepControl]="rutaArchivoGroup" completed="false">
+              <form [formGroup]="rutaArchivoGroup">
+                <ng-template matStepLabel>Cargar</ng-template>
+                <div class="tituloFormulario"> Seleccione un archivo:</div>
+                <label mat-button class="labelUrl" for="ruta">
+                  Seleccione un archivo
+                </label>
+                <input class="inputUrl"  type="file" name="file" id="ruta"  (change)="incluirRuta($event,'rutaArchivoControl')" multiple="false" accept=".txt, .TXT">
+                <mat-form-field class="campoFormulario campoArchivo">
+                  <mat-label>Ruta archivo... </mat-label>
+                  <input matInput formControlName="rutaArchivoControl">
+                </mat-form-field>
+                <div>
+                  <button mat-button matStepperNext>Siguiente</button>
+                </div>
+              </form>
+            </mat-step>
+            <mat-step [stepControl]="guardadoArchivoGroup">
+              <form [formGroup]="guardadoArchivoGroup">
+                <ng-template matStepLabel>Guardar</ng-template>
+                <div class="tituloFormulario">Nombre guardado:  </div>
+                <mat-form-field class="campoFormulario campoArchivo">
+                  <mat-label>Nombre Guardado </mat-label>
+                  <input matInput formControlName="nombreGuardadoArchivoControl">
+                </mat-form-field>
+                <div>
+                  <button mat-button matStepperPrevious>Atras</button>
+                  <button mat-button (click)="importarSpool()">Importa</button>
+                </div>
+              </form>
+            </mat-step>
+          </mat-horizontal-stepper>
+        </div> <!-- Fin importacion libre -->
+      </div>
+    </div>
+  }
+
+
+
+
+
+
+
+

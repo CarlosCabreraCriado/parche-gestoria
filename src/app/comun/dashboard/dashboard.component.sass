@@ -1,0 +1,200 @@
+.negrita
+     font-weight: bold
+
+.elementoArbolArchivos:hover
+    background-color: darkgrey
+
+.tituloArbolProyecto
+    display: flex
+    align-items: center
+
+.visible
+  opacity: 1
+  pointer-events: all
+
+.oculto
+  opacity: 0
+  pointer-events: none
+
+.contenedorDashboard
+  position: absolute
+  display: flex
+  flex-direction: column
+  width: 100%
+  height:100%
+  z-index: 1
+
+  #barraSuperior
+
+    .contenedorLogo
+      position: relative
+      display: inline-flex
+      justify-content: center
+      align-items: center
+      height: 100% 
+      width: 15vw
+      left: 0
+      top: 0
+      transition: 0.5s
+      .icono
+        position: absolute
+        max-height: 5vh
+        max-width: 90%
+
+    .version
+      position: relative
+      height: 3%
+      z-index: 100
+
+    .containerBotonesProyecto
+      position: absolute
+      display: flex 
+      align-items: center
+      right: 0%
+      top: 0%
+
+    .containerBotonesProyecto
+      position: absolute
+      right: 0%
+      top: 0%
+
+    .botonNav
+      position: absolute
+      width: 2%
+      z-index: 10
+         
+    //Panel de herramientas
+    .panelHerramientas
+        position: relative
+        display: inline-block
+        vertical-align: top
+        width: 70%
+
+        .mat-mdc-tab-group
+          position: relative
+          overflow: hidden
+          height: 100%
+          
+          .mat-mdc-tab-header
+            height: 5vh 
+            .mat-mdc-tab-labels
+              height: 5vh
+              .mat-mdc-tab
+                height: auto
+
+          .contenedorHerramientas
+            display: flex
+            position: relative
+            justify-content: center
+            overflow: hidden
+            .herramienta
+              display: flex
+              flex-direction: column
+              justify-content: center
+              align-items: center
+              height: 10vh
+              width: 10vh
+              border-radius: 0px
+              .mat-icon
+                  color: dimgrey
+                  height: 5vh
+                  width: 5vh
+                  font-size: 5vh 
+              .etiquetaHerramienta
+                  font-size: 2vh
+                  line-height: 1em
+                  
+            & .disabled      
+                background-color: darkgrey
+
+  #espacioTrabajo
+    width: 100%
+    height: -webkit-fill-available
+    border: 1px solid rgba(0, 0, 0, 0.5)
+    .mat-drawer-content
+      overflow: hidden
+
+.example-sidenav-content 
+  display: flex
+  height: 100%
+  align-items: center
+  justify-content: center
+
+.example-sidenav 
+  padding: 20px
+
+// ELEMENTOS DEL DASHBOARS:
+.contenedorElementos
+  position: absolute
+  top: 0
+  left: 0
+  width: 100%
+  height: 100%
+
+  #iframe-powerbi
+    position: absolute
+    width: 100%
+    height: 100%
+
+  .elemento 
+    display: flex 
+    justify-content: center 
+    align-items: center 
+    text-align: center 
+    position: absolute 
+    z-index: 10 
+
+    &.borradoActivado
+      border: 1px solid red
+      &:hover
+        background-color: red
+
+  .example-handle
+    position: absolute
+    top: 10px 
+    right: 10px 
+    color: #ccc 
+    cursor: move 
+    width: 24px 
+    height: 24px 
+
+
+//Estilos de tabla
+.contenedorTabla 
+  height: 400px
+  width: 100%
+  max-width: 100%
+  overflow: auto
+  margin-top: 10px
+  margin-bottom: 10px
+
+table 
+  width: 800px
+
+td.mat-mdc-column-star 
+  width: 20px
+  padding-right: 8px
+
+th.mat-mdc-column-position, td.mat-mdc-column-position 
+  padding-left: 8px
+
+.mat-mdc-table-sticky:first-child 
+  border-right: 1px solid #e0e0e0
+
+.mat-mdc-table-sticky:last-child 
+  border-left: 1px solid #e0e0e0
+
+.contenedorEditorDocumentos
+  position: absolute
+  top: 0
+  left: 0
+  width: 100%
+  height: 100%
+  
+
+
+
+
+
+
+  

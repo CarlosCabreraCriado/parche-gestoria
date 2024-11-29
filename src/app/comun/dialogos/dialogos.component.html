@@ -1,0 +1,560 @@
+<!--
+r*************************************
+Dialogo no disponible
+***************************************
+-->
+
+@if (data.tipoDialogo=='no disponible') {
+  <div>
+    <h1 mat-dialog-title>Función no disponible</h1>
+    <div mat-dialog-content>Estamos solucionando algunos problemas relacionados con esta funcionalidad.</div>
+    <div mat-dialog-actions>
+      <button mat-button mat-dialog-close>Cerrar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo Input File
+***************************************
+-->
+
+@if (data.tipoDialogo=='inputFile') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>
+      <p style="font-weight: bold;">{{data.contenido}}</p>
+      <input class="inputUrl"  type="file" name="file" (change)="incluirRuta($event)" multiple="false" accept=".xlsx">
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data.valorInput">Aceptar</button>
+    </div>
+  </div>
+}
+<!--
+**************************************
+Dialogo Input Text
+***************************************
+-->
+
+@if (data.tipoDialogo=='inputText') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>
+      <p style="font-weight: bold;">{{data.contenido}}</p>
+      <mat-form-field>
+        <mat-label>{{data.inputLabel}}</mat-label>
+        <input matInput [(ngModel)]="data.valorInput">
+      </mat-form-field>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data.valorInput">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo GoogleAuth
+***************************************
+-->
+
+@if (data.tipoDialogo=='googleAuth') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>
+      {{data.contenido}}
+      <p style="font-weight: bold;">Código de seguridad:</p>
+      <mat-form-field>
+        <mat-label>Código de seguridad</mat-label>
+        <input matInput [(ngModel)]="data.codigo">
+      </mat-form-field>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data.codigo">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo Bloqueo ventana abierta
+***************************************
+-->
+@if (data.tipoDialogo=='bloqueoVentana') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>{{data.contenido}}</div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo informativo
+***************************************
+-->
+
+@if (data.tipoDialogo=='informativo') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>{{data.contenido}}</div>
+    <div mat-dialog-actions>
+      <button mat-button mat-dialog-close>Cerrar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo exito
+***************************************
+-->
+
+@if (data.tipoDialogo=='exito') {
+  <div>
+    <h1 mat-dialog-title class="tituloDialogo">
+      <mat-icon class="iconoDialogo iconoExito">offline_pin</mat-icon>
+      {{data.titulo}}
+    </h1>
+    <div mat-dialog-content class="contenidoDialogo">{{data.contenido}}</div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="true">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo error
+***************************************
+-->
+
+@if (data.tipoDialogo=='error') {
+  <div>
+    <h1 mat-dialog-title class="tituloDialogo">
+      <mat-icon class="iconoDialogo iconoError">error</mat-icon>
+      {{data.titulo}}
+    </h1>
+    <div mat-dialog-content class="contenidoDialogo">{{data.contenido}}</div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="true">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo Warning
+***************************************
+-->
+
+@if (data.tipoDialogo=='warning') {
+  <div>
+    <h1 mat-dialog-title class="tituloDialogo">
+      <mat-icon class="iconoDialogo iconoWarning">warning</mat-icon>
+      {{data.titulo}}
+    </h1>
+    <div mat-dialog-content class="contenidoDialogo">{{data.contenido}}</div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="true">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo confirmación
+***************************************
+-->
+
+@if (data.tipoDialogo=='confirmacion') {
+  <div>
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>{{data.contenido}}</div>
+    <div mat-dialog-actions>
+      <button mat-button  [mat-dialog-close]="false">Cancelar</button>
+      <button mat-button [mat-dialog-close]="true">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo crear proyecto
+***************************************
+-->
+
+@if (data.tipoDialogo=='crearProyecto') {
+  <div>
+    <h1 mat-dialog-title>Nuevo proyecto</h1>
+    <div mat-dialog-content>
+      <p>Introduzca los datos del proyecto:</p>
+      <mat-form-field>
+        <mat-label>Nombre Proyecto</mat-label>
+        <input matInput [(ngModel)]="data.data.nombre">
+      </mat-form-field>
+      <p>Autor: </p>
+      <mat-form-field>
+        <mat-label>Autor</mat-label>
+        <input matInput [(ngModel)]="data.data.autor">
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Id. Sincronización</mat-label>
+        <input type="number" min="0" max="99" matInput [(ngModel)]="data.data.idSincronizacion">
+      </mat-form-field>
+      <p>Descripción: </p>
+      <mat-form-field>
+        <mat-label>Descripción del proyecto</mat-label>
+        <input matInput [(ngModel)]="data.data.descripcion">
+      </mat-form-field>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button (click)="onNoClick()">Cancelar</button>
+      <button mat-button [mat-dialog-close]="data.data" cdkFocusInitial>Crear Proyecto</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo formulario dato
+***************************************
+-->
+
+@if (data.tipoDialogo=='formularioDocumento') {
+  <div>
+    <h1 mat-dialog-title>Opciones de documento:</h1>
+    <div mat-dialog-content>
+      @for (campo of data.data.camposId; track campo; let i = $index) {
+        <div>
+          <!-- Titulo del campo -->
+          <p>{{data.data.tituloCampos[i]}}</p>
+          <mat-form-field appearance="fill">
+            <!-- Descripcion del campo -->
+            <mat-label>{{data.data.descripcionCampos[i]}}</mat-label>
+            <!-- Campo tipo texto: -->
+            @if (data.data.tipoCampo=='texto') {
+              <input matInput [(ngModel)]="data.data.valoresCampos[i]">
+            }
+            <!-- Campo tipo seleccion: -->
+            @if (data.data.tipoCampo=='seleccion') {
+              <mat-select [(ngModel)]="data.data.valoresCampos[i]">
+                @for (valorPosible of data.data.valoresPosibles; track valorPosible) {
+                  <mat-option [value]="valorPosible">
+                    {{valorPosible}}
+                  </mat-option>
+                }
+              </mat-select>
+            }
+          </mat-form-field>
+        </div>
+      }
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button (click)="onNoClick()">Cancelar</button>
+      <button mat-button [mat-dialog-close]="data.data" cdkFocusInitial>Aceptar</button>
+    </div>
+  </div>
+}
+
+
+<!--
+**************************************
+Buscar Actualización
+***************************************
+-->
+
+@if (data.tipoDialogo=='buscarActualizacion') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>Buscando Actualización</h1>
+    <div mat-dialog-content>Espere un momento</div>
+    <div class="contenedorSpinner">
+      <mat-spinner class="spinner"></mat-spinner>
+    </div>
+    <div class="contenedorBotonCancelar" mat-dialog-actions>
+      <button class="botonCancelar" mat-button  [mat-dialog-close]="false">Cancelar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Actualizacion Actual
+***************************************
+-->
+
+@if (data.tipoDialogo=='actualizacionActual') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>No hay actualizaciones disponibles.</h1>
+    <div mat-dialog-content>Su programa esta actualizado con la última versión disponible.</div>
+    <div class="contenedorBotonCancelar" mat-dialog-actions>
+      <button class="botonCancelar" mat-button  [mat-dialog-close]="false">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Actualizacion Disponible
+***************************************
+-->
+
+@if (data.tipoDialogo=='actualizacionEncontrada') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>Hay una nueva actualización disponible</h1>
+    <div mat-dialog-content>¿Desea descargarla e instalarla? Esta acción cerrará e instalará la aplicación automaticamente</div>
+    <div class="contenedorBotonCancelar" mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="true" cdkFocusInitial>Descargar e instalar</button>
+      <button class="botonCancelar" mat-button  [mat-dialog-close]="false">Cancelar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Descargando Actualizacion
+***************************************
+-->
+
+@if (data.tipoDialogo=='descargandoActualizacion') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>Descargado actualización...</h1>
+    <div mat-dialog-content>Esto puede tardar unos minutos.</div>
+    <mat-progress-bar class="barraDescarga" mode="indeterminate"></mat-progress-bar>
+  </div>
+}
+
+<!--
+**************************************
+ACTUALIZACION DESCARGADA
+***************************************
+-->
+
+@if (data.tipoDialogo=='descargaCompletada') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>Actualización descargada con exito</h1>
+    <div mat-dialog-content>Para instalarla se cerrará la aplicación</div>
+    <div class="contenedorBotonCancelar" mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="true" cdkFocusInitial>Cerrar e instalar</button>
+      <button class="botonCancelar" mat-button  [mat-dialog-close]="false">Cancelar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Procesando
+***************************************
+-->
+
+@if (data.tipoDialogo=='procesando') {
+  <div class="dialogoBuscarActualizacion">
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <div mat-dialog-content>Espere un momento</div>
+    <div class="contenedorSpinner">
+      <mat-spinner class="spinner"></mat-spinner>
+    </div>
+    <div class="contenedorBotonCancelar" mat-dialog-actions>
+      <button class="botonCancelar" mat-button  [mat-dialog-close]="false">Cancelar</button>
+    </div>
+  </div>
+}
+
+
+<!--
+**************************************
+Dialogo Seleccionar Objeto
+***************************************
+-->
+
+@if (data.tipoDialogo=='seleccionarObjeto') {
+  <div id="dialogoSeleccionarObjeto">
+    <h1 mat-dialog-title>{{data.titulo}}</h1>
+    <mat-tree [dataSource]="arbolArchivosDataSource" [treeControl]="arbolArchivosControl">
+      <!-- This is the tree node template for leaf nodes -->
+      <mat-tree-node class="archivo" *matTreeNodeDef="let node" matTreeNodePadding (click)="seleccionarObjeto(node)">
+        <!-- use a disabled button to provide padding for tree leaf -->
+        @if (node.tipo=='txt') {
+          <mat-icon>text_fields</mat-icon>
+        }
+        @if (node.tipo=='xlsx') {
+          <mat-icon>insert_chart_outlined</mat-icon>
+        }
+        @if (node.tipo=='db') {
+          <mat-icon>dns</mat-icon>
+        }
+        @if (node.tipo=='dir') {
+          <mat-icon>folder</mat-icon>
+        }
+        @if (node.tipo=='spool') {
+          <mat-icon>receipt_long</mat-icon>
+        }
+        @if (node.tipo=='png' || node.tipo=='jpg'|| node.tipo=='jpeg') {
+          <mat-icon>image</mat-icon>
+        }
+        {{node.nombre}}
+      </mat-tree-node>
+      <!-- This is the tree node template for expandable nodes -->
+      <mat-tree-node class="directorio" *matTreeNodeDef="let node;when: hasChild" matTreeNodeToggle matTreeNodePadding>
+        <button mat-icon-button
+          [attr.aria-label]="'Toggle ' + node.nombre">
+          <mat-icon class="mat-icon-rtl-mirror">
+            {{arbolArchivosControl.isExpanded(node) ? 'expand_more' : 'chevron_right'}}
+          </mat-icon>
+        </button>
+        <mat-icon>folder</mat-icon>
+        {{node.nombre}}
+      </mat-tree-node>
+    </mat-tree>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="false">Cerrar</button>
+    </div>
+  </div>
+}
+
+
+<!--
+**************************************
+Dialogo comentario
+***************************************
+-->
+
+@if (data.tipoDialogo=='comentarioInc') {
+  <div  id="dialogoComentarios">
+    <h1 mat-dialog-title>Comentarios {{data.titulo}}</h1>
+    @if (data.contenido.length > 0) {
+      <mat-card appearance="outlined">
+        <mat-list>
+          @for (comentario of data.contenido; track comentario; let i = $index) {
+            <mat-list-item class="itemLista">
+              @if (i != 0) {
+                <mat-divider></mat-divider>
+              }
+              <mat-slide-toggle class="toggle" (change)="toggleComentario(comentario)" [checked]="!!comentario.completo" color="primary">
+              </mat-slide-toggle>
+              <div class="contenedorComentario">
+                <div class="fecha">{{comentario.fecha.getDate()}}/{{comentario.fecha.getMonth()+1}}/{{1900+comentario.fecha.getYear()}} [{{comentario.fecha.getHours()}}:{{comentario.fecha.getMinutes()}}:{{comentario.fecha.getSeconds()}}]</div>
+                <hr/>
+                <div class="comentario">{{comentario.comentario}}</div>
+              </div>
+              <button class="iconoBorrar" matTooltip="Eliminar comentario" matTooltipPosition="above" mat-icon-button (click)="eliminarComentario(comentario)">
+                <mat-icon  aria-label="Example icon-button with a heart icon">delete</mat-icon>
+              </button>
+            </mat-list-item>
+          }
+        </mat-list>
+      </mat-card>
+    }
+    <div class="contenedorAddComentario">
+      <mat-form-field class="inputComentario">
+        <mat-label>Añadir comentario...</mat-label>
+        <textarea matInput placeholder="Añadir comentario" #comentarioInput></textarea>
+      </mat-form-field>
+      <button class="botonAddComentario" [disabled]="comentarioInput.value == ''" mat-raised-button color="primary" (click)="addComentario(comentarioInput.value); comentarioInput.value = ''">Añadir</button>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data">Cerrar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo FILTRO FECHA
+***************************************
+-->
+
+@if (data.tipoDialogo=='filtroFecha') {
+  <div>
+    <h1 mat-dialog-title>Filtrado: </h1>
+    <div mat-dialog-content>
+      <!-- Fecha INICIO -->
+      <mat-form-field appearance="outline">
+        <mat-label>Inicio</mat-label>
+        <input matInput [formControl]="" [matDatepicker]="fechaInicio" (dateChange)="cambiarFechaInicio($event)">
+        <mat-datepicker-toggle matIconSuffix [for]="fechaInicio"></mat-datepicker-toggle>
+        <mat-datepicker #fechaInicio></mat-datepicker>
+        <mat-hint>DD/MM/YYYY</mat-hint>
+      </mat-form-field>
+      <!-- Fecha FIN -->
+      <mat-form-field appearance="outline">
+        <mat-label>Fin</mat-label>
+        <input matInput [formControl]="" [matDatepicker]="fechaFin" (dateChange)="cambiarFechaFin($event)">
+        <mat-datepicker-toggle matIconSuffix [for]="fechaFin"></mat-datepicker-toggle>
+        <mat-datepicker #fechaFin></mat-datepicker>
+        <mat-hint>DD/MM/YYYY</mat-hint>
+      </mat-form-field>
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data">Aceptar</button>
+    </div>
+  </div>
+}
+
+<!--
+**************************************
+Dialogo Generar Documento 
+***************************************
+-->
+
+@if (data.tipoDialogo=='filtroGenerarDocumento') {
+  <div>
+    <h1 mat-dialog-title>Generador de Documentos: </h1>
+    <div mat-dialog-content>
+        
+        <!-- TIPO DOCUMENTO: -->
+        <mat-select [(ngModel)]="data.tipoDocumento">
+          <mat-option [value]="'Informe Comunidades Autonomas'">
+              Informe Comunidades Autonomas
+          </mat-option>
+      </mat-select>
+
+      <!-- Fecha INICIO -->
+      <mat-form-field appearance="outline">
+        <mat-label>Inicio</mat-label>
+        <input matInput [formControl]="" [matDatepicker]="fechaInicio" (dateChange)="cambiarFechaInicio($event)">
+        <mat-datepicker-toggle matIconSuffix [for]="fechaInicio"></mat-datepicker-toggle>
+        <mat-datepicker #fechaInicio></mat-datepicker>
+        <mat-hint>DD/MM/YYYY</mat-hint>
+      </mat-form-field>
+
+      <!-- Fecha FIN -->
+      <mat-form-field appearance="outline">
+        <mat-label>Fin</mat-label>
+        <input matInput [formControl]="" [matDatepicker]="fechaFin" (dateChange)="cambiarFechaFin($event)">
+        <mat-datepicker-toggle matIconSuffix [for]="fechaFin"></mat-datepicker-toggle>
+        <mat-datepicker #fechaFin></mat-datepicker>
+        <mat-hint>DD/MM/YYYY</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Titulo periodo</mat-label>
+        <input matInput [(ngModel)]="data.tituloDialogo">
+      </mat-form-field>
+
+      <p style="font-weight: bold;">Archivo Plantilla:</p>
+      <input class="inputUrl"  type="file" name="file" (change)="incluirRuta($event)" multiple="false" accept=".pptx">
+
+      <mat-form-field>
+        <mat-label>Directorio Salida:</mat-label>
+        <input matInput [(ngModel)]="data.pathOutput">
+      </mat-form-field>
+
+    </div>
+    <div mat-dialog-actions>
+      <button mat-button [mat-dialog-close]="data">Aceptar</button>
+      <button mat-button [mat-dialog-close]="false">Cancelar</button>
+    </div>
+
+
+  </div>
+}
+
+
+
+
+
+
+
+

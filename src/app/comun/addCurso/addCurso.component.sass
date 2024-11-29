@@ -1,0 +1,402 @@
+
+#contenedorGestionCursos
+  position: absolute
+  width: 100%
+  height: 100%
+  top: 0 
+  left: 0
+  background-color: white
+
+  .filtro
+    position: relative
+    width: 20%
+
+  .contenedorBotones
+    position: absolute
+    display: flex
+    width: 100%
+    height: 10%
+    align-items: center
+    justify-content: space-evenly
+    background-color: silver 
+
+    .filtroGeneral
+      .mat-mdc-form-field-subscript-wrapper
+        margin-bottom: -1.25em
+
+#contenedorTabla
+  position: absolute
+  width: 100%
+  height: 85%
+  overflow-y: auto
+  top: 10%
+  &::-webkit-scrollbar
+    display: none
+  &.tablaAutomatizacion
+    height: 90% !important
+    width: 50% !important
+
+.iconoReloadAutocompletado
+  position: absolute
+  top: 5%
+  width: 10%
+  right: 10% 
+
+.iconoReloadAutocompletadoInstitucion
+  position: relative
+  vertical-align: middle
+  width: 9%
+  margin-left: 3%
+
+#visualizadorCorreo
+  position: absolute
+  top: 10%
+  width: 50%
+  height: 85%
+  right: 0
+  overflow: scroll
+  .WordSection1
+    .MsoNormalTable
+      width: 100% !important
+
+#mensajeActualizar
+  position: absolute
+  height: 100%
+  width: 100%
+  display: flex
+  justify-content: center
+  align-items: center
+
+#tablaCursos
+  position: absolute
+  width: 98%
+  height: 50%
+  box-shadow: none
+
+  table
+    width: 100%
+
+  tr.example-detail-row
+    height: 0
+ 
+  tr.example-element-row:not(.example-expanded-row):hover
+    background: whitesmoke
+
+  tr.example-element-row:not(.example-expanded-row):active
+    background: #efefef 
+
+  .columnaCurso
+    width: 25%
+  .columnaServicio
+    width: 15%
+  .columnaEquipo
+    width: 15%
+  .columnaResponsable
+    width: 20%
+
+  .contenedorRevision
+    position: relative 
+    display: flex
+    align-items: center
+    justify-content: space-around
+    .iconoWarning
+      color: darkorange
+    .iconoPriorizada
+      color: red
+    .iconoResolved
+      color: green
+
+  .contenedorDetalle
+    overflow: hidden
+    display: flex
+    flex-wrap: wrap
+    .campo
+      display: flex
+      justify-content: center
+      align-items: center
+
+    .contenedorGridAutomatizacion
+      position: relative
+      display: grid
+      width: 100%
+      grid-template-columns: repeat(4, 1fr)
+      grid-template-rows: repeat(8, 1fr)
+      grid-gap: 10px
+      margin-bottom: 30px
+      //grid-auto-rows: minmax(100px, auto)
+      .seccionI
+        grid-area: 1/1/1/5
+      .seccionII
+        grid-area: 3/1/3/5
+      .seccionIII
+        grid-area: 5/1/5/5
+      .seccionIV
+        grid-area: 7/1/7/5
+      .titulo
+        display: flex
+        align-items: center
+        justify-content: center
+        background-color: lavender
+      .faseI
+        grid-row: 2
+        &.marcarCorreoOK
+          grid-row: 1
+      .faseII
+        grid-row: 4
+        &.marcarCorreoOK
+          grid-row: 3
+      .faseIII
+        grid-row: 6
+        &.marcarCorreoOK
+          grid-row: 5
+      .faseIV
+        grid-row: 8
+        &.formador
+          grid-row: 9
+        &.marcarCorreoOK
+          grid-row: 9
+      .estado
+        grid-column: 1
+      .mensaje
+        grid-column: 2/4
+      .botonAccion
+        grid-column: 4
+      .marcarCorreoOK
+        display: inline-flex
+        justify-content: flex-end
+
+    .contenedorGrid
+      position: relative
+      display: grid
+      width: 100%
+      grid-template-columns: repeat(4, 1fr)
+      grid-gap: 10px
+      //grid-auto-rows: minmax(100px, auto)
+
+    .titulo
+      text-align: center
+      font-weight: bold
+      font-size: 20px
+      margin-top: 10px 
+    .seccion
+      border: solid #7878de 2px
+      border-radius: 40px
+      grid-row: 2 / 9
+    .seccionGeneral
+      grid-column: 1
+    .seccionUbicacion
+      grid-column: 2
+    .seccionFecha
+      grid-column: 3
+    .seccionGrupo
+      grid-column: 4
+    .seccionFormador
+      grid-column: 3 
+      grid-row: 6 / 9
+    .seccionInstitucion
+      padding-top: 10px
+      grid-column: 2 
+      grid-row: 5 / 9
+      
+    .botonComentario
+      position: relative
+      width: 20%
+      margin: 2%
+    .botonEliminar
+      position: relative
+      width: 10%
+      margin: 2%
+      left: 50%
+    .botonAddSimilar
+      position: relative
+      width: 10%
+      margin: 2%
+      left: 25%
+
+    .campo
+      position: relative
+      width: 100%
+      .tituloCampo
+        position: relative
+        font-weight: bold
+      .valor
+        position: relative
+        white-space: pre-wrap
+        padding-right:10px
+      &.codigoCurso
+        margin-top: 10px
+        grid-column: 1
+        grid-row: 2
+      &.modalidad
+        grid-column: 1
+        grid-row: 3
+      &.estado
+        grid-column: 1
+        grid-row: 4
+      &.material
+        grid-column: 1
+        grid-row: 5
+      &.valoracion
+        grid-column: 1
+        grid-row: 6
+      &.observacion
+        grid-column: 1
+        grid-row: 7
+
+      &.codigoPostal
+        margin-top: 10px
+        grid-column: 2
+        grid-row: 2
+      &.territorial
+        grid-column: 2
+        grid-row: 3
+      &.ccaa
+        grid-column: 2
+        grid-row: 4
+      &.direccion
+        grid-column: 2
+        grid-row: 5
+      &.institucion
+        grid-column: 2
+        grid-row: 6
+      &.buscaInstitucion
+        grid-column: 2
+        grid-row: 7
+ 
+      &.fecha
+        margin-top: 10px
+        grid-column: 3
+        grid-row: 2
+      &.horaInicio
+        grid-column: 3
+        grid-row: 3
+      &.horaFin
+        grid-column: 3
+        grid-row: 4
+      &.duracion
+        grid-column: 3
+        grid-row: 5
+
+      &.formador
+        grid-column: 3
+        grid-row: 6/9
+        .contenedorFormador
+          display: flex 
+          justify-content: center
+          align-items: center
+          margin: 10px
+          border: solid 1px green
+          border-radius: 10px
+          .nombre
+            width: 90%
+            text-align: center
+          mat-icon
+            width: 20%
+
+      &.contacto1
+        grid-column: 3
+        grid-row: 2/4
+        .listaContactos
+          display: flex 
+          flex-direction: column
+          justify-content: center
+          align-items: center
+          margin: 10px
+          border: solid 1px green
+          border-radius: 10px
+        .titulo
+          margin-bottom: 15px
+      &.contacto2
+        grid-column: 4
+        grid-row: 2/4
+        .listaContactos
+          display: flex 
+          flex-direction: column
+          justify-content: center
+          align-items: center
+          margin: 10px
+          border: solid 1px green
+          border-radius: 10px
+        .titulo
+          margin-bottom: 15px
+      &.contacto3
+        grid-column: 3
+        grid-row: 4/6
+        .listaContactos
+          display: flex 
+          flex-direction: column
+          justify-content: center
+          align-items: center
+          margin: 10px
+          border: solid 1px green
+          border-radius: 10px
+        .titulo
+          margin-bottom: 15px
+      &.contacto4
+        grid-column: 4
+        grid-row: 4/6
+        .listaContactos
+          display: flex 
+          flex-direction: column
+          justify-content: center
+          align-items: center
+          margin: 10px
+          border: solid 1px green
+          border-radius: 10px
+        .titulo
+          margin-bottom: 15px
+
+      &.codigoGrupo
+        margin-top: 10px
+        grid-column: 4
+        grid-row: 2
+      &.curso
+        grid-column: 4
+        grid-row: 3
+      &.sesion
+        grid-column: 4
+        grid-row: 4
+      &.colectivo
+        grid-column: 4
+        grid-row: 5
+      &.grupo
+        grid-column: 4
+        grid-row: 6
+      &.numAlumnos
+        grid-column: 4
+        grid-row: 7
+
+        
+mat-datepicker-toggle
+  position: absolute
+  right: 0 
+  top: 0
+
+.mat-select-value
+  color: inherit
+
+mat-paginator
+ position: fixed
+ z-index: 100
+ width: 100%
+ bottom: 0%
+ background: none
+
+.error
+  background-color: rgba(255,0,0,0.3) !important
+.warn
+  background-color: #f2c811!important 
+.ok
+  background-color: rgba(28,231,4,0.3) !important
+.pendiente
+  background-color: #11b4f2 !important
+
+.tituloFormulario
+    font-weight: bold
+    margin: 10px
+
+.inputUrl
+  margin: 5px
+
+.oculto
+  display: none

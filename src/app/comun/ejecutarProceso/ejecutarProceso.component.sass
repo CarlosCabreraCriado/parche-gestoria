@@ -1,0 +1,95 @@
+
+.botonCerrar
+    position: relative
+    left: 95%
+
+.botonNav
+    z-index: 10
+    
+.mat-mdc-dialog-title
+    text-align: center
+    
+.mat-mdc-drawer
+    padding: 20px
+
+mat-drawer-content 
+  height: 95%
+  padding: 12px
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  
+.mat-mdc-dialog-content
+    mat-mdc-button-toggle-group
+        width: 100%
+        mat-mdc-button-toggle
+            width: 50%
+
+    .contenedorEjecutarProceso
+        position: relative
+        height: 50vh
+        border: 1px solid dimgray
+
+    .categoria:hover
+        color: white
+        background-color: dimgray
+    .proceso:hover
+        color: white
+        background-color: dimgray
+        
+
+    
+    mat-drawer-container
+        position: relative
+        height: 100%
+        width: 100%
+
+        .textoSeleccionarProceso
+            position: absolute
+            display: flex
+            width: 90%
+            height: 90%
+            justify-content: center
+            align-items: center
+            color: darkgrey
+        .procesoContainer
+            position: absolute
+            width: 95%
+            height: 90%
+            .nombreProceso
+                text-align: center
+                text-weight: bold
+            .argumentosProceso
+                text-align: center
+            .contenedorBotonesAccion
+                position: relative
+                height: 50px
+                width: 100%
+                .botonEjecucion
+                    position: absolute
+                    right: 0
+
+    form
+        .contenedorFormulario
+            position: relative
+            display: inline-block
+            min-width: 400px
+            min-height: 100px
+
+        .tituloFormulario
+            font-weight: bold
+
+        .inputUrl
+            width: 0.1px
+            height: 0.1px
+            opacity: 0
+            overflow: hidden
+            position: absolute
+            z-index: -1
+        .labelUrl
+            position: relative
+            background-color: lightsteelblue
+            padding: 2%
+            border-radius: 5px
+            margin-right: 20px
+

@@ -1,0 +1,1308 @@
+<!--   ******************* -->
+<!--        Add Curso      -->
+<!--   ******************* -->
+
+<div id="contenedorGestionCursos">
+
+  <div class="contenedorBotones">
+    <!--
+    <button mat-raised-button color="warn" (click)="recargarCursos()" class="botonCargar">Recargar</button>
+    -->
+    <!--<mat-icon>filter_list</mat-icon>-->
+
+    @if (pantallaSeleccionada=='Cursos') {
+      <mat-slide-toggle [(ngModel)]="!reducirTablaCursos" (click)="toggleCargaCursosCompleta()"></mat-slide-toggle>
+      <mat-form-field class="filtroGeneral">
+        <mat-label>Buscar</mat-label>
+        <input matInput #buscador (keydown.enter)="buscarCodigo(buscador.value)" placeholder="Ej. COD_CURSO" #input>
+      </mat-form-field>
+    }
+
+    @if (pantallaSeleccionada=='Automatizacion') {
+      <mat-slide-toggle [(ngModel)]="!reducirTablaCorreos" (click)="toggleCargaCorreosCompleta()">Ver todos</mat-slide-toggle>
+    }
+
+    @if (pantallaSeleccionada=='Formadores') {
+      <mat-form-field class="example-full-width filtro" appearance="fill">
+        <mat-label>Buscar formador</mat-label>
+        <input type="text" matInput [formControl]="autoFormadorControl" [matAutocomplete]="autoBusquedaFormador">
+        <mat-autocomplete #autoBusquedaFormador="matAutocomplete" (optionSelected)="buscarFormador($event)" [displayWith]="displayFn">
+          @for (option of filteredOptionsFormador | async; track option) {
+            <mat-option [value]="option">
+              {{option.nombre}}
+            </mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+    }
+
+    @if (pantallaSeleccionada=='Instituciones') {
+      <mat-form-field class="example-full-width filtro" appearance="fill">
+        <mat-label>Buscar institución</mat-label>
+        <input type="text" matInput [formControl]="autoInstitucionControl" [matAutocomplete]="autoBusquedaInstitucion">
+        <mat-autocomplete #autoBusquedaInstitucion="matAutocomplete" (optionSelected)="buscarInstitucion($event)" [displayWith]="displayFn">
+          @for (option of filteredOptionsInstitucion | async; track option) {
+            <mat-option [value]="option">
+              {{option.institucion}}
+            </mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+    }
+
+    <div class="example-button-container">
+        <button mat-fab color="warn" (click)="resetFiltro()">
+          <mat-icon>filter_alt_off</mat-icon>
+        </button>
+    </div>
+
+    <!-- Filtros de Cursos -->
+    @if(pantallaSeleccionada=='Cursos'){
+    <mat-button-toggle-group [formControl]="filterButtonControl" name="fontStyle" aria-label="Font Style" multiple>
+
+      <mat-button-toggle (click)="filtrar('Modificado')" (checked)="filtroModificados" value="Modificados">
+        <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+      </mat-button-toggle>
+
+      <mat-button-toggle (click)="filtrar('Warning')" (checked)="filtroWarning" value="Warning">
+        <mat-icon class="iconoWarning">new_releases_icon</mat-icon>
+      </mat-button-toggle>
+
+      <mat-button-toggle (click)="filtrar('Error')" (checked)="filtroError" value="Error">
+        <mat-icon class="iconoWarning">error</mat-icon>
+      </mat-button-toggle>
+
+      <mat-button-toggle (click)="filtrar('Programadas')" (checked)="filtroProgramadas" value="Programadas">
+        <mat-icon class="iconoWarning">alarm</mat-icon>
+      </mat-button-toggle>
+
+      <mat-button-toggle (click)="abrirFiltroFecha()" (checked)="filtroProgramadas" value="Programadas">
+        <mat-icon class="iconoWarning">date_range</mat-icon>
+      </mat-button-toggle>
+
+    </mat-button-toggle-group>
+    }
+
+    <!-- Filtros de Formadores -->
+    @if(pantallaSeleccionada=='Formadores'){
+        <mat-button-toggle-group [formControl]="filterButtonControlFormadores" name="fontStyle" aria-label="Font Style" multiple>
+
+          <mat-button-toggle (click)="filtrar('Modificado')" (checked)="filtroModificados" value="Modificados">
+            <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+          </mat-button-toggle>
+
+          <mat-button-toggle (click)="filtrar('Error')" (checked)="filtroError" value="Error">
+            <mat-icon class="iconoWarning">error</mat-icon>
+          </mat-button-toggle>
+
+        </mat-button-toggle-group>
+    }
+
+    <!-- Filtros de Instituciones -->
+    @if(pantallaSeleccionada=='Instituciones'){
+    <mat-button-toggle-group [formControl]="filterButtonControlInstituciones" name="fontStyle" aria-label="Font Style" multiple>
+
+      <mat-button-toggle (click)="filtrar('Modificado')" (checked)="filtroModificados" value="Modificados">
+        <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+      </mat-button-toggle>
+
+      <mat-button-toggle (click)="filtrar('Error')" (checked)="filtroError" value="Error">
+        <mat-icon class="iconoWarning">error</mat-icon>
+      </mat-button-toggle>
+
+    </mat-button-toggle-group>
+    }
+
+    <!--
+    <button mat-raised-button color="basic" class="botonFiltroGeneral">General</button>
+    <button mat-raised-button color="basic" class="botonFiltroRMCA">RMCA</button>
+    <button mat-raised-button color="basic" class="botonFiltroSAP">SAP 4.7</button>
+
+    <div>Num: {{dataTable.filteredData.length}}</div>
+    -->
+
+  </div>
+
+    <div id="contenedorTabla" [ngClass]="{'oculto': pantallaSeleccionada!='Cursos'}" >
+      <table id="tablaCursos" mat-table [dataSource]="dataTable" multiTemplateDataRows class="mat-elevation-z8">
+        <!--
+        <ng-container matColumnDef="{{column}}" *ngFor="let column of columnsToDisplay">
+          <th mat-header-cell *matHeaderCellDef> {{column}} </th>
+          <td mat-cell *matCellDef="let element"> {{element[column]}} </td>
+        </ng-container>
+        -->
+        <ng-container matColumnDef="cod_curso">
+          <th mat-header-cell *matHeaderCellDef class="columnaCurso">Cod Curso</th>
+          <td  mat-cell *matCellDef="let element"(click)="comprobarDatos(element['cod_curso'])">
+              <div matBadge="{{element.metadatos.comentarios.length}}" matBadgeOverlap="false" matBadgePosition="after" [matBadgeHidden]="(element.metadatos.comentarios.length <= 0)"></div>{{element.cod_curso}} </td>
+          </ng-container>
+          <ng-container matColumnDef="curso">
+            <th mat-header-cell *matHeaderCellDef class="columnaServicio">Curso</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarDatos(element['cod_curso'])"> {{element.curso}} </td>
+          </ng-container>
+          <ng-container matColumnDef="sesion">
+            <th mat-header-cell *matHeaderCellDef class="columnaEquipo">Sesión</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarDatos(element['cod_curso'])"> {{element['sesión']}} </td>
+          </ng-container>
+          <ng-container matColumnDef="institucion">
+            <th mat-header-cell *matHeaderCellDef class="columnaResponsable">Institución</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarDatos(element['cod_curso'])"> {{element['nombreInstitucion']}} </td>
+          </ng-container>
+          <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions">Revisión</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarDatos(element['cod_curso'])">
+              <!--
+              <button mat-raised-button color="{{element.metadatos.revisado}}" aria-label="expand row" (click)="marcarRevisado(element)">Revisado</button>
+              -->
+              <div class="contenedorRevision">
+                <!--
+                <section class="example-section">
+                  <mat-checkbox [checked]="element.metadatos.revisado" class="example-margin"></mat-checkbox>
+                </section>
+                -->
+                @if (element.metadatos.flag_cambio) {
+                  <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+                }
+                @if (!element.metadatos.error) {
+                  <mat-icon class="iconoResolved">beenhere_icon</mat-icon>
+                }
+                @if (element.metadatos.flagTareaPendiente) {
+                  <mat-icon class="iconoWarning">new_releases_icon</mat-icon>
+                }
+                @if (element.metadatos.error) {
+                  <mat-icon class="iconoPriorizada">error</mat-icon>
+                }
+                <!-- <mat-icon >local_hotel_icon</mat-icon>
+                <mat-icon *ngIf="element.metadatos.fecha_resolucion==undefined">event_busy_icon</mat-icon>
+                -->
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                  @if (expandedElement !== element) {
+                    <mat-icon>keyboard_arrow_down</mat-icon>
+                  }
+                  @if (expandedElement === element) {
+                    <mat-icon>keyboard_arrow_up</mat-icon>
+                  }
+                </button>
+              </div>
+            </td>
+          </ng-container>
+          <!-- Expanded Content Column - The detail row is made up of this one column that spans across all columns -->
+          <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="columnsToDisplayWithExpand.length">
+              <div class="contenedorDetalle"
+                [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                <div class="contenedorGrid">
+                  <div  class="titulo seccionGeneral">General</div>
+                  <div  class="titulo seccionUbicacion">Ubicación</div>
+                  <div  class="titulo seccionFecha">Fecha</div>
+                  <div  class="titulo seccionGrupo">Grupo</div>
+                  <div  class="seccion seccionGeneral"></div>
+                  <div  class="seccion seccionUbicacion"></div>
+                  <div  class="seccion seccionFecha"></div>
+                  <div  class="seccion seccionGrupo"></div>
+                  <div  class="seccion seccionInstitucion titulo">Institución
+                    <img src="assets/desarrollador/reload.png" alt="formador" class="iconoReloadAutocompletadoInstitucion" (click)="refreshInstituciones()">
+                  </div>
+                  <div  class="seccion seccionFormador"></div>
+                  <!-- Cod Curso -->
+                  <div  class="campo codigoCurso">
+                    <div class="tituloCampo">Código Curso: </div>
+                    <div class="valor"> {{element['cod_curso']}}</div>
+                  </div>
+                  <!-- Modalidad -->
+                  <div class="campo modalidad">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Modalidad</mat-label>
+                      <mat-select value="{{element['modalidad']}}"(selectionChange)="addCampoInput($event,element,'modalidad')">
+                        <mat-option value="ONLINE">Online</mat-option>
+                        <mat-option value="PRESENCIAL">Presencial</mat-option>
+                        <mat-option value="PRESENCIAL / ONLINE">Mixto</mat-option>
+                      </mat-select>
+                      <mat-error>Error </mat-error>
+                    </mat-form-field>
+                  </div>
+                  <!-- ESTADO -->
+                  <div class="campo estado">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Estado: </mat-label>
+                      <mat-select value="{{element['estado']}}"(selectionChange)="addCampoInput($event,element,'estado')">
+                        <mat-option value="CANCELADA">CANCELADA</mat-option>
+                        <mat-option value="PROGRAMADA">PROGRAMADA</mat-option>
+                        <mat-option value="REALIZADA">REALIZADA</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- Material -->
+                  <div class="campo material">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Material: </mat-label>
+                      <mat-select value="{{element['material']}}" (selectionChange)="addCampoInput($event,element,'material')" >
+                        <mat-option value="SI">SI</mat-option>
+                        <mat-option value="NO">NO</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- Valoracion -->
+                  <div class="campo valoracion">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Valoracion</mat-label>
+                      <input matInput style="{'color':'red'}" [name]="'valoracion'"  type="number" [min]="0" max="10" (keyup)="addCampoInput($event,element,'valoración')" [(ngModel)]="element['valoración']" placeholder="Valoración" #input>
+                      <mat-error>ERROR dato no valido</mat-error>
+                    </mat-form-field>
+                  </div>
+                  <!-- Observación -->
+                  <div class="campo observacion">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Observación</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'observaciones')" value="{{element['observaciones']}}" placeholder="Formador" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- COD POSTAL -->
+                  <div class="campo codigoPostal"[ngClass]="{'error': element.metadatos.errores.postal}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Cod. Postal</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'cod__postal')" minlength="5" maxlength="5" value="{{element['cod__postal']}}" placeholder="XXXXX" #postalCode>
+                      <mat-hint align="end">{{postalCode.value.length}} / 5</mat-hint>
+                    </mat-form-field>
+                  </div>
+                  <!-- TERRITORIAL -->
+                  <div class="campo territorial"[ngClass]="{'error': element.metadatos.errores.territorial}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Territorial: </mat-label>
+                      <mat-select [(value)]="element.territorial" (selectionChange)="addCampoInput($event,element,'territorial')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN-NAVARRA-LA RIOJA">Aragón-Navarra-La Rioja</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="ASTURIAS - CANTABRIA">Asturias-Cantabria</mat-option>
+                        <mat-option value="CASTILLA - LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="C. VALENCIANA - MURCIA">C. Valencia-Murcia</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- CCAA -->
+                  <div class="campo ccaa"[ngClass]="{'error': element.metadatos.errores.ccaa}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>CCAA: </mat-label>
+                      <mat-select value="{{element['ccaa_/_pais']}}" (selectionChange)="addCampoInput($event,element,'ccaa_/_pais')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN">Aragón</mat-option>
+                        <mat-option value="ASTURIAS">Asturias</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="C. VALENCIANA">C. Valenciana</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="CANTABRIA">Cantabria</mat-option>
+                        <mat-option value="CASTILLA - LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="CEUTA">Ceuta</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="LA RIOJA">La rioja</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="MELILLA">Melilla</mat-option>
+                        <mat-option value="MURCIA">Murcia</mat-option>
+                        <mat-option value="NAVARRA">Navarra</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="ESPAÑA">España</mat-option>
+                        <mat-option value="OTROS PAISES">Otros paises</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+
+                  <div class="campo institucion" [ngClass]="{'error': element.metadatos.errores.institucion}">
+
+                    <mat-form-field appearance="outline"  >
+                      <mat-label>Institución</mat-label>
+                      <input matInput value="{{element['nombreInstitucion']}}" disabled placeholder="Institución" #input>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- INSTITUCION -->
+                  <div class="campo buscaInstitucion" [ngClass]="{'error': element.metadatos.errores.institucion}">
+
+                    <mat-form-field class="example-full-width" appearance="fill">
+                        <mat-label>Institucion</mat-label>
+                        <input type="text" [formControl]="autoInstitucionControl" matInput [matAutocomplete]="autoInsertarInstitucion">
+                        <mat-autocomplete #autoInsertarInstitucion="matAutocomplete" (optionSelected)="seleccionInstitucion($event, element)" [displayWith]="displayFn" >
+                          @for (option of filteredOptionsInstitucion | async; track option) {
+                            <mat-option [value]="option">
+                              {{option.institucion}}
+                            </mat-option>
+                          }
+                        </mat-autocomplete>
+                    </mat-form-field>
+
+                  </div>
+                  
+                  <!-- FECHA CURSO -->
+                  <div class="campo fecha"[ngClass]="{'error': element.metadatos.errores.fecha}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Fecha</mat-label>
+                      <input matInput [matDatepicker]="picker" (dateChange)="addCampoInput($event,element,'fecha_formateada')" [value]="element['fecha_formateada']">
+                      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+                      <mat-datepicker #picker></mat-datepicker>
+                      <mat-hint>DD/MM/YYYY</mat-hint>
+                    </mat-form-field>
+                  </div>
+                  <!-- Hora Inicio -->
+                  <div class="campo horaInicio"[ngClass]="{'error': element.metadatos.errores.hora_inicio}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Hora Inicio</mat-label>
+                      <input matInput type="time" (keyup)="addCampoInput($event,element,'hora_inicio_formateada')" value="{{element['hora_inicio_formateada']}}" (input)="addCampoInput($event,element,'hora_inicio_formateada')" placeholder="Institución" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- Hora Fin -->
+                  <div class="campo horaFin"[ngClass]="{'error': element.metadatos.errores.hora_fin}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Hora Fin</mat-label>
+                      <input matInput type="time" (keyup)="addCampoInput($event,element,'hora_fin_formateada')" value="{{element['hora_fin_formateada']}}" (input)="addCampoInput($event,element,'hora_fin_formateada')" placeholder="00:00" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- Duracion -->
+                  <div class="campo duracion"[ngClass]="{'error': element.metadatos.errores.duracion}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Duración</mat-label>
+                      <input disabled matInput type="time" (keyup)="addCampoInput($event,element,'duracion_formateada')" value="{{element['duracion_formateada']}}" placeholder="00:00" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- COD GRUPO -->
+                  <div class="campo codigoGrupo"[ngClass]="{'error': element.metadatos.errores.cod_grupo}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Código Grupo</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'cod_grupo')" value="{{element['cod_grupo']}}" placeholder="XXXXXXXXXX" #input>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- CURSO -->
+                  <!--
+                  <div class="campo curso"[ngClass]="{'error': element.metadatos.errores.curso}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Tipología: </mat-label>
+                      <mat-select value="{{element['curso']}}" (selectionChange)="addCampoInput($event,element,'curso')">
+                        <mat-option value="FxM">FxM</mat-option>
+                        <mat-option value="AF1">AF1</mat-option>
+                        <mat-option value="AF2">AF2</mat-option>
+                        <mat-option value="AF3">AF3</mat-option>
+                        <mat-option value="AF4">AF4</mat-option>
+                        <mat-option value="EE">EE</mat-option>
+                        <mat-option value="PF">PF</mat-option>
+                        <mat-option value="FE">FE</mat-option>
+                        <mat-option value="JE">JE</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  -->
+
+                  <!-- SESION -->
+                  <div class="campo sesion"[ngClass]="{'error': element.metadatos.errores.sesion}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Programa: </mat-label>
+                      <mat-select value="{{element['sesión']}}" (selectionChange)="addCampoInput($event,element,'sesión')">
+                        <mat-option value="FxM1">FxM1: Cómo gestionar mejor mi economía</mat-option>
+                        <mat-option value="FxM2">FxM2: Cómo gestionar mis cuentas bancarias</mat-option>
+                        <mat-option value="FxM3">FxM3: Mis ahorros</mat-option>
+                        <mat-option value="FxM4">FxM4: Endeudamiento inteligente</mat-option>
+                        <mat-option value="FxMI1">FxMI1: [Inclusivo] Finanzas para mortales 1</mat-option>
+                        <mat-option value="FxMI2">FxMI2: [Inclusivo] Finanzas para mortales 2</mat-option>
+                        <mat-option value="AF1.1">AF1.1: ¿Sabes hacer un presupuesto?</mat-option>
+                        <mat-option value="AF1.2">AF1.2: ¿De dónde vienen los euros?</mat-option>
+                        <mat-option value="AF1.3">AF1.3: Aprendiendo a ahorrar</mat-option>
+                        <mat-option value="AF1.4">AF1.4: Proyectos solidarios</mat-option>
+                        <mat-option value="AF2.1">AF2.1: Cuentas y tarjetas bancarias</mat-option>
+                        <mat-option value="AF2.2">AF2.2: Los ahorros</mat-option>
+                        <mat-option value="AF2.3">AF2.3: Endeudamiento inteligente</mat-option>
+                        <mat-option value="AF2.4">AF2.4: De viaje al extrajero</mat-option>
+                        <mat-option value="AF3.1">AF3.1: Principales indicadores económicos</mat-option>
+                        <mat-option value="AF3.2">AF3.2: ¿Cómo administrar el dinero de un país de forma eficiente?</mat-option>
+                        <mat-option value="AF3.3">AF3.3: ¿Cómo gasta un país?</mat-option>
+                        <mat-option value="AF3.4">AF3.4: La jubilación de nuestros padres.. ¿Y la nuestra?</mat-option>
+                        <mat-option value="AF4.1">AF4.1: ¿Emprendemos? </mat-option>
+                        <mat-option value="AF4.2">AF4.2: Tengo un proyecto en mente</mat-option>
+                        <mat-option value="AF4.3">AF4.3: Monta tu propia empresa</mat-option>
+                        <mat-option value="AF4.4">AF4.4: ¿Cómo va mi empresa?</mat-option>
+                        <mat-option value="BEA">BEA: BUSINES ENGLISH IN ACTION</mat-option>
+                        <mat-option value="CIBERSEGURIDAD">CIBER: Masterclass Ciberseguridad</mat-option>
+                        <mat-option value="S-CIBER">CIBER Senior: Ciberseguridad</mat-option>
+                        <mat-option value="CRIPTO">CRIPTO: Criptomoneda</mat-option>
+                        <mat-option value="EE1">EE1: Soy emprendedor</mat-option>
+                        <mat-option value="EE2">EE2: Empresa y autónomo</mat-option>
+                        <mat-option value="EE3">EE3: Gestión financiera del emprendedor</mat-option>
+                        <mat-option value="EE4">EE4: Medios de pago y financiación</mat-option>
+                        <mat-option value="F.SEG.P">F.SEG(Personal): Seguridad en tus finanzas</mat-option>
+                        <mat-option value="F.SEG.U">F.SEG(Universidad): Seguridad en tus finanzas</mat-option>
+                        <mat-option value="F.SOST">F.SOST: Sostenibilidad y Finanzas</mat-option>
+                        <mat-option value="FAF">FAF: Formación para Alumnos Formadores</mat-option>
+                        <mat-option value="FxF">FxF: Formación para Formadores</mat-option>
+                        <mat-option value="FE1">FE1: [Parte 1]Finanzas para Emprendedores</mat-option>
+                        <mat-option value="FE2">FE2: [Parte 2]Finanzas para Emprendedores</mat-option>
+                        <mat-option value="IG">IG: Igualdad de género</mat-option>
+                        <mat-option value="PF">PF: Practicando con las finanzas</mat-option>
+                        <mat-option value="PFxM">PFxM: Presentación FxM</mat-option>
+                        <mat-option value="S-BD-C-CC">S-BD-C-CC: Banca digital y Cajeros y Correos Cash</mat-option>
+                        <mat-option value="JE1">JE1: La reincorporación al mercado laboral</mat-option>
+                        <mat-option value="JE2">JE2: Cómo organizar mis finanzas</mat-option>
+                        <mat-option value="N1.1">N1.1: Finan. del futuro. 1º y 2º de Primaria. Parte 1.</mat-option>
+                        <mat-option value="N1.2">N1.2: Finan. del futuro. 1º y 2º de Primaria. Parte 2.</mat-option>
+                        <mat-option value="N2">N2: Finan. del futuro. 3º y 4º de Primaria.</mat-option>
+                        <mat-option value="N3">N3: Finan. del futuro. 5º y 6º de Primaria.</mat-option>
+                        <mat-option value="TTMT">TTMT: Testamentaria</mat-option>
+                        <mat-option value="WC">WC: Work Café</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- COLECTIVO -->
+                  <div class="campo colectivo"[ngClass]="{'error': element.metadatos.errores.colectivo}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Colectivo: </mat-label>
+                      <mat-select value="{{element.colectivo}}" (selectionChange)="addCampoInput($event,element,'colectivo')">
+                        <mat-option value="EMPRENDEDORES">EMPRENDEDORES</mat-option>
+                        <mat-option value="CENTROS PENITENCIARIOS">CENTROS PENITENCIARIOS</mat-option>
+                        <mat-option value="ENTIDADES Y ASOCIACIONES">ENTIDADES Y ASOCIACIONES</mat-option>
+                        <mat-option value="JÓVENES (14 - 18 AÑOS)">JÓVENES (14 - 18 años)</mat-option>
+                        <mat-option value="NIÑOS (HASTA 13 AÑOS)">NIÑOS (HASTA 13 años)</mat-option>
+                        <mat-option value="SENIOR (A PARTIR DE 65 AÑOS)">SENIOR (A PARTIR DE 65 AÑOS)</mat-option>
+                        <mat-option value="INCLUSIVO">INCLUSIVO</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- GRUPO -->
+                  <div class="campo grupo"[ngClass]="{'error': element.metadatos.errores.grupo}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Grupo: </mat-label>
+                      <mat-select value="{{element.grupo}}" (selectionChange)="addCampoInput($event,element,'grupo')">
+                        <mat-option value="Autónomos">Autónomos</mat-option>
+                        <mat-option value="Bachillerato">Bachillerato</mat-option>
+                        <mat-option value="Educación Primaria">Educación Primaria</mat-option>
+                        <mat-option value="Emprendedores">Emprendedores</mat-option>
+                        <mat-option value="ESO">ESO</mat-option>
+                        <mat-option value="Formación Profesional Básica">Formación Profesional Básica</mat-option>
+                        <mat-option value="Formación Profesional Media">Formación Profesional Media</mat-option>
+                        <mat-option value="Formación Profesional Superior">Formación Profesional Superior</mat-option>
+                        <mat-option value="Mujeres">Mujeres</mat-option>
+                        <mat-option value="Personas con discapacidad">Personas con discapacidad</mat-option>
+                        <mat-option value="Personas en riesgo de exclusión social">Personas en riesgo de exclusión social</mat-option>
+                        <mat-option value="Universitarios">Universitarios</mat-option>
+                        <mat-option value="Otros">Otros</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- Numero Alumnos -->
+                  <div class="campo numAlumnos"[ngClass]="{'error': element.metadatos.errores.alumnos}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Número Alumnos</mat-label>
+                      <input matInput type="number" min="0" (ngModelChange)="addCampoInput($event,element,'nºasistentes')" (keyup)="addCampoInput($event,element,'nºasistentes')" value="{{element['nºasistentes']}}" placeholder="0" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- FORMADOR -->
+                  <div class="campo formador" [ngClass]="{'error': element.metadatos.errores.formadores}">
+                    <div class="listaFormadores">
+                        <img src="assets/desarrollador/reload.png" alt="formador" class="iconoReloadAutocompletado" (click)="refreshFormadores()">
+                      <div  class="titulo">Formadores</div>
+                      @for (formador of element.metadatos.formadores; track formador) {
+                        <div class="contenedorFormador">
+                          <div class="nombre">{{formador.nombre}}</div>
+                          <mat-icon (click)="eliminarFormadorLista(formador.id,element)" class="iconoPriorizada">delete</mat-icon>
+                        </div>
+                      }
+                      <mat-form-field class="example-full-width" appearance="fill">
+                        <mat-label>Añadir formador</mat-label>
+                        <input type="text" matInput [formControl]="autoFormadorControl"  [matAutocomplete]="autoInsertFormador">
+                        <mat-autocomplete #autoInsertFormador="matAutocomplete" (optionSelected)="seleccionFormador($event, element)" [displayWith]="displayFn">
+                          @for (option of filteredOptionsFormador | async; track option) {
+                            <mat-option [value]="option">
+                              {{option.nombre}}
+                            </mat-option>
+                          }
+                        </mat-autocomplete>
+                      </mat-form-field>
+                    </div>
+                  </div>
+                </div> <!-- FIN GRID -->
+                <button class="botonComentario" mat-raised-button color="basic" aria-label="Ver comentarios" (click)="mostrarComentarios(element.cod_curso)">Comentarios</button>
+                <button button mat-raised-button color="warn" class="botonEliminar" (click)="eliminarCurso(element['cod_curso'])">Eliminar</button>
+                <button button mat-raised-button color="primary" class="botonAddSimilar" (click)="copiarSesion(element)">Copiar Sesión</button>
+              </div>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columnsToDisplayWithExpand; sticky: true"></tr>
+          <tr mat-row *matRowDef="let element; columns: columnsToDisplayWithExpand;"
+            class="example-element-row"
+            [class.example-expanded-row]="expandedElement === element"
+            (click)="expandedElement = expandedElement === element ? null : element">
+          </tr>
+          <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+        </table>
+      </div>
+
+
+    <!-- TABLA FORMADORES -->
+      <div id="contenedorTabla" [ngClass]="{'oculto': pantallaSeleccionada!='Formadores'}" >
+
+        <table id="tablaCursos" mat-table [dataSource]="tablaFormadores" multiTemplateDataRows class="mat-elevation-z8">
+          <!--
+          <ng-container matColumnDef="{{column}}" *ngFor="let column of columnsToDisplay">
+            <th mat-header-cell *matHeaderCellDef> {{column}} </th>
+            <td mat-cell *matCellDef="let element"> {{element[column]}} </td>
+          </ng-container>
+          -->
+          <ng-container matColumnDef="cod_formador">
+            <th mat-header-cell *matHeaderCellDef class="columnaCurso">Cod Formador</th>
+            <td  mat-cell *matCellDef="let element"(click)="comprobarFormador(element['cod__formador'])"> {{element['cod__formador']}} </td>
+          </ng-container>
+          <ng-container matColumnDef="nombre">
+            <th mat-header-cell *matHeaderCellDef class="columnaServicio">Nombre</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarFormador(element['cod__formador'])"> {{element['nombre']}} </td>
+          </ng-container>
+          <ng-container matColumnDef="territorial">
+            <th mat-header-cell *matHeaderCellDef class="columnaResponsable">Territorial</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarFormador(element['cod__formador'])"> {{element['territorial']}} </td>
+          </ng-container>
+          <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions">Estado</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarFormador(element['cod__formador'])">
+              <!--
+              <button mat-raised-button color="{{element.metadatos.revisado}}" aria-label="expand row" (click)="marcarRevisado(element)">Revisado</button>
+              -->
+              <div class="contenedorRevision">
+                <!--
+                <section class="example-section">
+                  <mat-checkbox [checked]="element.metadatos.revisado" class="example-margin"></mat-checkbox>
+                </section>
+                -->
+                @if (element.metadatos.flag_cambio) {
+                  <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+                }
+                @if (!element.metadatos.error) {
+                  <mat-icon class="iconoResolved">beenhere_icon</mat-icon>
+                }
+                @if (element.metadatos.flagTareaPendiente) {
+                  <mat-icon class="iconoWarning">new_releases_icon</mat-icon>
+                }
+                @if (element.metadatos.error) {
+                  <mat-icon class="iconoPriorizada">error</mat-icon>
+                }
+                <!-- <mat-icon >local_hotel_icon</mat-icon>
+                <mat-icon *ngIf="element.metadatos.fecha_resolucion==undefined">event_busy_icon</mat-icon>
+                -->
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                  @if (expandedElement !== element) {
+                    <mat-icon>keyboard_arrow_down</mat-icon>
+                  }
+                  @if (expandedElement === element) {
+                    <mat-icon>keyboard_arrow_up</mat-icon>
+                  }
+                </button>
+              </div>
+            </td>
+          </ng-container>
+          <!-- Expanded Content Column - The detail row is made up of this one column that spans across all columns -->
+          <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="columnsToDisplayWithExpandFormador.length">
+              <div class="contenedorDetalle"
+                [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                <div class="contenedorGrid">
+                  <div  class="titulo seccionGeneral">General</div>
+                  <div  class="titulo seccionUbicacion">Ubicación</div>
+                  <div  class="titulo seccionFecha">Estado</div>
+                  <div  class="titulo seccionGrupo">Documentos</div>
+                  <div  class="seccion seccionGeneral"></div>
+                  <div  class="seccion seccionUbicacion"></div>
+                  <div  class="seccion seccionFecha"></div>
+                  <div  class="seccion seccionGrupo"></div>
+                  <!-- Cod Curso -->
+                  <div  class="campo codigoCurso">
+                    <div class="tituloCampo">Código Formador: </div>
+                    <div class="valor"> {{element['cod__formador']}}</div>
+                  </div>
+                  <!-- Nombre -->
+                  <div class="campo modalidad" [ngClass]="{'error': element.metadatos.errores.nombre}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Nombre</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'nombre')" value="{{element['nombre']}}" placeholder="Nombre" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- Email -->
+                  <div class="campo estado"[ngClass]="{'error': element.metadatos.errores.email}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Email</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'email')" value="{{element['email']}}" placeholder="Email" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- TELEFONO -->
+                  <div class="campo material">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Telefono</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'telefono')" value="{{element['telefono']}}" placeholder="Telefono" #input>
+                    </mat-form-field>
+                  </div>
+                  <!-- COD POSTAL
+                  <div class="campo codigoPostal"[ngClass]="{'error': element.metadatos.errores.postal}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Cod. Postal</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'cod__postal')" minlength="5" maxlength="5" value="{{element['cod__postal']}}" placeholder="XXXXX" #postalCode>
+                      <mat-hint align="end">{{postalCode.value.length}} / 5</mat-hint>
+                    </mat-form-field>
+                  </div>
+                  -->
+                  <!-- TERRITORIAL -->
+                  <div class="campo codigoPostal"[ngClass]="{'error': element.metadatos.errores.territorial}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Territorial: </mat-label>
+                      <mat-select [(value)]="element.territorial" (selectionChange)="addCampoInput($event,element,'territorial')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN-NAVARRA-LA RIOJA">Aragón-Navarra-La Rioja</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="ASTURIAS-CANTABRIA">Asturias-Cantabria</mat-option>
+                        <mat-option value="CASTILLA-LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="C. VALENCIANA-MURCIA">C. Valencia-Murcia</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- CCAA -->
+                  <div class="campo territorial"[ngClass]="{'error': element.metadatos.errores.ccaa}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>CCAA: </mat-label>
+                      <mat-select value="{{element['ccaa']}}" (selectionChange)="addCampoInput($event,element,'ccaa_/_pais')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN">Aragón</mat-option>
+                        <mat-option value="ASTURIAS">Asturias</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="C. VALENCIANA">C. Valenciana</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="CANTABRIA">Cantabria</mat-option>
+                        <mat-option value="CASTILLA-LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="CEUTA">Ceuta</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="LA RIOJA">La rioja</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="MELILLA">Melilla</mat-option>
+                        <mat-option value="MURCIA">Murcia</mat-option>
+                        <mat-option value="NAVARRA">Navarra</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="ESPAÑA">España</mat-option>
+                        <mat-option value="OTROS PAISES">Otros paises</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- FECHA ALTA
+                  <div class="campo horaInicio">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Fecha</mat-label>
+                      <input matInput [matDatepicker]="picker" (dateChange)="addCampoInput($event,element,'fecha_alta')" [value]="element['fecha_alta']">
+                      <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+                      <mat-datepicker #picker></mat-datepicker>
+                      <mat-hint>DD/MM/YYYY</mat-hint>
+                    </mat-form-field>
+                  </div>
+                  -->
+                  <!-- ESTADO -->
+                  <div class="campo fecha"[ngClass]="{'error': element.metadatos.errores.estado}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Estado: </mat-label>
+                      <mat-select value="{{element['estado']}}"(selectionChange)="addCampoInput($event,element,'estado')">
+                        <mat-option value="ACTIVO">ACTIVO</mat-option>
+                        <mat-option value="INACTIVO">INACTIVO</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                  <!-- Formulario Certificado  -->
+                  <div class="campo codigoGrupo">
+                    <div class="contenedorArchivo">
+                      <div class="tituloFormulario">Certificado: </div>
+                      @if (!element['certificado']) {
+                        <input class="inputUrl" value="'hola'"  type="file" name="file" id="certificado" (change)="incluirRuta($event,0)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                      @if (element['certificado']) {
+                        <input class="inputUrl"  type="file" name="file" id="certificado" (change)="incluirRuta($event,0)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                    </div>
+                  </div>
+                  <!-- Formulario Certificado  -->
+                  <div class="campo curso">
+                    <div class="contenedorArchivo">
+                      <div class="tituloFormulario">Confidencialidad: </div>
+                      @if (!element['confidencialidad']) {
+                        <input class="inputUrl" value="'hola'"  type="file" name="file" id="certificado" (change)="incluirRuta($event,1)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                      @if (element['confidencialidad']) {
+                        <input class="inputUrl"  type="file" name="file" id="certificado" (change)="incluirRuta($event,1)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                    </div>
+                  </div>
+                  <!-- Formulario Certificado  -->
+                  <div class="campo sesion">
+                    <div class="contenedorArchivo">
+                      <div class="tituloFormulario">Consentimiento: </div>
+                      @if (!element['consentimiento']) {
+                        <input class="inputUrl" type="file" name="file" id="certificado" (change)="incluirRuta($event,2)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                      @if (element['consentimiento']) {
+                        <input class="inputUrl"  type="file" name="file" id="certificado" (change)="incluirRuta($event,2)" multiple="false" accept="docx,pdf,xlsx">
+                      }
+                    </div>
+                  </div>
+                </div> <!-- FIN GRID -->
+                <button class="botonComentario" mat-raised-button color="basic" aria-label="Ver comentarios" (click)="mostrarComentarios(element.cod_curso)">Comentarios</button>
+                <button button mat-raised-button color="warn" class="botonEliminar" (click)="eliminarFormador(element['cod__formador'])">Eliminar</button>
+              </div>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columnsToDisplayWithExpandFormador; sticky: true"></tr>
+          <tr mat-row *matRowDef="let element; columns: columnsToDisplayWithExpandFormador;"
+            class="example-element-row"
+            [class.example-expanded-row]="expandedElement === element"
+            (click)="expandedElement = expandedElement === element ? null : element">
+          </tr>
+          <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+        </table>
+        <!--
+        <mat-paginator #paginatorFormadores="matPaginator" [pageSizeOptions]="[5, 10, 20]"
+          showFirstLastButtons
+          >
+        </mat-paginator>
+        -->
+      </div>
+      <!-- FIN TABLA FORMADORES -->
+
+    <!-- TABLA INSTITUCIONES -->
+      <div id="contenedorTabla" [ngClass]="{'oculto': pantallaSeleccionada!='Instituciones'}">
+        <table id="tablaCursos" mat-table [dataSource]="tablaInstituciones" multiTemplateDataRows class="mat-elevation-z8">
+          <!--
+          <ng-container matColumnDef="{{column}}" *ngFor="let column of columnsToDisplay">
+            <th mat-header-cell *matHeaderCellDef> {{column}} </th>
+            <td mat-cell *matCellDef="let element"> {{element[column]}} </td>
+          </ng-container>
+          -->
+          <ng-container matColumnDef="cod_institucion">
+            <th mat-header-cell *matHeaderCellDef class="columnaCurso">Cod Institucion</th>
+            <td  mat-cell *matCellDef="let element"(click)="comprobarInstitucion(element['cod_institucion'])"> {{element['cod_institucion']}} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="nombre">
+            <th mat-header-cell *matHeaderCellDef class="columnaServicio">Institución</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarInstitucion(element['cod_institucion'])"> {{element['institucion']}} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="territorial">
+            <th mat-header-cell *matHeaderCellDef class="columnaResponsable">Territorial</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarInstitucion(element['cod_institucion'])"> {{element['territorial']}} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions">Estado</th>
+            <td mat-cell *matCellDef="let element"(click)="comprobarInstitucion(element['cod_institucion'])">
+              <!--
+              <button mat-raised-button color="{{element.metadatos.revisado}}" aria-label="expand row" (click)="marcarRevisado(element)">Revisado</button>
+              -->
+              <div class="contenedorRevision">
+                <!--
+                <section class="example-section">
+                  <mat-checkbox [checked]="element.metadatos.revisado" class="example-margin"></mat-checkbox>
+                </section>
+                -->
+                @if (element.metadatos.flag_cambio) {
+                  <mat-icon class="iconoPriorizada">whatshot_icon</mat-icon>
+                }
+                @if (!element.metadatos.error) {
+                  <mat-icon class="iconoResolved">beenhere_icon</mat-icon>
+                }
+                @if (element.metadatos.flagTareaPendiente) {
+                  <mat-icon class="iconoWarning">new_releases_icon</mat-icon>
+                }
+                @if (element.metadatos.error) {
+                  <mat-icon class="iconoPriorizada">error</mat-icon>
+                }
+                <!-- <mat-icon >local_hotel_icon</mat-icon>
+                <mat-icon *ngIf="element.metadatos.fecha_resolucion==undefined">event_busy_icon</mat-icon>
+                -->
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                  @if (expandedElement !== element) {
+                    <mat-icon>keyboard_arrow_down</mat-icon>
+                  }
+                  @if (expandedElement === element) {
+                    <mat-icon>keyboard_arrow_up</mat-icon>
+                  }
+                </button>
+              </div>
+            </td>
+          </ng-container>
+          <!-- Expanded Content Column - The detail row is made up of this one column that spans across all columns -->
+          <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="columnsToDisplayWithExpandFormador.length">
+              <div class="contenedorDetalle"
+                [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                <div class="contenedorGrid">
+                  <div  class="titulo seccionGeneral">General</div>
+                  <div  class="titulo seccionUbicacion">Ubicación</div>
+                  <div  class="titulo seccionFecha">Estado</div>
+                  <div  class="titulo seccionGrupo">Contactos</div>
+                  <div  class="seccion seccionGeneral"></div>
+                  <div  class="seccion seccionUbicacion"></div>
+                  <div  class="seccion seccionFecha"></div>
+                  <div  class="seccion seccionGrupo"></div>
+
+                  <!-- Cod Curso -->
+                  <div  class="campo codigoCurso">
+                    <div class="tituloCampo">Código Institución: </div>
+                    <div class="valor"> {{element['cod_institucion']}}</div>
+                  </div>
+
+                  <!-- Nombre -->
+                  <div class="campo modalidad" [ngClass]="{'error': element.metadatos.errores.institucion}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Nombre Institución</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'institucion')" value="{{element['institucion']}}" placeholder="Nombre" #input>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- ESTADO -->
+                  <div class="campo estado"[ngClass]="{'error': element.metadatos.errores.estado}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Estado: </mat-label>
+                      <mat-select value="{{element['estado']}}"(selectionChange)="addCampoInput($event,element,'estado')">
+                        <mat-option value="ACTIVO">ACTIVO</mat-option>
+                        <mat-option value="INACTIVO">INACTIVO</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- COD POSTAL -->
+                  <div class="campo codigoPostal"[ngClass]="{'error': element.metadatos.errores.postal}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Cod. Postal</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'cod__postal')" minlength="5" maxlength="5" value="{{element['cod__postal']}}" placeholder="XXXXX" #postalCode>
+                      <mat-hint align="end">{{postalCode.value.length}} / 5</mat-hint>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- TERRITORIAL -->
+                  <div class="campo territorial"[ngClass]="{'error': element.metadatos.errores.territorial}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>Territorial: </mat-label>
+                      <mat-select [(value)]="element.territorial" (selectionChange)="addCampoInput($event,element,'territorial')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN-NAVARRA-LA RIOJA">Aragón-Navarra-La Rioja</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="ASTURIAS-CANTABRIA">Asturias-Cantabria</mat-option>
+                        <mat-option value="CASTILLA-LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="C. VALENCIANA-MURCIA">C. Valencia-Murcia</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- CCAA -->
+                  <div class="campo ccaa"[ngClass]="{'error': element.metadatos.errores.ccaa}">
+                    <mat-form-field appearance="fill">
+                      <mat-label>CCAA: </mat-label>
+                      <mat-select value="{{element['ccaa_/_pais']}}" (selectionChange)="addCampoInput($event,element,'ccaa_/_pais')">
+                        <mat-option value="ANDALUCÍA">Andalucía</mat-option>
+                        <mat-option value="ARAGÓN">Aragón</mat-option>
+                        <mat-option value="ASTURIAS">Asturias</mat-option>
+                        <mat-option value="ISLAS BALEARES">Baleares</mat-option>
+                        <mat-option value="C. VALENCIANA">C. Valenciana</mat-option>
+                        <mat-option value="CANARIAS">Canarias</mat-option>
+                        <mat-option value="CANTABRIA">Cantabria</mat-option>
+                        <mat-option value="CASTILLA-LA MANCHA">Castilla La Mancha</mat-option>
+                        <mat-option value="CASTILLA Y LEÓN">Castilla y León</mat-option>
+                        <mat-option value="CATALUÑA">Cataluña</mat-option>
+                        <mat-option value="CEUTA">Ceuta</mat-option>
+                        <mat-option value="EXTREMADURA">Extremadura</mat-option>
+                        <mat-option value="GALICIA">Galicia</mat-option>
+                        <mat-option value="LA RIOJA">La rioja</mat-option>
+                        <mat-option value="MADRID">Madrid</mat-option>
+                        <mat-option value="MELILLA">Melilla</mat-option>
+                        <mat-option value="MURCIA">Murcia</mat-option>
+                        <mat-option value="NAVARRA">Navarra</mat-option>
+                        <mat-option value="PAÍS VASCO">País Vasco</mat-option>
+                        <mat-option value="ESPAÑA">España</mat-option>
+                        <mat-option value="OTROS PAISES">Otros paises</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+
+                  <!-- DIRECCIÓN -->
+                  <div class="campo direccion"[ngClass]="{'error': element.metadatos.errores.direccion}">
+                    <mat-form-field appearance="outline">
+                      <mat-label>Dirección</mat-label>
+                      <input matInput (keyup)="addCampoInput($event,element,'direccion')" value="{{element['direccion']}}" placeholder="">
+                    </mat-form-field>
+                  </div>
+
+                  <!-- Contacto 1  -->
+                  <div class="campo contacto1" [ngClass]="{'error': element.metadatos.errores.contacto}">
+                    <div class="listaContactos">
+                      <div  class="titulo">Contacto 1</div>
+                      <!-- Nombre Contacto 1 -->
+                      <div class="campo estado"[ngClass]="{'error': element.metadatos.errores.contacto}">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Nombre Contacto</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'contacto1')" value="{{element['contacto1']}}" placeholder="Nombre Contacto" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- Email1 -->
+                      <div class="campo estado"[ngClass]="{'error': element.metadatos.errores.email}">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Email</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'email1')" value="{{element['email1']}}" placeholder="Email" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- TELEFONO -->
+                      <div class="campo material">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Teléfono</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'telefono1')" value="{{element['telefono1']}}" placeholder="Telefono" #input>
+                        </mat-form-field>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <!-- Contacto 2  -->
+                  <div class="campo contacto2">
+                    <div class="listaContactos">
+                      <div  class="titulo">Contacto 2</div>
+                      <!-- Nombre Contacto 2 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Nombre Contacto</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'contacto2')" value="{{element['contacto2']}}" placeholder="Nombre Contacto" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- Email1 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Email</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'email2')" value="{{element['email2']}}" placeholder="Email" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- TELEFONO -->
+                      <div class="campo material">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Teléfono</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'telefono2')" value="{{element['telefono2']}}" placeholder="Telefono" #input>
+                        </mat-form-field>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <!-- Contacto 3  -->
+                  <div class="campo contacto3">
+                    <div class="listaContactos">
+                      <div  class="titulo">Contacto 3</div>
+                      <!-- Nombre Contacto 3 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Nombre Contacto</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'contacto3')" value="{{element['contacto3']}}" placeholder="Nombre Contacto" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- Email1 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Email</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'email3')" value="{{element['email3']}}" placeholder="Email" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- TELEFONO -->
+                      <div class="campo material">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Teléfono</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'telefono3')" value="{{element['telefono3']}}" placeholder="Telefono" #input>
+                        </mat-form-field>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <!-- Contacto 4  -->
+                  <div class="campo contacto4">
+                    <div class="listaContactos">
+                      <div  class="titulo">Contacto 4</div>
+                      <!-- Nombre Contacto 4 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Nombre Contacto</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'contacto4')" value="{{element['contacto4']}}" placeholder="Nombre Contacto" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- Email1 -->
+                      <div class="campo estado">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Email</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'email4')" value="{{element['email4']}}" placeholder="Email" #input>
+                        </mat-form-field>
+                      </div>
+                      <!-- TELEFONO -->
+                      <div class="campo material">
+                        <mat-form-field appearance="outline">
+                          <mat-label>Teléfono</mat-label>
+                          <input matInput (keyup)="addCampoInput($event,element,'telefono4')" value="{{element['telefono4']}}" placeholder="Telefono" #input>
+                        </mat-form-field>
+                      </div>
+
+                    </div>
+                  </div>
+                  
+                </div> <!-- FIN GRID -->
+                <button class="botonComentario" mat-raised-button color="basic" aria-label="Ver comentarios" (click)="mostrarComentarios(element.cod_curso)">Comentarios</button>
+                <button button mat-raised-button color="warn" class="botonEliminar" (click)="eliminarInstitucion(element['cod_institucion'])">Eliminar</button>
+              </div>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columnsToDisplayWithExpandInstitucion; sticky: true"></tr>
+          <tr mat-row *matRowDef="let element; columns: columnsToDisplayWithExpandInstitucion;"
+            class="example-element-row"
+            [class.example-expanded-row]="expandedElement === element"
+            (click)="expandedElement = expandedElement === element ? null : element">
+          </tr>
+          <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+        </table>
+        <!--
+        <mat-paginator #paginatorFormadores="matPaginator" [pageSizeOptions]="[5, 10, 20]"
+          showFirstLastButtons
+          >
+        </mat-paginator>
+        -->
+      </div>
+      <!-- FIN TABLA INSTITUCIONES -->
+
+    <!-- TABLA AUTOMATIZACIÓN -->
+    @if (pantallaSeleccionada=='Automatizacion') {
+
+      <div id="contenedorTabla" class="tablaAutomatizacion">
+
+        @if (correosActualizados) {
+        <table id="tablaCursos" mat-table [dataSource]="tablaCorreos" multiTemplateDataRows class="mat-elevation-z8">
+
+          <ng-container matColumnDef="cod_curso">
+            <th mat-header-cell *matHeaderCellDef class="columnaServicio"
+                >Cod Curso</th>
+            <td mat-cell *matCellDef="let element"
+                >
+                {{element['cod_curso']}}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="institucion">
+            <th mat-header-cell *matHeaderCellDef class="columnaResponsable">Institución</th>
+            <td mat-cell *matCellDef="let element"> {{element['institucion']['institucion']}} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="estado">
+            <th mat-header-cell *matHeaderCellDef class="columnaResponsable">Estado</th>
+            <td mat-cell *matCellDef="let element"> {{element['fecha']}} ({{element['estado']}}) </td>
+          </ng-container>
+
+          <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions"></th>
+            <td mat-cell *matCellDef="let element">
+              <!--
+              <button mat-raised-button color="{{element.metadatos.revisado}}" aria-label="expand row" (click)="marcarRevisado(element)">Revisado</button>
+              -->
+              <div class="contenedorRevision">
+                <!--
+                <section class="example-section">
+                  <mat-checkbox [checked]="element.metadatos.revisado" class="example-margin"></mat-checkbox>
+                </section>
+                -->
+                <!-- <mat-icon >local_hotel_icon</mat-icon>
+                <mat-icon *ngIf="element.metadatos.fecha_resolucion==undefined">event_busy_icon</mat-icon>
+                -->
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                  @if (expandedElement !== element) {
+                    <mat-icon>keyboard_arrow_down</mat-icon>
+                  }
+                  @if (expandedElement === element) {
+                    <mat-icon>keyboard_arrow_up</mat-icon>
+                  }
+                </button>
+              </div>
+            </td>
+          </ng-container>
+          <!-- Expanded Content Column - The detail row is made up of this one column that spans across all columns -->
+          <ng-container matColumnDef="expandedDetail">
+
+            <td mat-cell *matCellDef="let element" [attr.colspan]="columnsToDisplayWithExpandCorreos.length">
+              <div class="contenedorDetalle"
+                [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                <div class="contenedorGridAutomatizacion">
+
+                    <!-- FASE I -->
+                    <div  class="titulo seccionI">Fase I: Confirmación Institución</div>
+                    <div class="estado faseI" 
+                        [ngClass]="{'error': element['flagsEstados'][0]=='error','warn': element['flagsEstados'][0]=='warn','ok': element['flagsEstados'][0]=='OK'}">
+                        {{element['cod_correo_institucion']}}
+                    </div>
+
+                    <div class="mensaje faseI">{{element['confirmacion_centro']}}: {{element['mensajeFaseI']}}</div>
+
+                    @if (element['confirmacion_centro']=='SIN GENERAR'){
+                    <button button mat-raised-button color="primary" class="botonAccion faseI"
+                        (click)="generarCorreo('institucion',element['cod_curso'],[element['institucion'],element['cod_correo_institucion']])"
+                        >Generar</button>
+                    }
+
+                    @if (element['confirmacion_centro']=='NO ENVIADO' || element['confirmacion_centro']=='OK'){
+                    <button button mat-stroked-button color="warn" class="botonAccion faseI"
+                        (click)="reGenerarCorreo('institucion',element['cod_curso'],[element['institucion'],element['cod_correo_institucion']])"
+                        >Regenerar</button>
+                    }
+                    <mat-slide-toggle class="marcarCorreoOK faseI botonAccion" [(ngModel)]="element.forzarCorreoInstitucion" (click)="forzarCorreoOK(element['cod_curso'],'institucion')"></mat-slide-toggle>
+
+                    <!-- FASE II -->
+                    <div  class="titulo seccionII">Fase II: Material Formador</div>
+                    <div class="estado faseII"
+                        [ngClass]="{'error': element['flagsEstados'][1]=='error','warn': element['flagsEstados'][1]=='warn','ok': element['flagsEstados'][1]=='OK'}">
+                        {{element['cod_correo_material']}}</div>
+                    <div class="mensaje faseII">{{element['confirmacion_material']}}: {{element['mensajeFaseII']}}</div>
+
+                    @if (element['confirmacion_material']=='SIN GENERAR'){
+                    <button button mat-raised-button color="primary" class="botonAccion faseII"
+                        (click)="generarCorreo('material',element['cod_curso'],[element['institucion'],element['cod_correo_material']])"
+                        >Generar</button>
+                    }
+                    @if (element['confirmacion_material']=='NO ENVIADO' || element['confirmacion_material']=='OK'){
+                    <button button mat-stroked-button color="warn" class="botonAccion faseII"
+                        (click)="reGenerarCorreo('material',element['cod_curso'],[element['institucion'],element['cod_correo_material']])"
+                        >Regenerar</button>
+                    }
+
+                    <!-- FASE III -->
+                    <div  class="titulo seccionIII">Fase III: Recordatorio</div>
+                    <div class="estado faseIII"
+                        [ngClass]="{'error': element['flagsEstados'][2]=='error','warn': element['flagsEstados'][2]=='warn','ok': element['flagsEstados'][2]=='OK'}">
+                        {{element['cod_correo_recordatorio']}}</div>
+                    <div class="mensaje faseIII">{{element['confirmacion_recordatorio']}}: {{element['mensajeFaseIII']}}</div>
+                    @if (element['confirmacion_recordatorio']=='SIN GENERAR'){
+                    <button button mat-raised-button color="primary" class="botonAccion faseIII"
+                        (click)="generarCorreo('recordatorio',element['cod_curso'],[element['institucion'],element['cod_correo_recordatorio']])"
+                        >Generar</button>
+                    }
+                    @if (element['confirmacion_recordatorio']=='EN FECHA'){
+                    <button button mat-stroked-button color="primary" class="botonAccion faseIII"
+                        (click)="generarCorreo('recordatorio',element['cod_curso'],[element['institucion'],element['cod_correo_recordatorio']])"
+                        >Generar</button>
+                    }
+                    @if (element['confirmacion_recordatorio']=='NO ENVIADO' || element['confirmacion_recordatorio']=='OK'){
+                    <button button mat-stroked-button color="warn" class="botonAccion faseIII"
+                        (click)="reGenerarCorreo('recordatorio',element['cod_curso'],[element['institucion'],element['cod_correo_recordatorio']])"
+                        >Regenerar</button>
+                    }
+
+                    <!-- FASE IV (FORMADOR) -->
+                    <div class="estado faseIV formador"
+                        [ngClass]="{'error': element['flagsEstados'][3]=='error','warn': element['flagsEstados'][3]=='warn','ok': element['flagsEstados'][3]=='OK','pendiente': element['flagsEstados'][3]=='PENDIENTE'}">
+                        [FORMADOR]
+                        {{element['cod_correo_graciasFormador']}}</div>
+                    <div class="mensaje faseIV formador">{{element['confirmacion_graciasFormador']}}: {{element['mensajeFaseIVFormador']}}</div>
+                    @if (element['confirmacion_graciasFormador']=='SIN GENERAR'){
+                    <button button mat-raised-button color="primary" class="botonAccion faseIV formador"
+                        (click)="generarCorreo('graciasFormador',element['cod_curso'],[element['institucion'],element['cod_correo_graciasFormador']])"
+                        >Generar</button>
+                    }
+                    @if (element['confirmacion_graciasFormador']=='NO ENVIADO' || element['confirmacion_graciasFormador']=='OK'){
+                    <button button mat-stroked-button color="warn" class="botonAccion faseIV formador"
+                        (click)="reGenerarCorreo('graciasFormador',element['cod_curso'],[element['institucion'],element['cod_correo_graciasFormador']])"
+                        >Regenerar</button>
+                    }
+
+                    <!-- FASE IV -->
+                    <div  class="titulo seccionIV">Fase IV: Gracias</div>
+
+                    <!-- FASE IV (INSTITUCION) -->
+                    <div class="estado faseIV"
+                        [ngClass]="{'error': element['flagsEstados'][4]=='error','warn': element['flagsEstados'][4]=='warn','ok': element['flagsEstados'][4]=='OK','pendiente': element['flagsEstados'][4]=='PENDIENTE'}">
+                        [INSTITUCIÓN]
+                        {{element['cod_correo_graciasInstitucion']}}</div>
+                    <div class="mensaje faseIV">{{element['confirmacion_graciasInstitucion']}}: {{element['mensajeFaseIVInstitucion']}}</div>
+                    @if (element['confirmacion_graciasInstitucion']=='SIN GENERAR'){
+                    <button button mat-raised-button color="primary" class="botonAccion faseIV"
+                        (click)="generarCorreo('graciasInstitucion',element['cod_curso'],[element['institucion'],element['cod_correo_graciasInstitucion']])"
+                        >Generar</button>
+                    }
+                    @if (element['confirmacion_graciasInstitucion']=='NO ENVIADO' || element['confirmacion_graciasInstitucion']=='OK'){
+                    <button button mat-stroked-button color="warn" class="botonAccion faseIV"
+                        (click)="reGenerarCorreo('graciasInstitucion',element['cod_curso'],[element['institucion'],element['cod_correo_graciasInstitucion']])"
+                        >Regenerar</button>
+                    }
+
+
+                </div> <!-- FIN GRID -->
+
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="columnsToDisplayWithExpandCorreos; sticky: true"
+
+              ></tr>
+          <tr mat-row *matRowDef="let element; columns: columnsToDisplayWithExpandCorreos;"
+            class="example-element-row"
+            [ngClass]="{'error': element['flagEstadoGeneral']=='error','warn': element['flagEstadoGeneral']=='warn','ok': element['flagEstadoGeneral']=='OK','pendiente': element['flagEstadoGeneral']=='PENDIENTE'}"
+            [class.example-expanded-row]="expandedElement === element"
+            (click)="expandedElement = expandedElement === element ? null : element">
+          </tr>
+          <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+        </table>
+        }@else{
+            <div id="mensajeActualizar">
+                Pulse actualizar para visualizar las tareas de automatización.
+            </div>
+        }
+
+        <!--
+        <mat-paginator #paginatorFormadores="matPaginator" [pageSizeOptions]="[5, 10, 20]"
+          showFirstLastButtons
+          >
+        </mat-paginator>
+        -->
+      </div>
+
+      @if(correosVisualizados.length > 0 && correosVisualizados[indexCorreoVisualizado]){
+        <div id="visualizadorCorreo" [innerHtml]="correosVisualizados[indexCorreoVisualizado]"> </div>
+      }
+
+      } <!-- FIN TABLA CORREOS -->
+
+    <mat-paginator #paginatorCursos="matPaginator" [ngClass]="{'oculto': pantallaSeleccionada!='Cursos'}" [pageSizeOptions]="[5, 10]"
+      showFirstLastButtons
+      aria-label="Select page of periodic elements">
+    </mat-paginator>
+
+    <mat-paginator #paginatorFormadores="matPaginator" [ngClass]="{'oculto': pantallaSeleccionada!='Formadores'}" [pageSizeOptions]="[5, 10]"
+      showFirstLastButtons
+      >
+    </mat-paginator>
+
+    <mat-paginator #paginatorInstituciones="matPaginator" [ngClass]="{'oculto': pantallaSeleccionada!='Instituciones'}" [pageSizeOptions]="[5, 10]"
+      showFirstLastButtons
+      >
+    </mat-paginator>
+
+    </div>

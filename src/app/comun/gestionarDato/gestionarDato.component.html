@@ -1,0 +1,88 @@
+
+
+<!-- Ejecutar Proceso  -->
+
+<div>
+  <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+  <h1 mat-dialog-title>Gestionar Datos: </h1>
+  <div mat-dialog-content>
+    <div  class="contenedorEjecutarProceso">
+      <mat-drawer-container [hasBackdrop]="false" autosize>
+        <mat-drawer #drawerProcesos  mode="side" opened>
+
+          <div class="tituloDrawer">Archivos: </div>
+          <mat-tree [dataSource]="arbolArchivosDataSource" [treeControl]="arbolArchivosControl">
+            <!-- This is the tree node template for leaf nodes -->
+            <mat-tree-node class="proceso" *matTreeNodeDef="let node" matTreeNodePadding (click)="gestionarArchivo(node)">
+              <!-- use a disabled button to provide padding for tree leaf -->
+              @if (node.tipo=='txt') {
+                <mat-icon>text_fields</mat-icon>
+              }
+              @if (node.tipo=='xlsx') {
+                <mat-icon>insert_chart_outlined</mat-icon>
+              }
+              @if (node.tipo=='db') {
+                <mat-icon>dns</mat-icon>
+              }
+              @if (node.tipo=='dir') {
+                <mat-icon>folder</mat-icon>
+              }
+              @if (node.tipo=='spool') {
+                <mat-icon>receipt_long</mat-icon>
+              }
+              @if (node.tipo=='png' || node.tipo=='jpg'|| node.tipo=='jpeg') {
+                <mat-icon>image</mat-icon>
+              }
+              {{node.nombre}}
+            </mat-tree-node>
+            <!-- This is the tree node template for expandable nodes -->
+            <mat-tree-node class="categoria" *matTreeNodeDef="let node;when: hasChild" matTreeNodeToggle matTreeNodePadding>
+              <button mat-icon-button
+                [attr.aria-label]="'Toggle ' + node.nombre">
+                <mat-icon class="mat-icon-rtl-mirror">
+                  {{arbolArchivosControl.isExpanded(node) ? 'expand_more' : 'chevron_right'}}
+                </mat-icon>
+              </button>
+              <mat-icon>folder</mat-icon>
+              {{node.nombre}}
+            </mat-tree-node>
+          </mat-tree>
+        </mat-drawer>
+
+        <mat-drawer-content>
+
+          <button mat-icon-button class="botonNav" color="warn" (click)="drawerProcesos.toggle()">
+            <mat-icon>notes</mat-icon>
+          </button>
+
+          @if (archivoSeleccionado === null) {
+            <div class="textoSeleccionarProceso">Seleccione un archivo</div>
+          }
+
+          @if (archivoSeleccionado !== null) {
+            <div class="procesoContainer">
+              <!-- Cabecera de proceso -->
+              <h2>
+                <div class="nombreProceso">{{archivoSeleccionado.nombre}}</div>
+              </h2>
+              <!-- Formulario de Gestionde datos  -->
+              <button  mat-raised-button class="botonEjecucion" color="warn" (click)="eliminarArchivo()">Borrar Archivo</button>
+            </div>
+          }
+        </mat-drawer-content>
+
+      </mat-drawer-container>
+
+
+    </div> <!-- Fin importacion libre -->
+
+  </div>
+</div>
+
+
+
+
+
+
+
+

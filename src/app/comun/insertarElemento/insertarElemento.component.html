@@ -1,0 +1,295 @@
+<!-- Insertar Elemento: TEXTO -->
+
+@if (data.opciones.tipo=='texto' && !data.opciones.posicionador) {
+  <div>
+    <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+    <h1 mat-dialog-title>Insertar Texto</h1>
+    <div mat-dialog-content>
+      <!--Importacion Libre -->
+      <div class="contenedorInsertarTexto">
+        <form [formGroup]="formularioTextoGroup" class="formularioTexto">
+          <div class="contenedorVisualizadorTexto" [ngStyle]="formatoTexto">
+            {{formularioTextoControl.value}}
+          </div>
+          <mat-form-field class="formularioValorTexto">
+            <mat-label>Texto: </mat-label>
+            <textarea matInput requiere [formControl]="formularioTextoControl" placeholder="Ej. Recuento mensual" value="Texto">
+            </textarea>
+          </mat-form-field>
+          <mat-form-field class="formularioFontSize">
+            <mat-label>Font size: </mat-label>
+            <input matInput type="number" (change)="cambiarFontSize()" [formControl]="formularioTextoSizeControl" placeholder="16px" value="16">
+          </mat-form-field>
+          <mat-button-toggle-group  class="barraFormatoTexto" #alineamiento="matButtonToggleGroup">
+            <mat-button-toggle value="left" (click)="cambiarAlineamientoTexto('left')" aria-label="Alinear a la izquierda">
+              <mat-icon>format_align_left</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="center"(click)="cambiarAlineamientoTexto('center')" aria-label="Alinear a al centro">
+              <mat-icon>format_align_center</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="right"(click)="cambiarAlineamientoTexto('right')" aria-label="Alinear a la derecha">
+              <mat-icon>format_align_right</mat-icon>
+            </mat-button-toggle>
+            <mat-button-toggle value="justify"(click)="cambiarAlineamientoTexto('justify')" aria-label="Justificar texto">
+              <mat-icon>format_align_justify</mat-icon>
+            </mat-button-toggle>
+          </mat-button-toggle-group>
+          <mat-button-toggle-group class="barraFormatoTexto" name="fontStyle" aria-label="Estilo Fuente">
+            <mat-button-toggle (click)="cambiarFormatoTexto('bold')" value="bold">Negrita</mat-button-toggle>
+            <mat-button-toggle (click)="cambiarFormatoTexto('italic')" value="italic">Cursiva</mat-button-toggle>
+            <mat-button-toggle (click)="cambiarFormatoTexto('underline')" value="underline">Subrayado</mat-button-toggle>
+          </mat-button-toggle-group>
+        </form>
+      </div>
+      <!-- Ejecucion:  -->
+      <div class="contenedorBotonesAccion">
+        <button (click)="posicionarElemento('texto')" mat-raised-button class="botonEjecucion" color="primary">
+          Posicionar
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Insertar Elemento: TABLA -->
+@if (data.opciones.tipo=='tabla' && !data.opciones.posicionador) {
+  <div>
+    <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+    <h1 mat-dialog-title>Insertar Tabla</h1>
+    <div mat-dialog-content>
+      <div>
+        <mat-horizontal-stepper [linear]="true" #Stepper>
+          <mat-step [stepControl]="formularioTablaGroup" completed="false">
+            <form [formGroup]="formularioTablaGroup">
+              <ng-template matStepLabel>Colección</ng-template>
+              <div class="tituloFormulario">Seleccione una colección:</div>
+              <button  mat-raised-button class="botonEjecucion" color="primary" (click)="seleccionarObjeto(0)">
+                Seleccione una colección
+              </button>
+              <mat-form-field class="campoFormulario campoArchivo">
+                <mat-label>Nombre Colección</mat-label>
+                <input matInput [formControl]="formularioObjetoTablaControl" required>
+              </mat-form-field>
+              <div class="contenedorBotonStepper">
+                <button mat-button (click)="avanzarStepper()">Siguiente</button>
+              </div>
+            </form>
+          </mat-step>
+          <mat-step [stepControl]="formularioTablaGroup">
+            <ng-template matStepLabel>Objeto</ng-template>
+            <form [formGroup]="formularioTablaGroup">
+              <div class="tituloFormulario">Seleccione el objeto a importar:</div>
+              <mat-selection-list #objetoSeleccionado>
+                @for (objeto of objetosColeccion; track objeto) {
+                  <mat-list-option [value]="objeto">
+                    {{objeto.objetoId}}
+                  </mat-list-option>
+                }
+              </mat-selection-list>
+              <div>
+                <button mat-button matStepperPrevious>Atras</button>
+                <button mat-button (click)="avanzarStepper(objetoSeleccionado);">Siguiente</button>
+              </div>
+            </form>
+          </mat-step>
+          <mat-step [stepControl]="formularioTablaGroup">
+            <ng-template matStepLabel>Cabeceras</ng-template>
+            <form [formGroup]="formularioTablaGroup">
+              <div class="tituloFormulario">Seleccione las cabeceras a importar:</div>
+              <mat-selection-list #cabecerasSeleccionadas>
+                @for (cabecera of cabecerasTablaTemporal; track cabecera) {
+                  <mat-list-option value="{{cabecera}}">
+                    {{cabecera}}
+                  </mat-list-option>
+                }
+              </mat-selection-list>
+              <div>
+                <button mat-button matStepperPrevious>Atras</button>
+                <button mat-button (click)="avanzarStepper(cabecerasSeleccionadas);">Siguiente</button>
+              </div>
+            </form>
+          </mat-step>
+          <mat-step [stepControl]="formularioObjetoTablaControl">
+            <ng-template matStepLabel>Formato</ng-template>
+            <form [formGroup]="formularioTextoGroup" class="formularioTexto">
+              <mat-drawer-container [hasBackdrop]="false" autosize>
+                <mat-drawer #drawerFormatoTabla  mode="side" opened>
+                  <div class="tituloDrawer">Formato de tabla</div>
+                  <mat-accordion class="example-headers-align">
+                    <mat-expansion-panel hideToggle>
+                      <mat-expansion-panel-header>
+                        <mat-panel-title>General</mat-panel-title>
+                      </mat-expansion-panel-header>
+                      <mat-form-field>
+                        <mat-label>First name</mat-label>
+                        <input matInput>
+                      </mat-form-field>
+                      <mat-form-field>
+                        <mat-label>Age</mat-label>
+                        <input matInput type="number" min="1">
+                      </mat-form-field>
+                    </mat-expansion-panel>
+                    <mat-expansion-panel  hideToggle>
+                      <mat-expansion-panel-header>
+                        <mat-panel-title>Cabecera</mat-panel-title>
+                      </mat-expansion-panel-header>
+                      <mat-form-field>
+                        <mat-label>Country</mat-label>
+                        <input matInput>
+                      </mat-form-field>
+                    </mat-expansion-panel>
+                    <mat-expansion-panel hideToggle>
+                      <mat-expansion-panel-header>
+                        <mat-panel-title>Cuerpo</mat-panel-title>
+                      </mat-expansion-panel-header>
+                      <mat-form-field>
+                        <mat-label>Date</mat-label>
+                        <input matInput [matDatepicker]="picker" (focus)="picker.open()" readonly>
+                      </mat-form-field>
+                      <mat-datepicker #picker></mat-datepicker>
+                    </mat-expansion-panel>
+                  </mat-accordion>
+                </mat-drawer>
+                <mat-drawer-content>
+                  <button mat-icon-button class="botonNav" color="warn" (click)="drawerFormatoTabla.toggle()">
+                    <mat-icon>notes</mat-icon>
+                  </button>
+                  <div class="contenedorVisualizadorTabla" [ngStyle]="formatoTabla">
+                    <div class="example-container mat-elevation-z8 contenedorTabla">
+                      <table mat-table class="visualizacionTabla" [dataSource]="datosTabla">
+                        <!-- Position Column -->
+                        @for (columna of cabecerasTabla; track columna) {
+                          <ng-container matColumnDef="{{columna}}">
+                            <th mat-header-cell *matHeaderCellDef> {{columna}} </th>
+                            <td mat-cell *matCellDef="let element"> {{element[columna]}} </td>
+                          </ng-container>
+                        }
+                        <tr mat-header-row *matHeaderRowDef="cabecerasTabla; sticky: true"></tr>
+                        <tr mat-row *matRowDef="let row; columns: cabecerasTabla;"></tr>
+                      </table>
+                    </div>
+                  </div>
+                </mat-drawer-content>
+              </mat-drawer-container>
+            </form>
+            <!-- Posicionar:  -->
+            <div class="contenedorBotonesAccion">
+              <button (click)="posicionarElemento('tabla')" mat-raised-button class="botonEjecucion" color="primary">
+                Posicionar
+              </button>
+            </div>
+          </mat-step>
+        </mat-horizontal-stepper>
+      </div>
+    </div>
+  </div>
+}
+<!-- Insertar Elemento: Gráfico -->
+@if (data.opciones.tipo=='grafico') {
+  <div>
+    <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+    <h1 mat-dialog-title>Insertar Gráfico</h1>
+    <div mat-dialog-content>
+      <div  class="contenedorImportacionLibre">
+        <mat-horizontal-stepper [linear]="true" #spoolStepper>
+          <!--
+          <mat-step [stepControl]="rutaArchivoGroup" completed="false">
+            <form [formGroup]="rutaArchivoGroup">
+              <ng-template matStepLabel>Cargar</ng-template>
+              <div class="tituloFormulario"> Seleccione un archivo:</div>
+              <label mat-button class="labelUrl" for="ruta">
+                Seleccione un archivo
+              </label>
+              <input class="inputUrl"  type="file" name="file" id="ruta" (oninput)="reportAMService.mostrarMensaje= true;" (change)="incluirRuta($event,'rutaArchivoControl')" multiple="false" accept=".txt, .TXT">
+              <mat-form-field class="campoFormulario campoArchivo">
+                <mat-label>Ruta archivo... </mat-label>
+                <input matInput formControlName="rutaArchivoControl">
+              </mat-form-field>
+              <div>
+                <button mat-button matStepperNext>Siguiente</button>
+              </div>
+            </form>
+          </mat-step>
+          <mat-step [stepControl]="guardadoArchivoGroup">
+            <form [formGroup]="guardadoArchivoGroup">
+              <ng-template matStepLabel>Guardar</ng-template>
+              <div class="tituloFormulario">Nombre guardado:  </div>
+              <mat-form-field class="campoFormulario campoArchivo">
+                <mat-label>Nombre Guardado </mat-label>
+                <input matInput formControlName="nombreGuardadoArchivoControl">
+              </mat-form-field>
+              <div>
+                <button mat-button matStepperPrevious>Atras</button>
+                <button mat-button (click)="importarSpool()">Importa</button>
+              </div>
+            </form>
+          </mat-step>
+          -->
+        </mat-horizontal-stepper>
+      </div> <!-- Fin importacion libre -->
+    </div>
+  </div>
+}
+
+
+<!-- Posicionador de elementos -->
+@if (data.opciones.posicionador) {
+  <div class="contenedorPosicionador">
+    <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+    <h1 mat-dialog-title>Posicionar elemento</h1>
+    <div class="panelPosicionador" mat-dialog-content>
+      <!-- Ejecucion:  -->
+      <div class="contenedorBotonesAccion">
+        <button (click)="insertarElemento()" mat-raised-button class="botonEjecucion" color="primary">
+          Insertar
+        </button>
+      </div>
+    </div>
+    <div class="areaDashboard" [ngClass]="estadoDrawer">
+      <!-- Posicionado TEXTO: -->
+      @if (data.opciones.tipo=='texto') {
+        <div class="example-box elementoPosicionado"  [ngStyle]="formatoTexto" cdkDrag cdkDragBoundary=".areaDashboard"  (cdkDragEnded)="onDragEnded($event)">
+          {{valorTexto}}
+          <div class="example-handle manipulador" cdkDragHandle>
+            <svg width="24px" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"></path>
+              <path d="M0 0h24v24H0z" fill="none"></path>
+            </svg>
+          </div>
+        </div>
+      }
+      <!-- Posicionado TABLA: -->
+      @if (data.opciones.tipo=='tabla') {
+        <div class="example-box elementoPosicionado" cdkDrag cdkDragBoundary=".areaDashboard"  (cdkDragEnded)="onDragEnded($event)">
+          <div class="contenedorVisualizadorTabla" [ngStyle]="formatoTabla">
+            <div class="example-container mat-elevation-z8 contenedorTabla">
+              <table mat-table class="visualizacionTabla" [dataSource]="datosTabla">
+                <!-- Position Column -->
+                @for (columna of cabecerasTabla; track columna) {
+                  <ng-container matColumnDef="{{columna}}">
+                    <th mat-header-cell *matHeaderCellDef> {{columna}} </th>
+                    <td mat-cell *matCellDef="let element"> {{element[columna]}} </td>
+                  </ng-container>
+                }
+                <tr mat-header-row *matHeaderRowDef="cabecerasTabla; sticky: true"></tr>
+                <tr mat-row *matRowDef="let row; columns: cabecerasTabla;"></tr>
+              </table>
+            </div>
+          </div>
+          <div class="example-handle manipulador" cdkDragHandle>
+            <svg width="24px" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"></path>
+              <path d="M0 0h24v24H0z" fill="none"></path>
+            </svg>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+
+
+
+
+

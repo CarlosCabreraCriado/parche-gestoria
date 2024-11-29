@@ -1,0 +1,94 @@
+
+.iconoDialogo
+    position: relative
+    display: inline-block
+    width: 50px
+    height: 50px
+    font-size: 50px 
+    vertical-align: middle
+    &.iconoExito
+        color: green
+    &.iconoError
+        color: red
+    &.iconoWarning
+        color: yellow
+    
+
+.tituloDialogo
+    position: relative
+    display: inline-block
+
+.dialogoBuscarActualizacion
+    text-align: center
+    .contenedorSpinner
+        display: flex 
+        justify-content: center 
+        align-items: center
+        margin: 20px 0
+    .contenedorBotonCancelar
+        justify-content: center 
+
+#dialogoSeleccionarObjeto
+    text-align: center
+    width: 30vw
+    max-height: 70vh
+    .directorio:hover
+        color: white
+        background-color: dimgray
+    .archivo:hover
+        color: white
+        background-color: dimgray
+
+#dialogoComentarios
+    text-align: center
+    width: 75vw
+    max-height: 80vh
+
+    .itemLista
+      position: relative
+      height: fit-content
+      display: flex
+      span
+        .mat-mdc-list-item-unscoped-content
+          display: flex
+          align-items: center
+
+
+      .toggle
+        position: relative
+        width: 10%
+
+      .contenedorComentario
+        position: relative
+        width: 80%
+        .fecha
+          position: relative
+          width: 100%
+          margin: 10px 0
+        .comentario
+          position: relative
+          width: 100%
+          margin: 10px 0
+          text-align: justify
+          white-space: pre-wrap
+
+    .botonBorrar
+      position: relative
+      width: 10%
+      
+    .contenedorAddComentario
+      position: relative
+      display: flex
+      width: 90%
+      margin: 10px
+      align-items: center
+      justify-content: center
+      .inputComentario
+        position: relative
+        width: 100%
+      .botonAddComentario
+        position: relative
+        width: 15%
+        margin: 10px
+
+

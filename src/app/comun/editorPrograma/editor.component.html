@@ -1,0 +1,170 @@
+
+<div class="contenedorIndex">
+
+  <img class="vodafone-icono" src="./assets/general/Icono.png"  alt="Icono Vodafone">
+
+  <button class="version" mat-stroked-button (click)="appService.buscarActualizacion()">v{{appService.version}}</button>
+
+  <div  class="titulo">EDITOR PROGRAMAS</div>
+
+  <div class="contenedorHerramientas">
+
+    <!-- (HERRAMIENTA INSERTAR) - ADD PROCESO -->
+    <button mat-icon-button class="herramienta" (click)="seleccionarHerramienta('addProceso',{})">
+      <mat-icon>add</mat-icon>
+      <div class="etiquetaHerramienta">Añadir </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - ADD Link -->
+    <button mat-icon-button class="herramienta" (click)="seleccionarHerramienta('addLink',{})">
+      <mat-icon>link</mat-icon>
+      <div class="etiquetaHerramienta">Conectar </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - Borrar -->
+    <button mat-icon-button class="herramienta" (click)="seleccionarHerramienta('borrar',{})">
+      <mat-icon>delete</mat-icon>
+      <div class="etiquetaHerramienta">Borrar </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - GRAFICA -->
+    <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
+      <mat-icon>barchart</mat-icon>
+      <div class="etiquetaHerramienta"> Gráfica </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - IMAGEN -->
+    <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
+      <mat-icon>wallpaper</mat-icon>
+      <div class="etiquetaHerramienta">Imagen </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - Guardar -->
+    <button mat-icon-button class="herramienta" (click)="guardarPrograma()">
+      <mat-icon>save</mat-icon>
+      <div class="etiquetaHerramienta">Guardar </div>
+    </button>
+
+    <!-- (HERRAMIENTA INSERTAR) - ACTUALIZAR -->
+    <button mat-icon-button class="herramienta disabled" (click)="update$.next(true)">
+      <mat-icon>design_services</mat-icon>
+      <div class="etiquetaHerramienta">Editar</div>
+    </button>
+
+    <mat-menu #menuEditar="matMenu">
+      <button mat-menu-item (click)="openDialog('no didponible',{})">
+        <mat-icon>settings</mat-icon>
+        <span>Configurar</span>
+      </button>
+
+      <button mat-menu-item (click)="update$.next(true)">
+        <mat-icon>delete</mat-icon>
+        <span>Eliminar</span>
+      </button>
+
+    </mat-menu>
+  </div>
+  <mat-drawer-container class="example-container" autosize>
+
+    <mat-drawer #drawer class="example-sidenav" mode="side" opened="false">
+      <p><b>Procesos:</b></p>
+      @if (showfiller) {
+        <p>No hay procesos disponibles</p>
+      }
+      <button (click)="showfiller = !showfiller" mat-raised-button>
+        Mostrar detalles
+      </button>
+    </mat-drawer>
+
+    <mat-drawer-content>
+
+      <button mat-icon-button class="botonNav" color="warn" (click)="drawer.toggle()">
+        <mat-icon>notes</mat-icon>
+      </button>
+
+      @for (bloqueProceso of nodes; track bloqueProceso; let i = $index) {
+        <div  class= "bloqueProceso">
+          <div id="{{bloqueProceso.id}}" class="example-box" (click)="clickNode(bloqueProceso,i)" cdkDrag>
+            <div class="tituloBloque">{{bloqueProceso.titulo}}</div>
+            <div class="contenedorEntradas">
+              @for (entrada of bloqueProceso.entradas; track entrada; let j = $index) {
+                <div  class= "snap">
+                  <div class="puntoSnap snapEntrada" (click)="clickSnap(bloqueProceso,i,'salida',j)"></div>
+                  <div>{{entrada.tipo}}</div>
+                </div>
+              }
+            </div>
+            <div class="contenedorSalidas">
+              @for (salida of bloqueProceso.salidas; track salida; let j = $index) {
+                <div  class= "snap">
+                  <div class="puntoSnap snapSalida" (click)="clickSnap(bloqueProceso,i,'salida',j)" ></div>
+                  <div>{{salida.tipo}}</div>
+                </div>
+              }
+            </div>
+            <div class="example-handle" cdkDragHandle>
+              <svg width="24px" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"></path>
+                <path d="M0 0h24v24H0z" fill="none"></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!--
+      <ngx-graph class="chart-container"
+        [links]=links
+        [nodes]=nodes
+        [layout]="dagre"
+        [update$]="update$"
+        (select)="onNodeSelect($event)" >
+
+        <ng-template #defsTemplate>
+          <svg:marker id="arrow" viewBox="0 -5 10 10" refX="8" refY="0" markerWidth="4" markerHeight="4" orient="auto">
+            <svg:path d="M0,-5L10,0L0,5" class="arrow-head" />
+            </svg:marker>
+          </ng-template>
+
+          <ng-template #nodeTemplate let-node >
+            <svg:g class="node"(click)="clickNode(node)">
+              <svg:rect
+                [attr.width]="'100px'"
+                [attr.height]="'100px'"
+                [attr.fill]="'white'"
+                [attr.stroke]="'black'"
+                [attr.stroke-width]="'2'"
+                />
+                <svg:text alignment-baseline="central" [attr.x]="10" [attr.y]="node.dimension.height / 2">
+                  {{node.label}}
+                  </svg:text>
+                  </svg:g>
+                </ng-template>
+
+                <ng-template #linkTemplate let-link>
+                  <svg:g class="edge">
+                    <svg:path class="line" stroke-width="2" marker-end="url(#arrow)"></svg:path>
+                      <svg:text class="edge-label" text-anchor="middle">
+                        <textPath
+                          class="text-path"
+                          [attr.href]="'#' + link.id"
+                          [style.dominant-baseline]="link.dominantBaseline"
+                          startOffset="50%"
+                          >
+                          {{link.label}}
+                        </textPath>
+                        </svg:text>
+                        </svg:g>
+                      </ng-template>
+                    </ngx-graph>
+                    -->
+
+                  </mat-drawer-content>
+                </mat-drawer-container>
+
+              </div>
+
+
+
+
+

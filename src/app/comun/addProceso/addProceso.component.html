@@ -1,0 +1,143 @@
+
+<!-- Add Proceso  -->
+
+<div>
+  <mat-icon class="botonCerrar" [mat-dialog-close]="true" aria-label="Example home icon">close</mat-icon>
+  <h1 mat-dialog-title>Insertar Proceso: </h1>
+  <div mat-dialog-content>
+    <div  class="contenedorEjecutarProceso">
+      <mat-drawer-container [hasBackdrop]="false" autosize>
+        <mat-drawer #drawerProcesos  mode="side" opened>
+
+          <div class="tituloDrawer"> Libreria de procesos:</div>
+          <mat-tree [dataSource]="arbolProcesosDataSource" [treeControl]="arbolProcesosControl">
+            <!-- This is the tree node template for leaf nodes -->
+            <mat-tree-node class="proceso" *matTreeNodeDef="let node" matTreeNodePadding (click)="abrirProceso(node)">
+              <!-- use a disabled button to provide padding for tree leaf -->
+              <mat-icon>developer_board</mat-icon>
+              {{node.nombre}}
+            </mat-tree-node>
+            <!-- This is the tree node template for expandable nodes -->
+            <mat-tree-node class="categoria" *matTreeNodeDef="let node;when: hasChild" matTreeNodeToggle matTreeNodePadding>
+              <button mat-icon-button
+                [attr.aria-label]="'Toggle ' + node.nombre">
+                <mat-icon class="mat-icon-rtl-mirror">
+                  {{arbolProcesosControl.isExpanded(node) ? 'expand_more' : 'chevron_right'}}
+                </mat-icon>
+              </button>
+              <mat-icon>folder</mat-icon>
+              {{node.categoria}}
+            </mat-tree-node>
+          </mat-tree>
+        </mat-drawer>
+
+        <mat-drawer-content>
+
+          <button mat-icon-button class="botonNav" color="warn" (click)="drawerProcesos.toggle()">
+            <mat-icon>menu</mat-icon>
+          </button>
+          @if (procesoSeleccionado === null) {
+            <div class="textoSeleccionarProceso">Seleccione un proceso</div>
+          }
+
+          @if (procesoSeleccionado !== null) {
+            <div class="procesoContainer">
+              <!-- Cabecera de proceso -->
+              <h2>
+                <div class="nombreProceso">{{procesoSeleccionado.nombre}}</div>
+              </h2>
+              <div class="autorProceso"><b>Autor:</b> {{procesoSeleccionado.autor}}</div>
+              <div class="descripcionProceso"><b>Descripción:</b> {{procesoSeleccionado.descripcion}}</div>
+              <!-- Argumentos de entrada  -->
+              <h3>
+                <div class="argumentosProceso">Entrada: </div>
+              </h3>
+              <!-- Formulario de Proceso  -->
+              <form [formGroup]="formularioProcesoGroup">
+                @for (control of formularioControl.controls; track control; let i = $index) {
+                  <div  class= "contenedorFormulario">
+                    <div class="tituloFormulario"> {{procesoSeleccionado.argumentos[i].formulario.titulo}}</div>
+                    <!-- Formulario de archivo  -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='archivo') {
+                      <div >
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de Objeto  -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='objeto') {
+                      <div >
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de Directorio  -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='ruta') {
+                      <div >
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de fecha -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='fecha') {
+                      <div >
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de numero -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='numero') {
+                      <div>
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de Texto -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='texto') {
+                      <div>
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de Boolean -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='boolean') {
+                      <div>
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                    <!-- Formulario de Seleccion -->
+                    @if (procesoSeleccionado.argumentos[i].formulario.tipo=='seleccion') {
+                      <div>
+                        <mat-icon>title</mat-icon>
+                      </div>
+                    }
+                  </div>
+                }
+                <h3>
+                  <div class="argumentosProceso">Salida: </div>
+                </h3>
+                @if (procesoSeleccionado.salida[0].tipo=='boolean') {
+                  <div>
+                    <mat-icon>title</mat-icon>
+                  </div>
+                }
+              </form>
+              <!-- Ejecucion:  -->
+              <div class="contenedorBotonesAccion">
+                <button [mat-dialog-close]="procesoSeleccionado" mat-raised-button class="botonEjecucion" color="primary">
+                  insertar
+                </button>
+              </div>
+            </div>
+          }
+        </mat-drawer-content>
+
+      </mat-drawer-container>
+
+
+    </div> <!-- Fin importacion libre -->
+
+  </div>
+</div>
+
+
+
+
+
+
+
+
