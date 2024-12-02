@@ -7,7 +7,7 @@
 
     <!-- LOGO -->
     <div class="contenedorLogo">
-        <img class="icono" src="./assets/general/Logo_Sanfi_Reducido.png"  alt="Icono">
+        <img class="icono" src="./assets/general/logo_castillo.png"  alt="Icono">
     </div>
       
     <!-- BOTON CERRAR PROYECTO -->
@@ -25,7 +25,7 @@
     </div>
 
 
-  @if (mostrarMenu){
+  
   <div class="panelHerramientas">
     <mat-tab-group mat-align-tabs="center" [(selectedIndex)]="selectedTab">
 
@@ -249,136 +249,7 @@
 
     </mat-tab-group>
   </div>
-  } @else { <!-- FIN DE BARRA DE HERRAMIENTAS -->
-
-    <div class="panelHerramientas">
-        
-    <mat-tab-group mat-align-tabs="center" [(selectedIndex)]="selectedTab" (selectedIndexChange)="this.cambioPestana($event)">
-
-        <mat-tab label="Monitorizacion">
-        </mat-tab>
-
-        <mat-tab label="Automatización">
-            <div class="contenedorHerramientas">
-              <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
-              <button mat-icon-button class="herramienta" (click)="comandoAddCurso('refreshAutomatizacion')">
-                <mat-icon>autorenew</mat-icon>
-                <div class="etiquetaHerramienta">Actualizar </div>
-              </button>
-
-              <!-- (HERRAMIENTA GENERAR DOCUMENTO COMUNIDADES) - Opciones -->
-              <button mat-icon-button class="herramienta" (click)="comandoAddCurso('generarDocumentoComunidades')">
-                <mat-icon>receipt_long</mat-icon>
-                <div class="etiquetaHerramienta">Generar</div>
-              </button>
-
-            </div>
-        </mat-tab>
-
-      <mat-tab label="Cursos">
-
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Verificar Errores -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('verificar')">
-            <mat-icon>check_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Verificar</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
-
-        </div>
-
-      </mat-tab>
-
-      <mat-tab label="Formadores">
-
-        <div class="contenedorHerramientas">
-            
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
-
-        </div>
-        
-      </mat-tab>
-
-      <mat-tab label="Instituciones">
-
-        <div class="contenedorHerramientas">
-            
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
-
-        </div>
-        
-      </mat-tab>
-
-    </mat-tab-group>
-  </div>
-  }
+  
 
   </div> <!-- FIN BARRA SUPERIOR  -->
 
@@ -477,9 +348,32 @@
 
         <!-- Editor Cursos -->
         <div class="contenedorEditorDocumentos" [ngClass]="claseAddCursoComponent">
-            <addCursoComponent #AddCursoComponent
-                [pantallaSeleccionada]="pantallaSeleccionada"
-            ></addCursoComponent>
+          <div  class="contenedorCargarProyecto">
+
+            <div class="row">
+    
+              
+                <mat-card appearance="outlined" class="irpfProyecto">
+                  <mat-card-header>
+                    <mat-card-title></mat-card-title>
+                    <mat-card-subtitle>asdas [ID: ]</mat-card-subtitle>
+                  </mat-card-header>
+                  <mat-card-content>
+                    <p>
+                      sdadasd
+                    </p>
+                  </mat-card-content>
+                  <mat-card-actions>
+                    <button mat-raised-button color="primary" (click)="cargarProyecto(listaProyectos[i].nombre)">CARGAR</button>
+                    <button mat-button color="warn" (click)="eliminarProyecto(listaProyectos[i].nombre)">ELIMINAR</button>
+                  </mat-card-actions>
+                </mat-card>
+              
+    
+            </div>
+            
+    
+          </div>
         </div>
 
     </mat-drawer-content>

@@ -14,6 +14,7 @@ import { MatTreeFlatDataSource, MatTreeFlattener } from '@angular/material/tree'
 import { InsertarElementoComponent} from '../insertarElemento/insertarElemento.component';
 import { AddCursoComponent } from '../addCurso/addCurso.component';
 import { EditorDocumentoComponent } from '../editorDocumento/editorDocumento.component';
+import { MatCardModule } from '@angular/material/card';
 
 //Modulos: 
 import { MatTableModule } from '@angular/material/table';
@@ -57,6 +58,7 @@ type EstadoDashboard= "Normal"|"Borrado";
       MatDialogModule, 
       EditorDocumentoComponent,
       AddCursoComponent,
+      MatCardModule
   ],
   encapsulation: ViewEncapsulation.None,
   selector: 'app-dashboard',

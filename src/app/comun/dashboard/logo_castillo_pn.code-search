@@ -1,0 +1,24 @@
+# Query: logo_castillo.pn
+# ContextLines: 1
+
+4 results - 4 files
+
+src\app\comun\dashboard\dashboard.component.html:
+   9      <div class="contenedorLogo">
+  10:         <img class="icono" src="./assets/general/logo_castillo.png"  alt="Icono">
+  11      </div>
+
+src\app\comun\editorPrograma\editor.component.html:
+  3  
+  4:   <img class="vodafone-icono" src="./assets/general/logo_castillo.png"  alt="Icono Vodafone">
+  5  
+
+src\app\comun\index\index.component.html:
+  3  
+  4:   <img class="vodafone-icono" src="./assets/general/logo_castillo.png"  alt="Icono Vodafone">
+  5  
+
+src\app\comun\splash\splash.component.html:
+  4      <div class="contenedorLogo">
+  5:       <img src="./assets/general/logo_castillo.png" class="logo" alt="Logo Santander Finanzas">
+  6        @if (mostrarSplash) {
