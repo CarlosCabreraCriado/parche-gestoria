@@ -1,472 +1,480 @@
 <div class="contenedorDashboard">
-
   <!-- BARRA DE HERRAMIENTAS -->
 
   <div id="barraSuperior">
-
-
     <!-- LOGO -->
     <div class="contenedorLogo">
-        <img class="icono" src="./assets/general/Logo_Sanfi_Reducido.png"  alt="Icono">
+      <img
+        class="icono"
+        src="./assets/general/Logo_Sanfi_Reducido.png"
+        alt="Icono"
+      />
     </div>
-      
+
     <!-- BOTON CERRAR PROYECTO -->
     <div class="containerBotonesProyecto">
-        <button class="version" mat-stroked-button>v{{appService.version}}</button>
+      <button class="version" mat-stroked-button>
+        v{{ appService.version }}
+      </button>
 
-        <button mat-icon-button class="botonToggleMenu" color="warn" (click)="mostrarMenu = !mostrarMenu;">
-          <mat-icon>build</mat-icon>
-        </button>
+      <button
+        mat-icon-button
+        class="botonToggleMenu"
+        color="warn"
+        (click)="mostrarMenu = !mostrarMenu"
+      >
+        <mat-icon>build</mat-icon>
+      </button>
 
-        <button mat-icon-button class="botonCerrarProyecto" color="warn" (click)="cerrarProyecto()">
-          <mat-icon>close</mat-icon>
-        </button>
-
+      <button
+        mat-icon-button
+        class="botonCerrarProyecto"
+        color="warn"
+        (click)="cerrarProyecto()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
     </div>
 
-
-  @if (mostrarMenu){
-  <div class="panelHerramientas">
-    <mat-tab-group mat-align-tabs="center" [(selectedIndex)]="selectedTab">
-
-      <mat-tab label="Insertar">
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
-          <button mat-icon-button class="herramienta" (click)="insertarElemento({tipo: 'texto'})">
-            <mat-icon>title</mat-icon>
-            <div class="etiquetaHerramienta">Texto </div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - TABLA -->
-          <button mat-icon-button class="herramienta" (click)="insertarElemento({tipo: 'tabla'})">
-            <mat-icon>table_chart</mat-icon>
-            <div class="etiquetaHerramienta">Tabla </div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - GRAFICA -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>barchart</mat-icon>
-            <div class="etiquetaHerramienta"> Gráfica </div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - IMAGEN -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>wallpaper</mat-icon>
-            <div class="etiquetaHerramienta">Imagen </div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - IMAGEN -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>wallpaper</mat-icon>
-            <div class="etiquetaHerramienta">Externo </div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - EDITAR -->
-          <button mat-icon-button class="herramienta" [matMenuTriggerFor]="menuEditar">
-            <mat-icon>design_services</mat-icon>
-            <div class="etiquetaHerramienta">Editar</div>
-          </button>
-
-          <mat-menu #menuEditar="matMenu">
-            <button mat-menu-item (click)="openDialog('no disponible',{})">
-              <mat-icon>settings</mat-icon>
-              <span>Configurar</span>
-            </button>
-
-            <button mat-menu-item (click)="activarBorradoElementos()">
-              <mat-icon>delete</mat-icon>
-              <span>Eliminar</span>
-            </button>
-
-          </mat-menu>
-        </div>
-
-      </mat-tab>
-
-      <mat-tab label="Datos">
-
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA DATOS) - Definir -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>create</mat-icon>
-            <div class="etiquetaHerramienta">Definir</div>
-          </button>
-
-          <!-- (HERRAMIENTA DATOS) - Añadir -->
-          <button mat-icon-button class="herramienta"  [matMenuTriggerFor]="menuAnadir" >
-            <mat-icon>add_box</mat-icon>
-            <div class="etiquetaHerramienta">Añadir</div>
-          </button>
-
-          <mat-menu #menuAnadir="matMenu">
-            <button mat-menu-item (click)="openDialog('no disponible',{})">
-              <mat-icon>receipt_long</mat-icon>
-              <span>Añadir TXT</span>
-            </button>
-            <button mat-menu-item (click)="openDialog('no disponible',{})">
-              <mat-icon>photo</mat-icon>
-              <span>Añadir Imagen</span>
-            </button>
-          </mat-menu>
-
-          <!-- (HERRAMIENTA DATOS) - XLSX -->
-          <button mat-icon-button class="herramienta" [matMenuTriggerFor]="menuXLSX" >
-            <mat-icon>addchart</mat-icon>
-            <div class="etiquetaHerramienta">XLSX</div>
-          </button>
-          <mat-menu #menuXLSX="matMenu">
-            <button mat-menu-item (click)="addDato({herramienta: 'rawxlsx'})">
-              <mat-icon>reorder</mat-icon>
-              <span>Raw XLSX</span>
-            </button>
-            <button mat-menu-item (click)="openDialog('no disponible',{})">
-              <mat-icon>palette</mat-icon>
-              <span>Style XLSX</span>
-            </button>
-          </mat-menu>
-
-          <!-- (HERRAMIENTA DATOS) - VERIFICAR -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>offline_pin</mat-icon>
-            <div class="etiquetaHerramienta">Verificar</div>
-          </button>
-
-          <!-- (HERRAMIENTA DATOS) - Visualizar -->
-          <button mat-icon-button class="herramienta" (click)="visualizarDato()">
-            <mat-icon>visibility</mat-icon>
-            <div class="etiquetaHerramienta">Visualizar</div>
-          </button>
-
-          <!-- (HERRAMIENTA DATOS) - Modificar -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>brush</mat-icon>
-            <div class="etiquetaHerramienta">Modificar</div>
-          </button>
-
-
-          <!-- (HERRAMIENTA DATOS) - Gestionar -->
-          <button mat-icon-button class="herramienta" (click)="gestionarDato()">
-            <mat-icon>build_circle</mat-icon>
-            <div class="etiquetaHerramienta">Gestionar</div>
-          </button>
-
-
-        </div>
-      </mat-tab>
-
-      <mat-tab label="Procesos">
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>code</mat-icon>
-            <div class="etiquetaHerramienta">Crear </div>
-          </button>
-
-          <!-- (HERRAMIENTA PROCESOS) - EJECUTAR -->
-          <button mat-icon-button class="herramienta" (click)="ejecutarProceso({herramienta: 'ejecutarProceso'})">
-            <mat-icon>memory</mat-icon>
-            <div class="etiquetaHerramienta">Procesos</div>
-          </button>
-
-          <!-- (HERRAMIENTA INSERTAR) - TABLA -->
-          <button mat-icon-button class="herramienta" [matMenuTriggerFor]="menuPrograma">
-            <mat-icon>developer_board</mat-icon>
-            <div class="etiquetaHerramienta">Programas</div>
-          </button>
-
-          <mat-menu #menuPrograma="matMenu">
-            <button mat-menu-item (click)="openDialog('no disponible',{})">
-              <mat-icon>play_circle_outline</mat-icon>
-              <span>Ejecutar</span>
-            </button>
-
-            <button mat-menu-item (click)="appService.abrirEditorPrograma()">
-              <mat-icon>square_foot</mat-icon>
-              <span>Editar</span>
-            </button>
-          </mat-menu>
-
-          <!-- (HERRAMIENTA INSERTAR) - GRAFICA -->
-          <button mat-icon-button class="herramienta disabled"  (click)="openDialog('no disponible',{})">
-            <mat-icon>date_range</mat-icon>
-            <div class="etiquetaHerramienta">Rutina</div>
-          </button>
-        </div>
-      </mat-tab>
-
-      <mat-tab label="Informe">
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
-          <button mat-icon-button class="herramienta" (click)="addPlantilla({herramienta: 'crearPlantilla'})">
-            <mat-icon>receipt</mat-icon>
-            <div class="etiquetaHerramienta">Plantilla </div>
-          </button>
-
-          <!-- (HERRAMIENTA INFORME) - TABLA -->
-          <button mat-icon-button class="herramienta" (click)="appService.abrirEditorDocumento()">
-            <mat-icon>import_contacts</mat-icon>
-            <div class="etiquetaHerramienta">Generar </div>
-          </button>
-
-          <!-- (HERRAMIENTA INFORME) - Editor -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>text_fields</mat-icon>
-            <div class="etiquetaHerramienta">Editor</div>
-          </button>
-
-        </div>
-      </mat-tab>
-
-      <mat-tab label="Opciones">
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA Configuración) - Opciones -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>miscellaneous_services</mat-icon>
-            <div class="etiquetaHerramienta">Configuración </div>
-          </button>
-
-          <!-- (HERRAMIENTA Importar) - Opciones -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>save_alt</mat-icon>
-            <div class="etiquetaHerramienta">Importar </div>
-          </button>
-
-          <!-- (HERRAMIENTA Exportar) - Opciones -->
-          <button mat-icon-button class="herramienta disabled" (click)="openDialog('no disponible',{})">
-            <mat-icon>publish</mat-icon>
-            <div class="etiquetaHerramienta">Exportar</div>
-          </button>
-
-          <!-- (HERRAMIENTA Actualizar) - Opciones -->
-          <button mat-icon-button class="herramienta disabled" (click)="appService.buscarActualizacion()">
-            <mat-icon>publish</mat-icon>
-            <div class="etiquetaHerramienta">Actualizar</div>
-          </button>
-
-
-        </div>
-      </mat-tab>
-
-    </mat-tab-group>
-  </div>
-  } @else { <!-- FIN DE BARRA DE HERRAMIENTAS -->
-
     <div class="panelHerramientas">
-        
-    <mat-tab-group mat-align-tabs="center" [(selectedIndex)]="selectedTab" (selectedIndexChange)="this.cambioPestana($event)">
+      <mat-tab-group mat-align-tabs="center" [(selectedIndex)]="selectedTab">
+        <mat-tab label="Insertar">
+          <div class="contenedorHerramientas">
+            <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <!--(click)="insertarElemento({ tipo: 'texto' })"-->
 
-        <mat-tab label="Monitorizacion">
-        </mat-tab>
+              <mat-icon>title</mat-icon>
+              <div class="etiquetaHerramienta">Texto</div>
+            </button>
 
-        <mat-tab label="Automatización">
-            <div class="contenedorHerramientas">
-              <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
-              <button mat-icon-button class="herramienta" (click)="comandoAddCurso('refreshAutomatizacion')">
-                <mat-icon>autorenew</mat-icon>
-                <div class="etiquetaHerramienta">Actualizar </div>
+            <!-- (HERRAMIENTA INSERTAR) - TABLA -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <!--(click)="insertarElemento({ tipo: 'tabla' })"-->
+              <mat-icon>table_chart</mat-icon>
+              <div class="etiquetaHerramienta">Tabla</div>
+            </button>
+
+            <!-- (HERRAMIENTA INSERTAR) - GRAFICA -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>barchart</mat-icon>
+              <div class="etiquetaHerramienta">Gráfica</div>
+            </button>
+
+            <!-- (HERRAMIENTA INSERTAR) - IMAGEN -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>wallpaper</mat-icon>
+              <div class="etiquetaHerramienta">Imagen</div>
+            </button>
+
+            <!-- (HERRAMIENTA INSERTAR) - IMAGEN -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>wallpaper</mat-icon>
+              <div class="etiquetaHerramienta">Externo</div>
+            </button>
+
+            <!-- (HERRAMIENTA INSERTAR) - EDITAR -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+              [matMenuTriggerFor]="menuEditar"
+            >
+              <mat-icon>design_services</mat-icon>
+              <div class="etiquetaHerramienta">Editar</div>
+            </button>
+
+            <mat-menu #menuEditar="matMenu">
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
+                <mat-icon>settings</mat-icon>
+                <span>Configurar</span>
               </button>
 
-              <!-- (HERRAMIENTA GENERAR DOCUMENTO COMUNIDADES) - Opciones -->
-              <button mat-icon-button class="herramienta" (click)="comandoAddCurso('generarDocumentoComunidades')">
+              <button mat-menu-item (click)="activarBorradoElementos()">
+                <mat-icon>delete</mat-icon>
+                <span>Eliminar</span>
+              </button>
+            </mat-menu>
+          </div>
+        </mat-tab>
+
+        <mat-tab label="Datos">
+          <div class="contenedorHerramientas">
+            <!-- (HERRAMIENTA DATOS) - Definir -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>create</mat-icon>
+              <div class="etiquetaHerramienta">Definir</div>
+            </button>
+
+            <!-- (HERRAMIENTA DATOS) - Añadir -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              [matMenuTriggerFor]="menuAnadir"
+            >
+              <mat-icon>add_box</mat-icon>
+              <div class="etiquetaHerramienta">Añadir</div>
+            </button>
+
+            <mat-menu #menuAnadir="matMenu">
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
                 <mat-icon>receipt_long</mat-icon>
-                <div class="etiquetaHerramienta">Generar</div>
+                <span>Añadir TXT</span>
               </button>
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
+                <mat-icon>photo</mat-icon>
+                <span>Añadir Imagen</span>
+              </button>
+            </mat-menu>
 
-            </div>
+            <!-- (HERRAMIENTA DATOS) - XLSX -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              [matMenuTriggerFor]="menuXLSX"
+            >
+              <mat-icon>addchart</mat-icon>
+              <div class="etiquetaHerramienta">XLSX</div>
+            </button>
+            <mat-menu #menuXLSX="matMenu">
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
+                <!--(click)="addDato({ herramienta: 'rawxlsx' })"-->
+                <mat-icon>reorder</mat-icon>
+                <span>Raw XLSX</span>
+              </button>
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
+                <mat-icon>palette</mat-icon>
+                <span>Style XLSX</span>
+              </button>
+            </mat-menu>
+
+            <!-- (HERRAMIENTA DATOS) - VERIFICAR -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>offline_pin</mat-icon>
+              <div class="etiquetaHerramienta">Verificar</div>
+            </button>
+
+            <!-- (HERRAMIENTA DATOS) - Visualizar -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              (click)="visualizarDato()"
+            >
+              <mat-icon>visibility</mat-icon>
+              <div class="etiquetaHerramienta">Visualizar</div>
+            </button>
+
+            <!-- (HERRAMIENTA DATOS) - Modificar -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>brush</mat-icon>
+              <div class="etiquetaHerramienta">Modificar</div>
+            </button>
+
+            <!-- (HERRAMIENTA DATOS) - Gestionar -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              (click)="gestionarDato()"
+            >
+              <mat-icon>build_circle</mat-icon>
+              <div class="etiquetaHerramienta">Gestionar</div>
+            </button>
+          </div>
         </mat-tab>
 
-      <mat-tab label="Cursos">
+        <mat-tab label="Procesos">
+          <div class="contenedorHerramientas">
+            <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>code</mat-icon>
+              <div class="etiquetaHerramienta">Crear</div>
+            </button>
 
-        <div class="contenedorHerramientas">
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
+            <!-- (HERRAMIENTA PROCESOS) - EJECUTAR -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              (click)="ejecutarProceso({ herramienta: 'ejecutarProceso' })"
+            >
+              <mat-icon>memory</mat-icon>
+              <div class="etiquetaHerramienta">Procesos</div>
+            </button>
 
-          <!-- (HERRAMIENTA CURSOS) - Verificar Errores -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('verificar')">
-            <mat-icon>check_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Verificar</div>
-          </button>
+            <!-- (HERRAMIENTA INSERTAR) - TABLA -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              [matMenuTriggerFor]="menuPrograma"
+            >
+              <mat-icon>developer_board</mat-icon>
+              <div class="etiquetaHerramienta">Programas</div>
+            </button>
 
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
+            <mat-menu #menuPrograma="matMenu">
+              <button mat-menu-item (click)="openDialog('no disponible', {})">
+                <mat-icon>play_circle_outline</mat-icon>
+                <span>Ejecutar</span>
+              </button>
 
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
+              <button mat-menu-item (click)="appService.abrirEditorPrograma()">
+                <mat-icon>square_foot</mat-icon>
+                <span>Editar</span>
+              </button>
+            </mat-menu>
 
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
+            <!-- (HERRAMIENTA INSERTAR) - GRAFICA -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>date_range</mat-icon>
+              <div class="etiquetaHerramienta">Rutina</div>
+            </button>
+          </div>
+        </mat-tab>
 
-        </div>
+        <mat-tab label="Informe">
+          <div class="contenedorHerramientas">
+            <!-- (HERRAMIENTA INSERTAR) - TEXTO -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              (click)="openDialog('no disponible', {})"
+            >
+              <!--(click)="addPlantilla({ herramienta: 'crearPlantilla' })"-->
+              <mat-icon>receipt</mat-icon>
+              <div class="etiquetaHerramienta">Plantilla</div>
+            </button>
 
-      </mat-tab>
+            <!-- (HERRAMIENTA INFORME) - TABLA -->
+            <button
+              mat-icon-button
+              class="herramienta"
+              (click)="openDialog('no disponible', {})"
+            >
+              <!--(click)="appService.abrirEditorDocumento()"-->
 
-      <mat-tab label="Formadores">
+              <mat-icon>import_contacts</mat-icon>
+              <div class="etiquetaHerramienta">Generar</div>
+            </button>
 
-        <div class="contenedorHerramientas">
-            
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
+            <!-- (HERRAMIENTA INFORME) - Editor -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>text_fields</mat-icon>
+              <div class="etiquetaHerramienta">Editor</div>
+            </button>
+          </div>
+        </mat-tab>
 
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
+        <mat-tab label="Opciones">
+          <div class="contenedorHerramientas">
+            <!-- (HERRAMIENTA Configuración) - Opciones -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>miscellaneous_services</mat-icon>
+              <div class="etiquetaHerramienta">Configuración</div>
+            </button>
 
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
+            <!-- (HERRAMIENTA Importar) - Opciones -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>save_alt</mat-icon>
+              <div class="etiquetaHerramienta">Importar</div>
+            </button>
 
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
+            <!-- (HERRAMIENTA Exportar) - Opciones -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="openDialog('no disponible', {})"
+            >
+              <mat-icon>publish</mat-icon>
+              <div class="etiquetaHerramienta">Exportar</div>
+            </button>
 
-        </div>
-        
-      </mat-tab>
-
-      <mat-tab label="Instituciones">
-
-        <div class="contenedorHerramientas">
-            
-          <!-- (HERRAMIENTA CURSOS) - Nuevo Curso -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('nuevo')">
-            <mat-icon>add_circle_outline</mat-icon>
-            <div class="etiquetaHerramienta">Nuevo</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Descargar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('descargar')">
-            <mat-icon>cloud_download</mat-icon>
-            <div class="etiquetaHerramienta">Descargar</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Subir -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('subir')">
-            <mat-icon>cloud_upload</mat-icon>
-            <div class="etiquetaHerramienta">Subir</div>
-          </button>
-
-          <!-- (HERRAMIENTA CURSOS) - Guardar -->
-          <button mat-icon-button class="herramienta" (click)="comandoAddCurso('guardar')">
-            <mat-icon>save</mat-icon>
-            <div class="etiquetaHerramienta">Guardar</div>
-          </button>
-
-        </div>
-        
-      </mat-tab>
-
-    </mat-tab-group>
+            <!-- (HERRAMIENTA Actualizar) - Opciones -->
+            <button
+              mat-icon-button
+              class="herramienta disabled"
+              (click)="appService.buscarActualizacion()"
+            >
+              <mat-icon>publish</mat-icon>
+              <div class="etiquetaHerramienta">Actualizar</div>
+            </button>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </div>
   </div>
-  }
-
-  </div> <!-- FIN BARRA SUPERIOR  -->
+  <!-- FIN BARRA SUPERIOR  -->
 
   <mat-drawer-container id="espacioTrabajo" autosize>
-
     <mat-drawer #drawer class="example-sidenav" mode="side" opened="false">
       <p class="negrita tituloArbolProyecto">
         Arbol de proyecto
-        <mat-icon class="botonReloadArbol" (click)="reloadArbolProyecto()">refresh</mat-icon>
+        <mat-icon class="botonReloadArbol" (click)="reloadArbolProyecto()"
+          >refresh</mat-icon
+        >
       </p>
 
-      <mat-tree [dataSource]="arbolArchivosDataSource" [treeControl]="arbolArchivosControl">
+      <mat-tree
+        [dataSource]="arbolArchivosDataSource"
+        [treeControl]="arbolArchivosControl"
+      >
         <!-- This is the tree node template for leaf nodes -->
-        <mat-tree-node class="elementoArbolArchivos" *matTreeNodeDef="let node" matTreeNodePadding>
+        <mat-tree-node
+          class="elementoArbolArchivos"
+          *matTreeNodeDef="let node"
+          matTreeNodePadding
+        >
           <!-- use a disabled button to provide padding for tree leaf -->
           <button mat-icon-button disabled></button>
 
-          @if (node.tipo=='txt') {
+          @if (node.tipo == "txt") {
             <mat-icon>text_fields</mat-icon>
           }
-          @if (node.tipo=='xlsx') {
+          @if (node.tipo == "xlsx") {
             <mat-icon>insert_chart_outlined</mat-icon>
           }
-          @if (node.tipo=='db') {
+          @if (node.tipo == "db") {
             <mat-icon>dns</mat-icon>
           }
-          @if (node.tipo=='dir') {
+          @if (node.tipo == "dir") {
             <mat-icon>folder</mat-icon>
           }
-          @if (node.tipo=='spool') {
+          @if (node.tipo == "spool") {
             <mat-icon>receipt_long</mat-icon>
           }
-          @if (node.tipo=='png' || node.tipo=='jpg'|| node.tipo=='jpeg') {
+          @if (
+            node.tipo == "png" || node.tipo == "jpg" || node.tipo == "jpeg"
+          ) {
             <mat-icon>image</mat-icon>
           }
-          {{node.nombre}}
-
+          {{ node.nombre }}
         </mat-tree-node>
         <!-- This is the tree node template for expandable nodes -->
-        <mat-tree-node class="elementoArbolArchivos" matTreeNodeToggle *matTreeNodeDef="let node;when: hasChild" matTreeNodePadding>
-          <button mat-icon-button
-            [attr.aria-label]="'Toggle ' + node.nombre">
+        <mat-tree-node
+          class="elementoArbolArchivos"
+          matTreeNodeToggle
+          *matTreeNodeDef="let node; when: hasChild"
+          matTreeNodePadding
+        >
+          <button mat-icon-button [attr.aria-label]="'Toggle ' + node.nombre">
             <mat-icon class="mat-icon-rtl-mirror">
-              {{arbolArchivosControl.isExpanded(node) ? 'expand_more' : 'chevron_right'}}
+              {{
+                arbolArchivosControl.isExpanded(node)
+                  ? "expand_more"
+                  : "chevron_right"
+              }}
             </mat-icon>
           </button>
           <mat-icon>folder</mat-icon>
-          {{node.nombre}}
+          {{ node.nombre }}
         </mat-tree-node>
       </mat-tree>
     </mat-drawer>
     <mat-drawer-content>
-
-      <button mat-icon-button class="botonNav" color="warn" (click)="drawer.toggle()">
+      <button
+        mat-icon-button
+        class="botonNav"
+        color="warn"
+        (click)="drawer.toggle()"
+      >
         <mat-icon>menu</mat-icon>
       </button>
 
       <!-- CONTENEDOR DE ELEMENTOS -->
-      <div class="contenedorElementos" [ngClass]="clasePowerBi">
-
-        <!-- Prueba POWER BI 
--->
-
-
-        <iframe id="iframe-powerbi" width="98%" height="90%" src="https://app.powerbi.com/reportEmbed?reportId=7aede3bc-06b4-4e0c-9d4d-7693fe61e2d3&autoAuth=true&ctid=83286d50-10f2-4f4c-9a87-20f08ddaca1c" frameborder="0" allowFullScreen="true"></iframe>
-
-        @for (elemento of elementosRender.elementos; track elemento; let i = $index) {
-          <div class="elemento" [ngClass]="claseElementos" [ngStyle]="elemento.estilo" (click)="clickElemento(i)">
+      <div class="contenedorElementos">
+        @for (
+          elemento of elementosRender.elementos;
+          track elemento;
+          let i = $index
+        ) {
+          <div
+            class="elemento"
+            [ngClass]="claseElementos"
+            [ngStyle]="elemento.estilo"
+            (click)="clickElemento(i)"
+          >
             <!-- ELEMENTO TEXTO -->
-            @if (elemento.tipo=='texto') {
+            @if (elemento.tipo == "texto") {
               <div>
-                {{elemento.valor}}
+                {{ elemento.valor }}
               </div>
             }
             <!-- ELEMENTO TABLA -->
-            @if (elemento.tipo=='tabla') {
+            @if (elemento.tipo == "tabla") {
               <div>
                 <div class="example-container mat-elevation-z8 contenedorTabla">
-                  <table mat-table class="visualizacionTabla" [dataSource]="elemento.valor">
+                  <table
+                    mat-table
+                    class="visualizacionTabla"
+                    [dataSource]="elemento.valor"
+                  >
                     <!-- Position Column -->
                     @for (columna of elemento.cabeceras; track columna) {
-                      <ng-container matColumnDef="{{columna}}">
-                        <th mat-header-cell *matHeaderCellDef> {{columna}} </th>
-                        <td mat-cell *matCellDef="let element"> {{element[columna]}} </td>
+                      <ng-container matColumnDef="{{ columna }}">
+                        <th mat-header-cell *matHeaderCellDef>{{ columna }}</th>
+                        <td mat-cell *matCellDef="let element">
+                          {{ element[columna] }}
+                        </td>
                       </ng-container>
                     }
-                    <tr mat-header-row *matHeaderRowDef="elemento.cabeceras; sticky: true"></tr>
-                    <tr mat-row *matRowDef="let row; columns: elemento.cabeceras;"></tr>
+                    <tr
+                      mat-header-row
+                      *matHeaderRowDef="elemento.cabeceras; sticky: true"
+                    ></tr>
+                    <tr
+                      mat-row
+                      *matRowDef="let row; columns: elemento.cabeceras"
+                    ></tr>
                   </table>
                 </div>
               </div>
@@ -474,20 +482,6 @@
           </div>
         }
       </div>
-
-        <!-- Editor Cursos -->
-        <div class="contenedorEditorDocumentos" [ngClass]="claseAddCursoComponent">
-            <addCursoComponent #AddCursoComponent
-                [pantallaSeleccionada]="pantallaSeleccionada"
-            ></addCursoComponent>
-        </div>
-
     </mat-drawer-content>
   </mat-drawer-container>
-
 </div>
-
-
-
-
-

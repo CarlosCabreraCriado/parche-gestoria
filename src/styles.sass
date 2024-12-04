@@ -1,5 +1,18 @@
 
-@import '@angular/material/prebuilt-themes/indigo-pink.css'
+
+@use '@angular/material' as mat
+//@include mat.core()
+
+//@import '@angular/material/prebuilt-themes/indigo-pink.css' as indigo
+
+// Define una paleta personalizada para "warn"
+$custom-warn-palette: mat.define-palette(mat.$purple-palette, 500, 100, 100) // Usa un color como deep-orange
+
+// Crea un tema basado en indigo-pink
+$custom-theme: mat.define-light-theme((color: (primary: mat.define-palette(mat.$indigo-palette), accent: mat.define-palette(mat.$indigo-palette), warn: $custom-warn-palette)))
+
+// Aplica los estilos del tema personalizado
+@include mat.all-component-themes($custom-theme)
 
 //@import 'material-icons/iconfont/material-icons.css'
 

@@ -1,17 +1,16 @@
 const path = require("path");
 const fs = require("fs");
-
 const readline = require("readline");
-const moment = require("moment");
 
+const moment = require("moment");
 const XlsxPopulate = require("xlsx-populate");
 const Datastore = require("nedb");
-
 const _ = require("lodash");
+
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 
-class ProcesosGenerales {
+class ProcesosAsesoria {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
     this.pathToDbFolder = pathToDbFolder;
     this.nombreProyecto = nombreProyecto;
@@ -24,6 +23,627 @@ class ProcesosGenerales {
     });
   }
 
+  async calculoDeIRPF(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Calculo de IRPF...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoIRPF = {};
+      var clientes = [];
+      var pathArchivoIRPF = argumentos.formularioControl[0];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[1]),
+        "IRPF-Procesado",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[1]),
+        "IRPF-Procesado",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoIRPF))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: IRPF");
+            archivoIRPF = workbook;
+            var columnas = archivoIRPF.sheet(0).usedRange()._numColumns;
+
+            var filas = archivoIRPF.sheet(0).usedRange()._numRows;
+
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoIRPF.sheet(0).cell(2, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+
+            for (var i = 3; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (archivoIRPF.sheet(0).cell(i, j).value() !== undefined) {
+                  switch (cabeceras[j - 1]) {
+                    case "Emp->Código_de_la_Empresa":
+                      objetoCliente["cod_empresa"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Emp->Nombre_de_la_Empresa":
+                      objetoCliente["nombre_empresa"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Código_del_Trabajador":
+                      objetoCliente["cod_trabajador"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->DNI_del_Trabajador":
+                      objetoCliente["dni_trabajador"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Apellidos_y_Nombre_del_Trabajador":
+                      objetoCliente["nombre_trabajador"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Número_de_hijos":
+                      objetoCliente["num_hijos"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Porcentaje_retención":
+                      objetoCliente["porcentaje_retencion"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Tipo_de_retención":
+                      objetoCliente["tipo_retencion"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Ingresos_anuales":
+                      objetoCliente["ingresos_anuales"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->IRPF_Grado_Discapacidad":
+                      objetoCliente["grado_discapacidad"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Tipo_Contrato_(3_posiciones)":
+                      objetoCliente["tipo_contrato"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Edad_Trabajador":
+                      objetoCliente["edad_trabajador"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Fecha_Nacimiento_(AAAA/MM/DD)":
+                      objetoCliente["fecha_nacimiento"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Situación_Familiar":
+                      objetoCliente["situacion_familiar"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->DNI_Conyuge":
+                      objetoCliente["dni_conyuge"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Año_Nacimiento_Hijo_01":
+                      objetoCliente["anio_nacimiento_hijo_01"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Año_Nacimiento_Hijo_02":
+                      objetoCliente["anio_nacimiento_hijo_02"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Año_Nacimiento_Hijo_03":
+                      objetoCliente["anio_nacimiento_hijo_03"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Indicador_Adquisición_Vivienda":
+                      objetoCliente["adquisicion_vivienda"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Pensiones_Compensatorias_Cónyuge":
+                      objetoCliente["pension_conyuge"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Anualidades_en_Favor_de_los_Hijos":
+                      objetoCliente["anualidades_hijos"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Sumatorio_015_de_conceptos_de_paga":
+                      objetoCliente["sumatorio_015"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Sumatorio_016_de_conceptos_de_paga":
+                      objetoCliente["sumatorio_016"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "Trab->Sumatorio_017_de_conceptos_de_paga":
+                      objetoCliente["sumatorio_017"] = archivoIRPF
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              if (
+                objetoCliente.dni_trabajador !== "" &&
+                objetoCliente.dni_trabajador !== null &&
+                objetoCliente.dni_trabajador !== undefined
+              ) {
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              headless: false,
+            });
+            const page = await browser.newPage();
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+            for (var i = 0; i < clientes.length; i++) {
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].dni_trabajador == "" ||
+                clientes[i].dni_trabajador == null ||
+                clientes[i].dni_trabajador == undefined
+              ) {
+                clientes[i]["errores"] = ["DNI del trabajador no definido."];
+                continue;
+              }
+
+              await page.goto(
+                "https://prewww2.aeat.es/wlpl/PRET-R200/R242/index.zul",
+                { waitUntil: "networkidle0" },
+              );
+
+              //Procesado:
+
+              //********
+              // DNI
+              //********
+              await page.locator('input[title="NIF del perceptor"]').wait();
+              await page.type(
+                'input[title="NIF del perceptor"]',
+                String(clientes[i].dni_trabajador),
+              );
+
+              //********
+              // AÑO DE NACIMIENTO
+              //********
+              var anioNacimiento = clientes[i].fecha_nacimiento.slice(-4);
+              await page.locator('input[title="Año de nacimiento"]').wait();
+              await page.type(
+                'input[title="Año de nacimiento"]',
+                anioNacimiento,
+              );
+
+              //********
+              //Seleccion de discapacidad:
+              //********
+              var spanSelector = 'span[title="Sin discapacidad"]';
+
+              if (
+                clientes[i].grado_discapacidad == "" ||
+                clientes[i].grado_discapacidad == null ||
+                clientes[i].grado_discapacidad == undefined
+              ) {
+                spanSelector = 'span[title="Sin discapacidad"]';
+              } else if (clientes[i].grado_discapacidad >= 65) {
+                spanSelector = 'span[title="Superior o igual al 65%"]';
+              } else if (clientes[i].grado_discapacidad >= 33) {
+                spanSelector =
+                  'span[title="Superior o igual al 33% e inferior al 65%"]';
+              }
+
+              await page.locator(`${spanSelector} input[type="radio"]`).wait();
+              var radioButton = await page.$(
+                `${spanSelector} input[type="radio"]`,
+              );
+
+              if (radioButton) {
+                await radioButton.click(); // Hacer clic en el radio button
+                console.log("Radio button seleccionado.");
+              } else {
+                console.log("No se encontró el radio button.");
+              }
+
+              //********
+              //Seleccion situacion familiar:
+              //********
+              var spanSelector = "";
+
+              switch (clientes[i].situacion_familiar) {
+                case "Soltero,divorciado,v":
+                  spanSelector = `span[title='Situación 1: Soltero/a, viudo/a, divorciado/a o separado/a legalmente, con hijos solteros menores de 18 años o incapacitados judicialmente que convivan exclusivamente con el perceptor, sin convivir también con el otro progenitor, siempre que proceda consignar al menos un hijo o descendiente en el apartado "Ascendientes y  Descendientes"']`;
+                  break;
+                case "Conyuge a Cargo":
+                  spanSelector =
+                    'span[title="Situación 2: Perceptor casado y no separado legalmente cuyo cónyuge no obtenga rentas superiores a 1.500 euros anuales, excluidas las exentas."]';
+                  break;
+                case "Sin conyuge a Cargo":
+                  spanSelector =
+                    'span[title="Situación 3: Perceptor cuya situación familiar es distinta de las dos anteriores (v. gr.: solteros sin hijos; casados cuyo cónyuge obtiene rentas superiores a 1.500 euros anuales, excluidas las exentas, etc.).También se marcará esta casilla cuando el perceptor no desee manifestar su situación familiar"]';
+                  break;
+              }
+
+              await page.locator(`${spanSelector} input[type="radio"]`).wait();
+              await page.locator(`${spanSelector}`).click();
+
+              //Si hay conyuge a cargo pone su DNI:
+              if (clientes[i].situacion_familiar == "Conyuge a Cargo") {
+                await page.locator('input[title="NIF del cónyuge"]').wait();
+                await page.type(
+                  'input[title="NIF del cónyuge"]',
+                  clientes[i].dni_conyuge,
+                );
+              }
+
+              //********************
+              // TIPO CONTRATO:
+              //********************
+              spanSelector = 'span[title="General"]';
+
+              if (clientes[i].tipo_contrato >= 300) {
+                spanSelector =
+                  'span[title="Duración inferior al año o relación laboral especial de las personas artistas que desarrollan actividades escénicas, audiovisuales y musicales, y de quienes realizan actividades técnicas o auxiliares necesarias para el desarrollo de dicha actividad (excepto relaciones esporádicas: peonadas y jornales diarios)."]';
+              }
+
+              await page.locator(`${spanSelector} input[type="radio"]`).wait();
+              await page.locator(`${spanSelector}`).click();
+
+              // ******************
+              // DATOS ASCENDIENTES / DESCENDIENTES:
+              // ******************
+
+              if (
+                clientes[i].anio_nacimiento_hijo_01 ||
+                clientes[i].anio_nacimiento_hijo_02 ||
+                clientes[i].anio_nacimiento_hijo_03
+              ) {
+                await page
+                  .locator("span ::-p-text('Ascendientes y descendientes')")
+                  .wait();
+                await page
+                  .locator("span ::-p-text('Ascendientes y descendientes')")
+                  .click();
+
+                //Hijo 01:
+                if (clientes[i].anio_nacimiento_hijo_01) {
+                  await page.locator(".z-icon-user-plus").wait();
+                  await page.locator(".z-icon-user-plus").click();
+
+                  await page
+                    .locator('[role="dialog"] input[title="Año de nacimiento"]')
+                    .wait();
+                  await page.type(
+                    '[role="dialog"] input[title="Año de nacimiento"]',
+                    String(clientes[i].anio_nacimiento_hijo_01),
+                  );
+
+                  await page.locator("button ::-p-text(' Aceptar')").wait();
+                  await page.locator("button ::-p-text(' Aceptar')").click();
+                  await page.waitForSelector('[role="dialog"]', {
+                    hidden: true,
+                  });
+                }
+
+                //Hijo 02:
+                if (clientes[i].anio_nacimiento_hijo_02) {
+                  await page.locator(".z-icon-user-plus").wait();
+                  await page.locator(".z-icon-user-plus").click();
+
+                  await page
+                    .locator('[role="dialog"] input[title="Año de nacimiento"]')
+                    .wait();
+                  await page.type(
+                    '[role="dialog"] input[title="Año de nacimiento"]',
+                    String(clientes[i].anio_nacimiento_hijo_02),
+                  );
+
+                  await page.locator("button ::-p-text(' Aceptar')").click();
+                  await page.waitForSelector('[role="dialog"]', {
+                    hidden: true,
+                  });
+                }
+
+                //Hijo 03:
+                if (clientes[i].anio_nacimiento_hijo_03) {
+                  await page.locator(".z-icon-user-plus").wait();
+                  await page.locator(".z-icon-user-plus").click();
+
+                  await page
+                    .locator('[role="dialog"] input[title="Año de nacimiento"]')
+                    .wait();
+                  await page.type(
+                    '[role="dialog"] input[title="Año de nacimiento"]',
+                    String(clientes[i].anio_nacimiento_hijo_03),
+                  );
+
+                  await page.locator("button ::-p-text(' Aceptar')").click();
+                  await page.waitForSelector('[role="dialog"]', {
+                    hidden: true,
+                  });
+                }
+              } //Fin ascentientes y descendientes.
+
+              // ******************
+              // DATOS ECONOMICOS:
+              // ******************
+              await page.locator("span ::-p-text('Datos económicos')").wait();
+              await page.locator("span ::-p-text('Datos económicos')").click();
+              await page
+                .locator(
+                  'input[title="Retribuciones totales (dinerarias y en especie)."]',
+                )
+                .wait();
+              await page
+                .locator(
+                  'input[title="Gastos deducibles (Art. 19.2, letras a, b y c de la LIRPF: Seguridad Social, Mutualidades de funcionarios, derechos pasivos, colegios de huérfanos o instituciones similares)"]',
+                )
+                .wait();
+              await page
+                .locator(
+                  'input[title="Pensión compensatoria a favor del cónyuge. Importe fijado judicialmente"]',
+                )
+                .wait();
+              await page
+                .locator(
+                  'input[title="Anualidades por alimentos en favor de los hijos. Importe fijado judicialmente"]',
+                )
+                .wait();
+
+              if (clientes[i].sumatorio_015) {
+                await page.type(
+                  'input[title="Retribuciones totales (dinerarias y en especie)."]',
+                  String(clientes[i].sumatorio_015),
+                );
+              }
+              if (clientes[i].sumatorio_017) {
+                await page.type(
+                  'input[title="Gastos deducibles (Art. 19.2, letras a, b y c de la LIRPF: Seguridad Social, Mutualidades de funcionarios, derechos pasivos, colegios de huérfanos o instituciones similares)"]',
+                  String(clientes[i].sumatorio_017),
+                );
+              }
+              if (clientes[i].pension_conyuge) {
+                await page.type(
+                  'input[title="Pensión compensatoria a favor del cónyuge. Importe fijado judicialmente"]',
+                  String(clientes[i].pension_conyuge),
+                );
+              }
+              if (clientes[i].anualidades_hijos) {
+                await page.type(
+                  'input[title="Anualidades por alimentos en favor de los hijos. Importe fijado judicialmente"]',
+                  String(clientes[i].anualidades_hijos),
+                );
+              }
+
+              // ******************
+              // RESULTADOS:
+              // ******************
+              await page.locator("span ::-p-text('Resultados')").wait();
+              await page.locator("span ::-p-text('Resultados')").click();
+
+              await this.esperar(2000);
+
+              const found = await page.evaluate(() => {
+                const div = document.querySelector("div");
+                return div && div.textContent.includes("Relación de errores");
+              });
+
+              if (found) {
+                console.log("ERROR EN EL PROCESAMIENTO", i);
+
+                await this.esperar(2000);
+
+                var errores = await page.$$eval(".z-label", (spans) =>
+                  spans.map((span) => span.textContent.trim()),
+                );
+
+                clientes[i]["errores"] = errores;
+
+                console.log("ERRORES", errores);
+
+                await page.reload();
+                continue;
+              }
+
+              //********************
+              // DESCARGA:
+              //********************
+              await page.locator("button ::-p-text(' Generar PDF')").wait();
+              await page.locator("button ::-p-text(' Generar PDF')").click();
+
+              await page.waitForSelector(".resultado");
+              var resultados = await page.$$eval(".resultado", (spans) =>
+                spans.map((span) => span.textContent.trim()),
+              );
+
+              clientes[i]["retencion_aplicable"] = parseFloat(
+                resultados[0].replace(/\./g, "").replace(",", "."),
+              );
+              clientes[i]["resultado"] = parseFloat(
+                resultados[1].replace(/\./g, "").replace(",", "."),
+              );
+
+              console.log("RESULTADO IRPF", resultados, clientes[i]);
+
+              await this.esperar(2000);
+              //await page.reload();
+            } // FIN FOR CLIENTES
+
+            //Cerrar navedador
+            await browser.close();
+
+            //Procesado de los resultados en XLSX:
+            archivoIRPF
+              .sheet(0)
+              .cell(2, columnas + 1)
+              .value("Retención Aplicable");
+            archivoIRPF
+              .sheet(0)
+              .cell(2, columnas + 2)
+              .value("Resultado IRPF");
+            archivoIRPF
+              .sheet(0)
+              .cell(2, columnas + 3)
+              .value("DIFF");
+            archivoIRPF
+              .sheet(0)
+              .cell(2, columnas + 4)
+              .value("Errores");
+
+            var diff = 0;
+            for (var i = 0; i < clientes.length; i++) {
+              diff =
+                (clientes[i].resultado || 0) - (clientes[i].sumatorio_016 || 0);
+
+              archivoIRPF
+                .sheet(0)
+                .cell(i + 3, columnas + 1)
+                .value(clientes[i].retencion_aplicable || 0);
+              archivoIRPF
+                .sheet(0)
+                .cell(i + 3, columnas + 2)
+                .value(clientes[i].resultado || 0);
+              archivoIRPF
+                .sheet(0)
+                .cell(i + 3, columnas + 3)
+                .value(diff);
+              if (
+                clientes[i].errores !== undefined &&
+                clientes[i].errores.length > 0
+              ) {
+                archivoIRPF
+                  .sheet(0)
+                  .cell(i + 3, columnas + 4)
+                  .value(clientes[i].errores.join(" // "));
+              } else {
+                if (diff == 0) {
+                  archivoIRPF
+                    .sheet(0)
+                    .cell(i + 3, columnas + 4)
+                    .value("OK");
+                }
+              }
+            }
+
+            //ESCRITURA XLSX:
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+
+            archivoIRPF
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "IRPF-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("Fin del procesamiento");
+                //console.log(archivoIRPF)
+
+                resolve(true);
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
   async extraccionRemedy(argumentos) {
     console.log("Extracción Remedy");
     //console.log("Archivo entrada: "+argumentos[0])
@@ -33,12 +653,9 @@ class ProcesosGenerales {
     const page = await browser.newPage();
 
     //(async () => {
-    await page.goto(
-      "https://oneitsm.onbmc.com/arsys/forms/onbmc-s/SHR%3ALandingConsole/Default+Administrator+View/?cacheid=864a674f",
-    );
-    await page.screenshot({
-      path: "/Users/carloscabreracriado/Desktop/prueba.png",
-    });
+    await page.goto("https://prewww2.aeat.es/wlpl/PRET-R200/R242/index.zul");
+    await page.setViewport({ width: 1080, height: 1024 });
+
     await browser.close();
     //})();
 
@@ -4015,6 +4632,6 @@ class ProcesosGenerales {
         });
     });
   }
-} //Fin Procesos Generales
+} //Fin Procesos Asesoria
 
-module.exports = ProcesosGenerales;
+module.exports = ProcesosAsesoria;

@@ -32,6 +32,7 @@ import { MatSidenavModule } from "@angular/material/sidenav";
 import { MatTreeModule } from "@angular/material/tree";
 import { MatDialogModule } from "@angular/material/dialog";
 import { MatButtonModule } from "@angular/material/button";
+
 import { MatInputModule } from "@angular/material/input";
 import { MatFormFieldModule } from "@angular/material/form-field";
 
@@ -54,6 +55,7 @@ interface ExpansibleNode {
   nombre: string;
   level: number;
 }
+
 interface objetosSeleccionados {
   indexControl: number;
   node: any;
@@ -79,21 +81,6 @@ interface objetosSeleccionados {
   styleUrls: ["./ejecutarProceso.component.sass"],
 })
 export class EjecutarProcesoComponent implements OnInit {
-  constructor(
-    private appService: AppService,
-    public dialogRef: MatDialogRef<EjecutarProcesoComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: AddDatoData,
-    public formBuilder: UntypedFormBuilder,
-    private dialog: MatDialog,
-  ) {
-    //Inicializacion del arbol de procesos:
-    this.arbolProcesosDataSource.data = this.datosArbolProcesos;
-
-    this.formularioProcesoGroup = formBuilder.group({
-      formularioPruebaControl: this.formularioPruebaControl,
-    });
-  }
-
   //Arbol de Procesos para ejecutar:
   private _transformer = (node: LibreriaProcesos, level: number) => {
     return {
@@ -136,7 +123,26 @@ export class EjecutarProcesoComponent implements OnInit {
   public formularioProcesoGroup: UntypedFormGroup;
 
   public formularioControl = new UntypedFormArray([]);
-  private formularioPruebaControl = new UntypedFormControl("");
+  public formularioPruebaControl = new UntypedFormControl("");
+  public formularioCargado: boolean = false;
+  public argumentosActivos: any;
+
+  constructor(
+    private appService: AppService,
+    public dialogRef: MatDialogRef<EjecutarProcesoComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: AddDatoData,
+    public formBuilder: UntypedFormBuilder,
+    private dialog: MatDialog,
+  ) {
+    //Inicializacion del arbol de procesos:
+    this.arbolProcesosDataSource.data = this.datosArbolProcesos;
+
+    /*
+    this.formularioProcesoGroup = formBuilder.group({
+      formularioControl: new UntypedFormArray([]),
+    });
+    */
+  }
 
   ngOnInit() {
     this.datosArbolProcesos = libreriaProcesos;
@@ -269,41 +275,87 @@ export class EjecutarProcesoComponent implements OnInit {
   }
 
   abrirProceso(node) {
-    console.log("Abriendo proceso");
+    console.log("Abriendo proceso: ", node.argumentos);
+
+    this.argumentosActivos = node.argumentos;
+    this.formularioProcesoGroup = this.formBuilder.group({});
+
     this.formularioControl = new UntypedFormArray([]);
     this.objetosSeleccionados = [];
 
     //DEFINICIONES DE FORMULARIO:
     for (var i = 0; i < node.argumentos.length; i++) {
       if (node.argumentos[i].tipo == "objeto") {
+        this.formularioProcesoGroup.addControl(
+          node.argumentos[i].identificador,
+          new UntypedFormControl({ value: "", disabled: true }),
+        );
+        /*
         this.formularioControl.push(
           new UntypedFormControl({ value: "", disabled: true }),
         );
+                */
       } else {
         if (node.argumentos[i].formulario.valorDefault) {
+          this.formularioProcesoGroup.addControl(
+            node.argumentos[i].identificador,
+            new UntypedFormControl({
+              value: node.argumentos[i].formulario.valorDefault,
+              disabled: false,
+            }),
+          );
+
+          /*
           this.formularioControl.push(
             new UntypedFormControl({
               value: node.argumentos[i].formulario.valorDefault,
               disabled: false,
             }),
           );
+                        */
         } else {
-          this.formularioControl.push(
-            new UntypedFormControl({ value: "", disabled: false }),
+          console.log("Agregando control: ");
+
+          this.formularioProcesoGroup.addControl(
+            node.argumentos[i].identificador,
+            new UntypedFormControl({
+              value: "",
+              disabled: false,
+            }),
           );
+
+          /*
+          this.formularioControl.push(
+            new UntypedFormControl({ 
+                            value: "", 
+                            disabled: false 
+                        }),
+          );
+
+                    */
         }
       }
     }
 
+    /*
     this.formularioProcesoGroup = this.formBuilder.group({
       formularioControl: this.formularioControl,
     });
+        */
 
-    console.log(this.formularioControl);
+    console.log(this.formularioProcesoGroup);
+    //console.log(this.formularioControl);
 
     this.procesoSeleccionado = node;
     console.log(node);
+    this.formularioCargado = true;
     return;
+  }
+
+  getFormArray(): UntypedFormArray {
+    return this.formularioProcesoGroup.get(
+      "formularioControl",
+    ) as UntypedFormArray;
   }
 
   seleccionarObjeto(indexControl: number) {

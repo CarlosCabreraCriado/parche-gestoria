@@ -1,7 +1,7 @@
 {
-  "name": "GestorSantanderFormacion",
+  "name": "GestoriaCastillo",
   "version": "0.9.82",
-  "description": "Gestor de cursos de formación Santander Finanzas",
+  "description": "Programa de gestión de la gestoria Castillo",
   "main": "main.js",
   "scripts": {
     "electron": "run-script-os",
@@ -17,11 +17,7 @@
     "build": "set NODE_ENV=production&& electron-builder build --win --publish never",
     "deploy": "set NODE_ENV=production&& electron-builder build --win --publish always"
   },
-  "keywords": [
-    "Santander",
-    "Gestor",
-    "Fomacion"
-  ],
+  "keywords": [],
   "author": "Carlos Cabrera Criado",
   "license": "CC0-1.0",
   "dependencies": {
@@ -54,7 +50,7 @@
     "nedb": "^1.8.0",
     "ngx-electron": "^1.0.4",
     "pizzip": "^3.1.7",
-    "puppeteer": "^22.0.0",
+    "puppeteer": "^23.9.0",
     "qrcode": "^1.5.3",
     "rxjs": "~6.6.7",
     "stream": "0.0.2",
@@ -79,7 +75,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/CarlosCabreraCriado/Santander-Formacion.git"
+    "url": "https://github.com/CarlosCabreraCriado/parche-gestoria.git"
   },
   "files": [
     "*.js",
