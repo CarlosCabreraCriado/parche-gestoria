@@ -92,4 +92,9 @@ typings/
 
 .DS_Store
 
+compilado/
+compilado/*
+
+dist/
+
 2

@@ -220,6 +220,8 @@ class ProcesosAsesoria {
                 }
               }
 
+              objetoCliente["errores"] = [];
+
               if (
                 objetoCliente.dni_trabajador !== "" &&
                 objetoCliente.dni_trabajador !== null &&
@@ -233,7 +235,8 @@ class ProcesosAsesoria {
             const browser = await puppeteer.launch({
               headless: false,
             });
-            const page = await browser.newPage();
+
+            var page = await browser.newPage();
 
             // Configurar el comportamiento de descarga
             await page._client().send("Page.setDownloadBehavior", {
@@ -242,7 +245,23 @@ class ProcesosAsesoria {
             });
 
             await page.setViewport({ width: 1080, height: 1024 });
+
+            var hoy = new Date();
             for (var i = 0; i < clientes.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
 
@@ -372,7 +391,12 @@ class ProcesosAsesoria {
                   .click();
 
                 //Hijo 01:
-                if (clientes[i].anio_nacimiento_hijo_01) {
+                if (
+                  clientes[i].anio_nacimiento_hijo_01 &&
+                  hoy.getFullYear() -
+                    Number(clientes[i].anio_nacimiento_hijo_01) <
+                    25
+                ) {
                   await page.locator(".z-icon-user-plus").wait();
                   await page.locator(".z-icon-user-plus").click();
 
@@ -392,7 +416,12 @@ class ProcesosAsesoria {
                 }
 
                 //Hijo 02:
-                if (clientes[i].anio_nacimiento_hijo_02) {
+                if (
+                  clientes[i].anio_nacimiento_hijo_02 &&
+                  hoy.getFullYear() -
+                    Number(clientes[i].anio_nacimiento_hijo_02) <
+                    25
+                ) {
                   await page.locator(".z-icon-user-plus").wait();
                   await page.locator(".z-icon-user-plus").click();
 
@@ -411,7 +440,12 @@ class ProcesosAsesoria {
                 }
 
                 //Hijo 03:
-                if (clientes[i].anio_nacimiento_hijo_03) {
+                if (
+                  clientes[i].anio_nacimiento_hijo_03 &&
+                  hoy.getFullYear() -
+                    Number(clientes[i].anio_nacimiento_hijo_03) <
+                    25
+                ) {
                   await page.locator(".z-icon-user-plus").wait();
                   await page.locator(".z-icon-user-plus").click();
 
@@ -455,6 +489,11 @@ class ProcesosAsesoria {
                   'input[title="Anualidades por alimentos en favor de los hijos. Importe fijado judicialmente"]',
                 )
                 .wait();
+              await page
+                .locator(
+                  'span[title="El perceptor ha comunicado en el modelo 145 que está efectuando pagos por préstamos destinados a la adquisición o rehabilitación de su vivienda habitual por los que va a tener derecho a deducción por inversión en vivienda habitual en el IRPF y que la suma de los rendimientos íntegros del trabajo procedentes de todos sus pagadores es inferior a 33.007,20 euros anuales."]',
+                )
+                .wait();
 
               if (clientes[i].sumatorio_015) {
                 await page.type(
@@ -480,10 +519,23 @@ class ProcesosAsesoria {
                   String(clientes[i].anualidades_hijos),
                 );
               }
+              if (clientes[i].adquisicion_vivienda == "Destina") {
+                await page
+                  .locator(
+                    'span[title="El perceptor ha comunicado en el modelo 145 que está efectuando pagos por préstamos destinados a la adquisición o rehabilitación de su vivienda habitual por los que va a tener derecho a deducción por inversión en vivienda habitual en el IRPF y que la suma de los rendimientos íntegros del trabajo procedentes de todos sus pagadores es inferior a 33.007,20 euros anuales."]',
+                  )
+                  .click();
+              }
 
               // ******************
               // RESULTADOS:
               // ******************
+
+              if (!clientes[i].sumatorio_017) {
+                clientes[i]["errores"] = "ERROR: Faltan datos de sumatorio_017";
+                await page.reload();
+                continue;
+              }
               await page.locator("span ::-p-text('Resultados')").wait();
               await page.locator("span ::-p-text('Resultados')").click();
 
@@ -509,6 +561,33 @@ class ProcesosAsesoria {
 
                 await page.reload();
                 continue;
+              }
+              if (
+                hoy.getFullYear() -
+                  Number(clientes[i].anio_nacimiento_hijo_01) >=
+                25
+              ) {
+                clientes[i]["errores"].push("WARNING: Hijo 1 mayor de 25 años");
+              }
+              if (
+                hoy.getFullYear() -
+                  Number(clientes[i].anio_nacimiento_hijo_02) >=
+                25
+              ) {
+                clientes[i]["errores"].push("WARNING: Hijo 2 mayor de 25 años");
+              }
+              if (
+                hoy.getFullYear() -
+                  Number(clientes[i].anio_nacimiento_hijo_03) >=
+                25
+              ) {
+                clientes[i]["errores"].push("WARNING: Hijo 3 mayor de 25 años");
+              }
+
+              if (clientes[i].num_hijos > 3) {
+                clientes[i]["errores"].push(
+                  "ERROR: Faltan datos de descendencia (más de 3 hijos)",
+                );
               }
 
               //********************
@@ -575,6 +654,8 @@ class ProcesosAsesoria {
                 .value(diff);
               if (
                 clientes[i].errores !== undefined &&
+                clientes[i].errores !== null &&
+                Array.isArray(clientes[i].errores) &&
                 clientes[i].errores.length > 0
               ) {
                 archivoIRPF
