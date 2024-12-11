@@ -26,17 +26,19 @@ class ProcesosAsesoria {
   async calculoDeIRPF(argumentos) {
     return new Promise((resolve) => {
       console.log("Calculo de IRPF...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
       var archivoIRPF = {};
       var clientes = [];
-      var pathArchivoIRPF = argumentos.formularioControl[0];
+      var pathArchivoIRPF = argumentos.formularioControl[1];
       var pathSalidaExcel = path.join(
-        path.normalize(argumentos.formularioControl[1]),
+        path.normalize(argumentos.formularioControl[2]),
         "IRPF-Procesado",
       );
       var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[1]),
+        path.normalize(argumentos.formularioControl[2]),
         "IRPF-Procesado",
         "Resultados",
       );
@@ -231,8 +233,12 @@ class ProcesosAsesoria {
               }
             }
 
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
             //Inicio de procesamiento:
             const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
               headless: false,
             });
 

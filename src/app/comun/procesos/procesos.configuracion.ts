@@ -87,11 +87,23 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "texto",
             obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
             identificador: "excelClientes",
             formulario: {
               titulo: "Excel de clientes",
               tipo: "archivo",
-              accept: ".xls, .XLS, .xlsm, .xlsx",
+              accept: ".xlsm, .xlsx, .XLSX",
               placeholder:
                 "Introduzca la ruta del archivo de datos de clientes.",
               valorDefault: "",
