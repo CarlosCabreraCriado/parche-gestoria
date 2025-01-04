@@ -747,6 +747,385 @@ class ProcesosAsesoria {
     });
   }
 
+  async cambioBaseDeCotizacion(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Cambio de base de cotización...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoCambioBase = {};
+      var clientes = [];
+      var pathArchivoCambioBase = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Cambio de Base - Procesado",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Cambio de Base - Procesado",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoCambioBase))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: Cambio de Base");
+            archivoCambioBase = workbook;
+            var columnas = archivoCambioBase.sheet(0).usedRange()._numColumns;
+
+            var filas = archivoCambioBase.sheet(0).usedRange()._numRows;
+
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoCambioBase.sheet(0).cell(1, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+
+            for (var i = 2; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (
+                  archivoCambioBase.sheet(0).cell(i, j).value() !== undefined
+                ) {
+                  switch (cabeceras[j - 1]) {
+                    case "EXPT":
+                      objetoCliente["expediente"] = archivoCambioBase
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "NOMBRE Y APELLIDOS":
+                      objetoCliente["nombre"] = archivoCambioBase
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "DNI":
+                      objetoCliente["dni"] = archivoCambioBase
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "NAF":
+                      objetoCliente["seguridad_social"] = archivoCambioBase
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "BASE MINIMA S/TRAMO":
+                      objetoCliente["base_minima"] = archivoCambioBase
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+
+              if (
+                objetoCliente.dni !== "" &&
+                objetoCliente.dni !== null &&
+                objetoCliente.dni !== undefined
+              ) {
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            console.log("Clientes: ", clientes);
+            resolve(true);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+              args: [
+                `--disable-extensions`,
+                `--no-sandbox`,
+                `--disable-setuid-sandbox`,
+              ],
+            });
+
+            var page = await browser.newPage();
+
+            page.on("dialog", async (dialog) => {
+              console.log(
+                `Se mostró un cuadro de diálogo: ${dialog.message()}`,
+              );
+              await dialog.accept(); // Acepta el cuadro de diálogo
+            });
+
+            // Configurar el comportamiento de descarga
+            const client = await page.target().createCDPSession();
+            await client.send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            var hoy = new Date();
+            for (var i = 0; i < clientes.length; i++) {
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].dni == "" ||
+                clientes[i].dni == null ||
+                clientes[i].dni == undefined
+              ) {
+                clientes[i]["errores"] = ["DNI del trabajador no definido."];
+                continue;
+              }
+
+              await page.goto(
+                "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV26C007",
+                {
+                  waitUntil: "networkidle0",
+                },
+              );
+
+              // ******************
+              // RESULTADOS:
+              // ******************
+              console.log("Esperando a que cargue el contenido...");
+
+              //Aceptar terminos y condiciones:
+              await page.locator("#CHK_LEIDO").wait();
+              await page.locator("#CHK_LEIDO").click();
+              await page
+                .locator(
+                  'button[title="Ejecuta la acción y continúa a la siguiente pantalla."]',
+                )
+                .wait();
+              await page
+                .locator(
+                  'button[title="Ejecuta la acción y continúa a la siguiente pantalla."]',
+                )
+                .click();
+
+              //Rellenar Número de segurida social:
+              await page
+                .locator(
+                  'input[title="Número de la Seguridad Social (Númerico 12)"]',
+                )
+                .wait();
+              await page.type(
+                'input[title="Número de la Seguridad Social (Númerico 12)"]',
+                String(clientes[i].seguridad_social),
+              );
+
+              //Selecciona el tipo de documentos:
+              await page.locator("#IPF_TIPO").wait();
+
+              const startsWithNumber = (str) => {
+                if (!str) return false; // Manejo de cadena vacía
+                const firstChar = str[0]; // Primer carácter
+                return !isNaN(firstChar); // isNaN -> false si es número
+              };
+
+              if (startsWithNumber(clientes[i].dni)) {
+                await page.select("#IPF_TIPO", "1");
+              } else {
+                await page.select("#IPF_TIPO", "6");
+              }
+
+              //Rellena el dni
+              await page.locator("#IPF_NUMERO").wait();
+              await page.type("#IPF_NUMERO", String(clientes[i].dni));
+
+              //Click Continuar
+              await page.locator("#ENVIO_3").wait();
+              await page.locator("#ENVIO_3").click();
+
+              //Selecciona el tipo de documentos:
+              await page.locator("#OPCION_BASE").wait();
+              await page.select("#OPCION_BASE", "5");
+
+              //Rellena base de cotización:
+              var baseMinima = String(clientes[i].base_minima);
+              baseMinima = baseMinima.replace(".", ",");
+              await page.locator("#OTRA_BASE").wait();
+              await page.type("#OTRA_BASE", baseMinima);
+
+              await this.esperar(1000);
+
+              //Click Continuar
+              await page.locator("#ENVIO_3").wait();
+              await page.locator("#ENVIO_3").click();
+
+              console.log("CLICK");
+              await this.esperar(1000);
+              console.log("CLICK");
+
+              const errorYaSolicitada = await page.evaluate(() => {
+                console.log("Iniciando");
+                const elementos = document.querySelectorAll(".pr_pMensaje");
+                console.log("Elementos", elementos);
+                return Array.from(elementos).some((el) =>
+                  el.textContent.includes(
+                    "4913* BASE IGUAL A LA SOLICITADA CON ANTERIORIDAD.",
+                  ),
+                );
+              });
+
+              if (errorYaSolicitada) {
+                console.log("Base de cotización igual a la solicitada.", i);
+                await this.esperar(1000);
+                var errores =
+                  "Cotización ya solicitada con anterioridad. No se puede volver a solicitar.";
+
+                clientes[i]["errores"].push(errores);
+
+                console.log("ERRORES", errores);
+
+                await page.reload();
+                continue;
+              }
+
+              const exito = await page.evaluate(() => {
+                console.log("Iniciando");
+                const elementos = document.querySelectorAll(".pr_pMensaje");
+                console.log("Elementos", elementos);
+                return Array.from(elementos).some((el) =>
+                  el.textContent.includes("Operación realizada correctamente."),
+                );
+              });
+
+              if (exito) {
+                console.log("Operación Exitosa");
+                await page.locator('button[title="Cerrar"]').wait();
+                await page.locator('button[title="Cerrar"]').click();
+
+                // Selector del enlace que apunta al archivo PDF
+                const selectorEnlace = "a.pr_enlaceDocInforme";
+
+                await this.esperar(2000); // Ajusta según el tamaño del archivo
+                // Haz clic en el enlace para iniciar la descarga
+                await page.locator("a.pr_enlaceDocInforme").wait();
+                await page.locator("a.pr_enlaceDocInforme").click();
+                await this.esperar(3000); // Ajusta según el tamaño del archivo
+                //await page.locator("a.pr_enlaceDocInforme").click();
+
+                // Espera un tiempo para asegurarte de que la descarga se complete
+                console.log("Descargando archivo...");
+
+                var errores = "Realizado con exito.";
+
+                clientes[i]["errores"].push(errores);
+
+                console.log("ERRORES", errores);
+                await page.reload();
+                continue;
+              }
+
+              await this.esperar(2000);
+              await page.reload();
+            } // FIN FOR CLIENTES
+
+            //Cerrar navedador
+            //await browser.close();
+
+            console.log("Clientes: ", clientes);
+            console.log("Columnas: ", columnas);
+
+            //Procesado de los resultados en XLSX:
+            archivoCambioBase
+              .sheet(0)
+              .cell(1, 27 + 1)
+              .value("Comentarios");
+
+            for (var i = 0; i < clientes.length; i++) {
+              if (
+                clientes[i].errores !== undefined &&
+                clientes[i].errores !== null &&
+                Array.isArray(clientes[i].errores) &&
+                clientes[i].errores.length > 0
+              ) {
+                archivoCambioBase
+                  .sheet(0)
+                  .cell(i + 2, 27 + 1)
+                  .value(clientes[i].errores.join(" // "));
+              } else {
+                if (diff == 0) {
+                  archivoCambioBase
+                    .sheet(0)
+                    .cell(i + 2, 27 + 1)
+                    .value("Error");
+                }
+              }
+            }
+
+            //ESCRITURA XLSX:
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+
+            archivoCambioBase
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "Cambio-Base-Cotizacion.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("Fin del procesamiento");
+                //console.log(archivoIRPF)
+
+                resolve(true);
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
   async extraccionRemedy(argumentos) {
     console.log("Extracción Remedy");
     //console.log("Archivo entrada: "+argumentos[0])

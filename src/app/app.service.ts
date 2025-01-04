@@ -34,9 +34,10 @@ export class AppService {
   public datosProyecto: any = {};
   public listaProyectos: any = [];
   public proyectoConfig: any = {};
+  public parametrosProyecto: any = {};
 
   //Variables Globales:
-  public version: string = "0.9.85";
+  public version: string = "0.9.86";
 
   cambiarUrl(url: string): void {
     console.log("CAMBIANDO A URL: " + url);
@@ -51,6 +52,8 @@ export class AppService {
     if (this.proyectoConfig !== null || this.proyectoConfig !== undefined) {
       this.proyectoActivo = true;
     }
+
+    this.cargarParametros();
 
     window.electronAPI.on("onAbrirModo", (evnt, modo, data) => {
       console.log("Abriendo Modo: ");
@@ -396,12 +399,95 @@ export class AppService {
     return window.electronAPI.eliminarProyecto(nombreProyecto);
   }
 
+  cargarParametros() {
+    //Obtener del localStorage los parametros guardados:
+    this.parametrosProyecto = window.localStorage.getItem("parametrosProyecto");
+
+    //Obtener en LocalStorage:
+    const stringParametros = window.localStorage.getItem("parametrosProyecto");
+    if (stringParametros) {
+      this.parametrosProyecto = JSON.parse(stringParametros);
+    } else {
+      //Guardar en LocalStorage:
+      this.parametrosProyecto = {
+        procesos: [],
+      };
+      window.localStorage.setItem(
+        "parametrosProyecto",
+        JSON.stringify(this.parametrosProyecto),
+      );
+    }
+  }
+
   abrirProyecto(nombreProyecto: string) {
     console.log("Abriendo Proyecto" + nombreProyecto);
+    this.cargarParametros();
     this.proyectoActivo = true;
     this.nombreProyectoActivo = nombreProyecto;
     this.datosProyecto = window.electronAPI.abrirProyecto(nombreProyecto);
     return this.datosProyecto;
+  }
+
+  importarValoresPorDefecto(nombreProceso) {
+    function camelize(str) {
+      return str
+        .replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
+          return index === 0 ? word.toLowerCase() : word.toUpperCase();
+        })
+        .replace(/\s+/g, "");
+    }
+
+    nombreProceso = camelize(nombreProceso);
+
+    if (this.parametrosProyecto.procesos) {
+      for (var i = 0; i < this.parametrosProyecto.procesos.length; i++) {
+        if (
+          this.parametrosProyecto.procesos[i].nombreProceso == nombreProceso
+        ) {
+          return this.parametrosProyecto.procesos[i].valorParametros;
+        }
+      }
+    }
+
+    return [];
+  }
+
+  setValoresPorDefecto(nombreProceso: string, valores) {
+    function camelize(str) {
+      return str
+        .replace(/(?:^\w|[A-Z]|\b\w)/g, function (word, index) {
+          return index === 0 ? word.toLowerCase() : word.toUpperCase();
+        })
+        .replace(/\s+/g, "");
+    }
+
+    //Normalizar nombreProceso:
+    nombreProceso = camelize(nombreProceso);
+
+    //Buscar si ya existe el proceso:
+    for (var i = 0; i < this.parametrosProyecto.procesos.length; i++) {
+      if (this.parametrosProyecto.procesos[i].nombreProceso == nombreProceso) {
+        this.parametrosProyecto.procesos[i].valorParametros = valores;
+        window.localStorage.setItem(
+          "parametrosProyecto",
+          JSON.stringify(this.parametrosProyecto),
+        );
+        return;
+      }
+    }
+
+    //Si no existe, crearlo:
+    this.parametrosProyecto.procesos.push({
+      nombreProceso: nombreProceso,
+      valorParametros: valores,
+    });
+
+    window.localStorage.setItem(
+      "parametrosProyecto",
+      JSON.stringify(this.parametrosProyecto),
+    );
+
+    return;
   }
 
   getDatosProyecto() {
