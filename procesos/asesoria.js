@@ -2103,7 +2103,7 @@ class ProcesosAsesoria {
                 ]);
 
                 if (nuevaPagina) {
-                  await this.esperar(2000);
+                  await this.esperar(1000);
                   const pdfUrl = nuevaPagina.url();
                   console.log(`📄 URL del PDF detectada: ${pdfUrl}`);
 
@@ -2128,7 +2128,7 @@ class ProcesosAsesoria {
                 continue;
               }
 
-              await this.esperar(2000);
+              await this.esperar(1000);
 
               // Buscar el nuevo archivo descargado
               const archivosDespues = new Set(fs.readdirSync(pathSalida));
@@ -2151,7 +2151,7 @@ class ProcesosAsesoria {
                 console.log(`No se encontró archivo para el cliente: ${i + 1}`);
               }
 
-              await this.esperar(2000);
+              await this.esperar(1000);
             } //Fin iteracion de clientes
             //Cerrar navedador
             await browser.close();
