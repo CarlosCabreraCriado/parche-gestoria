@@ -158,8 +158,12 @@ export class EjecutarProcesoComponent implements OnInit {
     }
 
     //Extraer parametros:
-    console.log("Argumentos proceso: ");
+    console.log("Argumentos proceso: ", proceso);
     var argumentos = this.formularioProcesoGroup.getRawValue();
+    this.appService.setValoresPorDefecto(
+      proceso.nombre,
+      argumentos.formularioControl,
+    );
 
     //Extraccion de los objetos:
     var objeto = {};
@@ -273,6 +277,16 @@ export class EjecutarProcesoComponent implements OnInit {
     this.formularioControl = new UntypedFormArray([]);
     this.objetosSeleccionados = [];
 
+    //Importar valores por defecto:
+    var valoresDefecto = this.appService.importarValoresPorDefecto(node.nombre);
+    console.warn("Valores por defecto: ", valoresDefecto);
+
+    for (var i = 0; i < valoresDefecto; i++) {
+      if (valoresDefecto) {
+        node.argumentos[i].formulario.valorDefault = valoresDefecto[i];
+      }
+    }
+
     //DEFINICIONES DE FORMULARIO:
     for (var i = 0; i < node.argumentos.length; i++) {
       if (node.argumentos[i].tipo == "objeto") {
@@ -288,9 +302,18 @@ export class EjecutarProcesoComponent implements OnInit {
             }),
           );
         } else {
-          this.formularioControl.push(
-            new UntypedFormControl({ value: "", disabled: false }),
-          );
+          if (valoresDefecto[i] != undefined) {
+            this.formularioControl.push(
+              new UntypedFormControl({
+                value: valoresDefecto[i],
+                disabled: false,
+              }),
+            );
+          } else {
+            this.formularioControl.push(
+              new UntypedFormControl({ value: "", disabled: false }),
+            );
+          }
         }
       }
     }
