@@ -35,6 +35,7 @@
     "@types/jsoneditor": "^9.9.5",
     "ang-jsoneditor": "3.1.1",
     "arrow-line": "^0.7.5",
+    "axios": "^1.7.9",
     "chart.js": "^2.9.3",
     "docxtemplater": "^3.47.4",
     "electron-log": "^4.2.4",
