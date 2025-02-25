@@ -77,11 +77,154 @@ var libreriaProcesos: LibreriaProcesos[] = [
     descripcion: "Procesos de asesoría",
     subCategoria: [
       {
-        nombre: "Cálculo de IRPF",
+        nombre: "IRPF 2024",
         categoria: "Asesoria",
         tipo: "proceso",
         descripcion:
-          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria",
+          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria 2024",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
+        nombre: "IRPF 2025",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion:
+          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria de 2025",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
+        nombre: "Cartas de pago en Hacienda",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion:
+          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria 2024",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
+        nombre: "Etiquetas AEAT",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion: "Descarga automática de etiquetas de la AEAT",
         autor: "Carlos Cabrera",
         argumentos: [
           {
