@@ -2441,6 +2441,413 @@ class ProcesosAsesoria {
     });
   }
 
+  async actualizacionCNAE25(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo CNAE...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoCNAE = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "CNAE-Informes-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "CNAE-Informes-Procesados",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: CNAE");
+            archivoCNAE = workbook;
+            var columnas = archivoCNAE.sheet(0).usedRange()._numColumns;
+            var filas = archivoCNAE.sheet(0).usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoCNAE.sheet(0).cell(4, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+
+            for (var i = 5; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (archivoCNAE.sheet(0).cell(i, j).value() !== undefined) {
+                  switch (cabeceras[j - 1]) {
+                    case "Código Cuenta Cotización (CCC)":
+                      objetoCliente["ccc"] = archivoCNAE
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      objetoCliente["ccc1"] = objetoCliente["ccc"].substring(
+                        0,
+                        4,
+                      );
+                      objetoCliente["ccc2"] = objetoCliente["ccc"].substring(
+                        4,
+                        6,
+                      );
+                      objetoCliente["ccc3"] = objetoCliente["ccc"].substring(6);
+                      break;
+
+                    case "CNAE25":
+                      objetoCliente["cnae25"] = archivoCNAE
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+
+              if (
+                objetoCliente.ccc !== "" &&
+                objetoCliente.ccc !== null &&
+                objetoCliente.ccc !== undefined &&
+                objetoCliente.cnae25 !== "" &&
+                objetoCliente.cnae25 !== null &&
+                objetoCliente.cnae25 !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] = objetoCliente["ccc"] + ".pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            console.log("Clientes: ");
+            console.log(clientes);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            for (var i = 0; i < clientes.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined ||
+                clientes[i].cnae25 == "" ||
+                clientes[i].cnae25 == null ||
+                clientes[i].cnae25 == undefined
+              ) {
+                clientes[i]["errores"] = ["Campos CCC o CNAE25 no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ACR82&E=I&AP=AFIR",
+                { waitUntil: "networkidle0" },
+              );
+
+              await this.esperar(1000);
+
+              //********
+              // CCC1
+              //********
+              await page
+                .locator('input[name="txt_SDFA82V0REGKCCOE_ayuda"]')
+                .wait();
+              await page.type(
+                'input[name="txt_SDFA82V0REGKCCOE_ayuda"]',
+                String(clientes[i].ccc1),
+              );
+
+              //********
+              // CCC2
+              //********
+              await page
+                .locator('input[name="txt_SDFA82V0TESCCCOE_ayuda"]')
+                .wait();
+              await page.type(
+                'input[name="txt_SDFA82V0TESCCCOE_ayuda"]',
+                String(clientes[i].ccc2),
+              );
+
+              //********
+              // CCC3
+              //********
+              await page.locator('input[name="txt_SDFA82V0CCONE"]').wait();
+              await page.type(
+                'input[name="txt_SDFA82V0CCONE"]',
+                String(clientes[i].ccc3),
+              );
+
+              await this.esperar(1000);
+
+              //*************
+              // Continuar
+              //*************
+              await page.locator('input[name="btn_Sub2207001004_32"]').wait();
+              await page.locator('input[name="btn_Sub2207001004_32"]').click();
+
+              await this.esperar(2000);
+
+              //********
+              // CNAE25
+              //********
+              await page
+                .locator('input[name="txt_SDFA82V1CNAE25E_ayuda"]')
+                .wait();
+              await page
+                .locator('input[name="txt_SDFA82V1CNAE25E_ayuda"]')
+                .click();
+
+              for (let i = 0; i < 6; i++) {
+                await page.keyboard.press("Backspace");
+              }
+
+              await page.type(
+                'input[name="txt_SDFA82V1CNAE25E_ayuda"]',
+                String(clientes[i].cnae25),
+              );
+
+              //*************
+              // Confirmar
+              //*************
+              await page.locator('input[name="btn_Sub2207001004_65"]').wait();
+              await page.locator('input[name="btn_Sub2207001004_65"]').click();
+              await this.esperar(1000);
+
+              //*************
+              // Confirmar2
+              //*************
+              await page.locator('input[name="btn_Sub2204701006_64"]').wait();
+              await page.locator('input[name="btn_Sub2204701006_64"]').click();
+              await this.esperar(1000);
+
+              const confirmacion = await page.evaluate((texto) => {
+                try {
+                  return Array.from(document.querySelectorAll("#DIL"))[0]
+                    .innerText;
+                } catch (error) {
+                  return false;
+                }
+              });
+
+              if (confirmacion) {
+                archivoCNAE
+                  .sheet(0)
+                  .cell(i + 5, 11)
+                  .value(confirmacion);
+              }
+
+              await this.esperar(1000);
+            } //Fin iteracion de clientes
+
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoCNAE
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "CNAE-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            //Iniciando descarga de informes:
+            for (var i = 0; i < clientes.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined ||
+                clientes[i].cnae25 == "" ||
+                clientes[i].cnae25 == null ||
+                clientes[i].cnae25 == undefined
+              ) {
+                clientes[i]["errores"] = ["Campos CCC o CNAE25 no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
+                { waitUntil: "networkidle0" },
+              );
+
+              await this.esperar(1000);
+
+              //********
+              // CCC1
+              //********
+              await page.locator('input[name="txt_SDFREG62_ayuda"]').wait();
+              await page.type(
+                'input[name="txt_SDFREG62_ayuda"]',
+                String(clientes[i].ccc1),
+              );
+
+              //********
+              // CCC2
+              //********
+              await page.locator('input[name="txt_SDFTESO62"]').wait();
+              await page.type(
+                'input[name="txt_SDFTESO62"]',
+                String(clientes[i].ccc2),
+              );
+
+              //********
+              // CCC3
+              //********
+              await page.locator('input[name="txt_SDFNUM62"]').wait();
+              await page.type(
+                'input[name="txt_SDFNUM62"]',
+                String(clientes[i].ccc3),
+              );
+
+              await this.esperar(1000);
+              await page.select(
+                'select[name="cbo_ListaTipoImpresion"]',
+                "OnLine",
+              );
+
+              await this.esperar(1000);
+              //*************
+              // Generar Documento de ingreso
+              //*************
+              const [nuevaPagina] = await Promise.all([
+                new Promise((resolvePromise) =>
+                  browser.once("targetcreated", async (target) => {
+                    const newPage = await target.page();
+                    newPage.on("response", async (response) => {
+                      // Verificar si el contenido es un PDF
+                      if (
+                        !response.url().endsWith(".js") &&
+                        !response.url().endsWith(".css") &&
+                        response.url().startsWith("chrome-extension://")
+                      ) {
+                        console.log("PDF detectado:", response.url());
+
+                        // Intercepta el PDF:
+                        const pdfBuffer = await response.buffer();
+
+                        // Guardar el PDF en el sistema de archivos
+                        const filePath = path.join(
+                          pathSalida,
+                          clientes[i]["nombreArchivo"],
+                        );
+                        fs.writeFileSync(filePath, pdfBuffer);
+                        console.log("PDF descargado en:", filePath);
+                        resolvePromise(newPage);
+                      }
+                    });
+                  }),
+                ),
+
+                await page.locator('input[name="btn_Sub2207601004"]').wait(),
+                await page.locator('input[name="btn_Sub2207601004"]').click(),
+              ]);
+
+              console.log("Nuevo cliente");
+              await this.esperar(1000);
+              await nuevaPagina.close();
+              await this.esperar(1000);
+            }
+
+            await browser.close();
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
   async spoolToXLSX(argumentos) {
     console.log("Formatear SPOOL");
     console.log("Archivo entrada: " + argumentos[0]);

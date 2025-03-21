@@ -37,7 +37,7 @@ export class AppService {
   public parametrosProyecto: any = {};
 
   //Variables Globales:
-  public version: string = "0.9.87";
+  public version: string = "0.9.89";
 
   cambiarUrl(url: string): void {
     console.log("CAMBIANDO A URL: " + url);
