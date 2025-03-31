@@ -2636,9 +2636,30 @@ class ProcesosAsesoria {
               //********
               // CNAE25
               //********
-              await page
-                .locator('input[name="txt_SDFA82V1CNAE25E_ayuda"]')
-                .wait();
+              try {
+                await page.waitForSelector(
+                  'input[name="txt_SDFA82V1CNAE25E_ayuda"]',
+                  { timeout: 5_000 },
+                );
+              } catch (e) {
+                let mensajeError = await page.evaluate((texto) => {
+                  try {
+                    return Array.from(document.querySelectorAll("#DIL"))[0]
+                      .innerText;
+                  } catch (error) {
+                    return false;
+                  }
+                });
+
+                archivoCNAE
+                  .sheet(0)
+                  .cell(i + 5, 11)
+                  .value("ERROR: " + mensajeError);
+
+                await this.esperar(1000);
+                continue;
+              }
+
               await page
                 .locator('input[name="txt_SDFA82V1CNAE25E_ayuda"]')
                 .click();
@@ -2777,49 +2798,351 @@ class ProcesosAsesoria {
               );
 
               await this.esperar(1000);
+
               //*************
               // Generar Documento de ingreso
               //*************
-              const [nuevaPagina] = await Promise.all([
-                new Promise((resolvePromise) =>
-                  browser.once("targetcreated", async (target) => {
-                    const newPage = await target.page();
-                    newPage.on("response", async (response) => {
-                      // Verificar si el contenido es un PDF
-                      if (
-                        !response.url().endsWith(".js") &&
-                        !response.url().endsWith(".css") &&
-                        response.url().startsWith("chrome-extension://")
-                      ) {
-                        console.log("PDF detectado:", response.url());
+              let nuevaPagina;
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    const timeout = setTimeout(() => {
+                      resolvePromise(false);
+                    }, 5000);
 
-                        // Intercepta el PDF:
-                        const pdfBuffer = await response.buffer();
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+                      newPage.on("response", async (response) => {
+                        // Verificar si el contenido es un PDF
+                        if (
+                          !response.url().endsWith(".js") &&
+                          !response.url().endsWith(".css") &&
+                          response.url().startsWith("chrome-extension://")
+                        ) {
+                          console.log("PDF detectado:", response.url());
 
-                        // Guardar el PDF en el sistema de archivos
-                        const filePath = path.join(
-                          pathSalida,
-                          clientes[i]["nombreArchivo"],
-                        );
-                        fs.writeFileSync(filePath, pdfBuffer);
-                        console.log("PDF descargado en:", filePath);
-                        resolvePromise(newPage);
-                      }
+                          // Intercepta el PDF:
+                          const pdfBuffer = await response.buffer();
+
+                          // Guardar el PDF en el sistema de archivos
+                          const filePath = path.join(
+                            pathSalida,
+                            clientes[i]["nombreArchivo"],
+                          );
+                          fs.writeFileSync(filePath, pdfBuffer);
+                          console.log("PDF descargado en:", filePath);
+                          resolvePromise(newPage);
+                        }
+                      });
                     });
                   }),
-                ),
 
-                await page.locator('input[name="btn_Sub2207601004"]').wait(),
-                await page.locator('input[name="btn_Sub2207601004"]').click(),
-              ]);
+                  await page.locator('input[name="btn_Sub2207601004"]').wait(),
+                  await page.locator('input[name="btn_Sub2207601004"]').click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch");
+              }
 
-              console.log("Nuevo cliente");
               await this.esperar(1000);
-              await nuevaPagina.close();
+              //Comprueba si hubo error
+              if (!nuevaPagina) {
+                console.log("ERROR EN DESCARGA");
+              } else {
+                await nuevaPagina.close();
+              }
+              console.log("Nuevo cliente");
               await this.esperar(1000);
             }
 
             await browser.close();
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
+  async informesITA(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo ITA...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoITA = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "ITA-Informes-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "ITA-Informes-Procesados",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: ITA");
+            archivoITA = workbook;
+            var columnas = archivoITA.sheet(0).usedRange()._numColumns;
+            var filas = archivoITA.sheet(0).usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoITA.sheet(0).cell(1, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+            for (var i = 2; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (archivoITA.sheet(0).cell(i, j).value() !== undefined) {
+                  switch (cabeceras[j - 1]) {
+                    case "Código Cuenta Cotización (CCC)":
+                      objetoCliente["ccc"] = archivoITA
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      objetoCliente["ccc1"] = objetoCliente["ccc"].substring(
+                        0,
+                        4,
+                      );
+                      objetoCliente["ccc2"] = objetoCliente["ccc"].substring(
+                        4,
+                        6,
+                      );
+                      objetoCliente["ccc3"] = objetoCliente["ccc"].substring(6);
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+
+              if (
+                objetoCliente.ccc !== "" &&
+                objetoCliente.ccc !== null &&
+                objetoCliente.ccc !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] = objetoCliente["ccc"] + ".pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            console.log("Clientes: ");
+            console.log(clientes);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            //Iniciando descarga de informes:
+            for (var i = 0; i < clientes.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined
+              ) {
+                clientes[i]["errores"] = ["Campo CCC no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
+                { waitUntil: "networkidle0" },
+              );
+
+              await this.esperar(1000);
+
+              //********
+              // CCC1
+              //********
+              await page.locator('input[name="txt_SDFREG62_ayuda"]').wait();
+              await page.type(
+                'input[name="txt_SDFREG62_ayuda"]',
+                String(clientes[i].ccc1),
+              );
+
+              //********
+              // CCC2
+              //********
+              await page.locator('input[name="txt_SDFTESO62"]').wait();
+              await page.type(
+                'input[name="txt_SDFTESO62"]',
+                String(clientes[i].ccc2),
+              );
+
+              //********
+              // CCC3
+              //********
+              await page.locator('input[name="txt_SDFNUM62"]').wait();
+              await page.type(
+                'input[name="txt_SDFNUM62"]',
+                String(clientes[i].ccc3),
+              );
+
+              await this.esperar(1000);
+              await page.select(
+                'select[name="cbo_ListaTipoImpresion"]',
+                "OnLine",
+              );
+
+              await this.esperar(1000);
+
+              //*************
+              // Generar Documento de ingreso
+              //*************
+              let nuevaPagina;
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    setTimeout(() => {
+                      resolvePromise(false);
+                    }, 5000);
+
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+                      newPage.on("response", async (response) => {
+                        // Verificar si el contenido es un PDF
+                        if (
+                          !response.url().endsWith(".js") &&
+                          !response.url().endsWith(".css") &&
+                          response.url().startsWith("chrome-extension://")
+                        ) {
+                          console.log("PDF detectado:", response.url());
+
+                          // Intercepta el PDF:
+                          const pdfBuffer = await response.buffer();
+
+                          // Guardar el PDF en el sistema de archivos
+                          const filePath = path.join(
+                            pathSalida,
+                            clientes[i]["nombreArchivo"],
+                          );
+                          fs.writeFileSync(filePath, pdfBuffer);
+                          console.log("PDF descargado en:", filePath);
+                          resolvePromise(newPage);
+                        }
+                      });
+                    });
+                  }),
+
+                  await page.locator('input[name="btn_Sub2207601004"]').wait(),
+                  await page.locator('input[name="btn_Sub2207601004"]').click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch");
+              }
+
+              await this.esperar(1000);
+              //Comprueba si hubo error
+              if (!nuevaPagina) {
+                console.log("ERROR EN DESCARGA");
+                archivoITA
+                  .sheet(0)
+                  .cell(i + 2, 2)
+                  .value("ERROR: No se ha podido descargar el informe.");
+              } else {
+                archivoITA
+                  .sheet(0)
+                  .cell(i + 2, 2)
+                  .value("OK");
+                await nuevaPagina.close();
+              }
+              console.log("Nuevo cliente");
+              await this.esperar(1000);
+            }
+
+            await browser.close();
+
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoITA
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "ITA-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
             resolve(true);
           })
           .then(() => {})
