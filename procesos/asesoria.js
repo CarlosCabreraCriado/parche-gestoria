@@ -2512,6 +2512,13 @@ class ProcesosAsesoria {
                         .cell(i, j)
                         .value();
                       break;
+
+                    case "Expediente":
+                      objetoCliente["expediente"] = archivoCNAE
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
                   }
                 }
               }
@@ -2526,7 +2533,11 @@ class ProcesosAsesoria {
                 objetoCliente.cnae25 !== null &&
                 objetoCliente.cnae25 !== undefined
               ) {
-                objetoCliente["nombreArchivo"] = objetoCliente["ccc"] + ".pdf";
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["expediente"] +
+                  "-" +
+                  objetoCliente["ccc"] +
+                  ".pdf";
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
@@ -2699,7 +2710,7 @@ class ProcesosAsesoria {
               if (confirmacion) {
                 archivoCNAE
                   .sheet(0)
-                  .cell(i + 5, 11)
+                  .cell(i + 5, 12)
                   .value(confirmacion);
               }
 
@@ -2947,6 +2958,13 @@ class ProcesosAsesoria {
                       );
                       objetoCliente["ccc3"] = objetoCliente["ccc"].substring(6);
                       break;
+
+                    case "Expediente":
+                      objetoCliente["expediente"] = archivoITA
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
                   }
                 }
               }
@@ -2958,7 +2976,11 @@ class ProcesosAsesoria {
                 objetoCliente.ccc !== null &&
                 objetoCliente.ccc !== undefined
               ) {
-                objetoCliente["nombreArchivo"] = objetoCliente["ccc"] + ".pdf";
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["expediente"] +
+                  "-" +
+                  objetoCliente["ccc"] +
+                  ".pdf";
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
@@ -3108,12 +3130,12 @@ class ProcesosAsesoria {
                 console.log("ERROR EN DESCARGA");
                 archivoITA
                   .sheet(0)
-                  .cell(i + 2, 2)
+                  .cell(i + 2, 3)
                   .value("ERROR: No se ha podido descargar el informe.");
               } else {
                 archivoITA
                   .sheet(0)
-                  .cell(i + 2, 2)
+                  .cell(i + 2, 3)
                   .value("OK");
                 await nuevaPagina.close();
               }
