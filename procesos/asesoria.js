@@ -6,6 +6,7 @@ const moment = require("moment");
 const XlsxPopulate = require("xlsx-populate");
 const Datastore = require("nedb");
 const _ = require("lodash");
+const { DateTime } = require("luxon");
 
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
@@ -3151,6 +3152,1262 @@ class ProcesosAsesoria {
               .toFileAsync(
                 path.normalize(
                   path.join(pathSalidaExcel, "ITA-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
+  async certificadoSeguridadSocial(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo SS CCC...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoSS = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "SS-Certificados-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "SS-Certificados-Procesados",
+        "Resultados",
+      );
+      var pathSalidaFacturacion = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "SS-Certificados-Procesados",
+        "FACTURACIÓN",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      // Verificar si la carpeta "FACTURACIÓN" existe y crearla si no
+      if (!fs.existsSync(pathSalidaFacturacion)) {
+        fs.mkdirSync(pathSalidaFacturacion, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalidaFacturacion}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalidaFacturacion}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: SS");
+            archivoSS = workbook;
+            var columnas = archivoSS.sheet("DATOS").usedRange()._numColumns;
+            var filas = archivoSS.sheet("DATOS").usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoSS.sheet("DATOS").cell(1, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+            for (var i = 2; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (archivoSS.sheet("DATOS").cell(i, j).value() !== undefined) {
+                  switch (cabeceras[j - 1]) {
+                    case "CCC COMPLETO":
+                      objetoCliente["ccc"] = archivoSS
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "EMPRESA":
+                      objetoCliente["empresa"] = archivoSS
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "CÓDIGO":
+                      objetoCliente["codigo"] = archivoSS
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+
+              if (
+                objetoCliente.ccc !== "" &&
+                objetoCliente.ccc !== null &&
+                objetoCliente.ccc !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["codigo"] +
+                  " CERTIFICADO ESTAR AL CORRIENTE SS " +
+                  objetoCliente["empresa"] +
+                  " " +
+                  DateTime.now().setZone("Europe/Madrid").toFormat("ddMMyy") +
+                  ".pdf";
+
+                objetoCliente["nombreArchivoFacturacion"] =
+                  objetoCliente["codigo"] +
+                  "-" +
+                  objetoCliente["empresa"] +
+                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            console.log("Clientes: ");
+            console.log(clientes);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            //Confirma el cambio de pagina:
+            page.on("dialog", async (dialog) => {
+              const tipo = dialog.type();
+              if (tipo == "beforeunload") {
+                await dialog.accept();
+              }
+            });
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            //Iniciando descarga de informes:
+            for (var i = 0; i < clientes.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined
+              ) {
+                clientes[i]["errores"] = ["Campo CCC no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+                { waitUntil: "networkidle0" },
+              );
+
+              //********
+              // Pulsar CODIGO ARED
+              //********
+              await page.locator('a[id="enlace_316077"]').click();
+
+              //********
+              // Pulsar Buscar
+              //********
+              await page
+                .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
+                .click();
+
+              //********
+              // Pulsar opcion CCC/NAF
+              //********
+              await page.locator(`input[title="Buscar por CCC o NAF"]`).wait();
+              var radioButton = await page.$(
+                `input[title="Buscar por CCC o NAF"]`,
+              );
+
+              if (radioButton) {
+                await radioButton.click(); // Hacer clic en el radio button
+                console.log("Radio button seleccionado.");
+              } else {
+                console.log("No se encontró el radio button.");
+              }
+
+              //********
+              // Introducir CCC
+              //********
+              await page
+                .locator('input[name="criteriosBusquedaCccNaf"]')
+                .wait();
+              await page.type(
+                'input[name="criteriosBusquedaCccNaf"]',
+                String(clientes[i].ccc),
+              );
+
+              await this.esperar(1000);
+
+              //********
+              // Pulsar Buscar
+              //********
+              await page
+                .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
+                .click();
+
+              //********
+              // Pulsar opcion encontrada
+              //********
+              await page
+                .locator(
+                  'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]',
+                )
+                .click();
+
+              //********
+              // Pulsar boton "Continuar"
+              //********
+              await page.locator('button[name="SPM.ACC.CONTINUAR"]').click();
+
+              //********
+              // Pulsar boton "Imprimir"
+              //********
+              await page.locator('button[name="SPM.ACC.IMPRIMIR"]').click();
+              await page.waitForNavigation({ waitUntil: "load" });
+
+              //*************
+              // Generar Documento de certificado
+              //*************
+              const enlaces = await page.$$("a");
+              let enlaceEncontrado = null;
+
+              for (const enlace of enlaces) {
+                const texto = await page.evaluate((el) => el.innerText, enlace);
+                if (texto.includes("Certificado genérico")) {
+                  enlaceEncontrado = enlace;
+                  break;
+                }
+              }
+
+              let nuevaPagina;
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    setTimeout(() => {
+                      resolvePromise(false);
+                    }, 10000);
+
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+                      newPage.on("response", async (response) => {
+                        // Verificar si el contenido es un PDF
+                        if (
+                          !response.url().endsWith(".js") &&
+                          !response.url().endsWith(".css") &&
+                          response.url().startsWith("chrome-extension://")
+                        ) {
+                          console.log("PDF detectado:", response.url());
+
+                          // Intercepta el PDF:
+                          const pdfBuffer = await response.buffer();
+
+                          // Guardar el PDF en el sistema de archivos
+                          const filePath = path.join(
+                            pathSalida,
+                            clientes[i]["nombreArchivo"],
+                          );
+                          const filePathFacturacion = path.join(
+                            pathSalidaFacturacion,
+                            clientes[i]["nombreArchivoFacturacion"],
+                          );
+
+                          fs.writeFileSync(filePath, pdfBuffer);
+                          fs.writeFileSync(filePathFacturacion, pdfBuffer);
+
+                          console.log("PDF descargado en:", filePath);
+                          resolvePromise(newPage);
+                        }
+                      });
+                    });
+                  }),
+                  await enlaceEncontrado.click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch: ", e);
+              }
+
+              await this.esperar(1000);
+
+              //Comprueba si hubo error
+              if (!nuevaPagina) {
+                console.log("ERROR EN DESCARGA");
+                archivoSS
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("ERROR: No se ha podido descargar el certificado.");
+              } else {
+                archivoSS
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("OK, certificado descargado.");
+                await nuevaPagina.close();
+              }
+              console.log("Nuevo cliente");
+              await this.esperar(1000);
+            }
+
+            await browser.close();
+
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoSS
+              .toFileAsync(
+                path.normalize(path.join(pathSalidaExcel, "SS-Procesado.xlsx")),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
+  async certificadoTributario(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo Tributario CCC...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoTributario = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_Tributarios-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_Tributarios-Procesados",
+        "Resultados",
+      );
+      var pathSalidaFacturacion = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_Tributarios-Procesados",
+        "FACTURACIÓN",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalidaFacturacion)) {
+        fs.mkdirSync(pathSalidaFacturacion, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalidaFacturacion}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalidaFacturacion}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: Tributario");
+            archivoTributario = workbook;
+            var columnas = archivoTributario
+              .sheet("DATOS")
+              .usedRange()._numColumns;
+            var filas = archivoTributario.sheet("DATOS").usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(
+                archivoTributario.sheet("DATOS").cell(1, i).value(),
+              );
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+            for (var i = 2; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (
+                  archivoTributario.sheet("DATOS").cell(i, j).value() !==
+                  undefined
+                ) {
+                  switch (cabeceras[j - 1]) {
+                    case "CCC COMPLETO":
+                      objetoCliente["ccc"] = archivoTributario
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "EMPRESA":
+                      objetoCliente["empresa"] = archivoTributario
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "CÓDIGO":
+                      objetoCliente["codigo"] = archivoTributario
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "NIF":
+                      objetoCliente["nif"] = archivoTributario
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+              objetoCliente["flagEvitarDuplicado"] = false;
+
+              if (
+                objetoCliente.ccc !== "" &&
+                objetoCliente.ccc !== null &&
+                objetoCliente.ccc !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["codigo"] +
+                  " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
+                  objetoCliente["empresa"] +
+                  " " +
+                  DateTime.now().setZone("Europe/Madrid").toFormat("ddMMyy") +
+                  ".pdf";
+
+                objetoCliente["nombreArchivoFacturacion"] =
+                  objetoCliente["codigo"] +
+                  "-" +
+                  objetoCliente["empresa"] +
+                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            //Procesar duplicados:
+            const vistos = new Set();
+            clientes = clientes.map((obj) => {
+              if (vistos.has(obj.nif)) {
+                obj["errores"] = [
+                  "Evitando generar certificado por NIF duplicado",
+                ];
+                return { ...obj, flagEvitarDuplicado: true };
+              } else {
+                vistos.add(obj.nif);
+                return obj;
+              }
+            });
+
+            console.log("Clientes: ");
+            console.log(clientes);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            //Confirma el cambio de pagina:
+            page.on("dialog", async (dialog) => {
+              console.log("Dialogo: ", dialog.type());
+              const tipo = dialog.type();
+              if (tipo == "beforeunload") {
+                await dialog.accept();
+              }
+            });
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            //Iniciando descarga de informes:
+            for (var i = 0; i < clientes.length; i++) {
+              if (clientes[i].flagEvitarDuplicado) {
+                archivoTributario
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("WARNING: Solicitud evitada por duplicidad en NIF.");
+                continue;
+              }
+
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined
+              ) {
+                clientes[i]["errores"] = ["Campo CCC no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+                { waitUntil: "networkidle0" },
+              );
+
+              try {
+                const botonModal = await page.waitForSelector(
+                  'button[data-dismiss="modal"]',
+                  { timeout: 1000 },
+                );
+                if (botonModal) {
+                  await botonModal.click();
+                  console.log("Botón clicado");
+                }
+              } catch (error) {
+                console.log(
+                  "Botón no encontrado después de 1 segundo, continuando...",
+                );
+              }
+
+              //********
+              // Pulsar opcion en representacion de terceros
+              //********
+              await page.locator(`input[id="fTipoRepresentacion1"]`).wait();
+              var radioButton = await page.$(
+                `input[id="fTipoRepresentacion1"]`,
+              );
+
+              if (radioButton) {
+                await radioButton.click(); // Hacer clic en el radio button
+                console.log("Radio button seleccionado.");
+              } else {
+                console.log("No se encontró el radio button.");
+              }
+
+              //********
+              // Introducir NIE
+              //********
+              await page.locator('input[name="fNifT"]').wait();
+              await page.type('input[name="fNifT"]', String(clientes[i].nif));
+              await this.esperar(500);
+
+              //********
+              // Introducir Nombre y apellidos
+              //********
+              await page.locator('input[name="fNombreT"]').wait();
+              await page.type(
+                'input[name="fNombreT"]',
+                String(clientes[i].empresa),
+              );
+              await this.esperar(500);
+
+              //********
+              // Pulsar opcion tipo de certificado
+              //********
+              await page.locator(`input[id="fTipoCertificado4"]`).wait();
+              var radioButton2 = await page.$(`input[id="fTipoCertificado4"]`);
+
+              if (radioButton2) {
+                await radioButton2.click(); // Hacer clic en el radio button
+                console.log("Radio button seleccionado.");
+              } else {
+                console.log("No se encontró el radio button.");
+              }
+
+              //********
+              // Pulsar Validar solicitud
+              //********
+              await page.locator('input[id="validarSolicitud"]').click();
+              await page.waitForNavigation({ waitUntil: "load" });
+
+              //********
+              // Pulsar opcion encontrada
+              //********
+              await page.locator('input[value="Firmar Enviar"]').wait();
+
+              let nuevaPagina;
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    setTimeout(() => {
+                      resolvePromise(false);
+                    }, 10000);
+
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+
+                      await newPage.locator('input[id="Conforme"]').wait();
+                      await newPage.locator('input[id="Conforme"]').click();
+                      await this.esperar(500);
+
+                      await newPage.locator('input[name="Firmar"]').wait();
+                      await newPage.locator('input[name="Firmar"]').click();
+
+                      await newPage.close();
+                      resolvePromise(true);
+                    });
+                  }),
+                  await page.locator('input[value="Firmar Enviar"]').click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch: ", e);
+              }
+
+              await this.esperar(1000);
+              console.log("Descargando...");
+
+              //*************
+              // Descargar resguardo solicitud
+              //*************
+              await page.locator('input[id="descarga"]').wait();
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    setTimeout(() => {
+                      resolvePromise(false);
+                    }, 5000);
+
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+                      newPage.on("response", async (response) => {
+                        // Verificar si el contenido es un PDF
+                        if (
+                          !response.url().endsWith(".js") &&
+                          !response.url().endsWith(".css") &&
+                          response.url().startsWith("chrome-extension://")
+                        ) {
+                          console.log("PDF detectado:", response.url());
+
+                          // Intercepta el PDF:
+                          const pdfBuffer = await response.buffer();
+
+                          // Guardar el PDF en el sistema de archivos
+                          const filePath = path.join(
+                            pathSalida,
+                            clientes[i]["nombreArchivo"],
+                          );
+                          const filePathFacturacion = path.join(
+                            pathSalidaFacturacion,
+                            clientes[i]["nombreArchivoFacturacion"],
+                          );
+                          fs.writeFileSync(filePath, pdfBuffer);
+                          fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                          console.log("PDF descargado en:", filePath);
+                          resolvePromise(newPage);
+                        }
+                      });
+                    });
+                  }),
+                  await page.locator('input[id="descarga"]').click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch");
+              }
+
+              //Comprueba si hubo error
+              if (!nuevaPagina) {
+                console.log("ERROR EN FIRMA DE CONSENTIMIENTO");
+                archivoTributario
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value(
+                    "ERROR: No se ha podido generar el resguardo de la solicitud.",
+                  );
+              } else {
+                archivoTributario
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("OK, resguardo de solicitud descargado.");
+                await nuevaPagina.close();
+              }
+              console.log("Nuevo cliente");
+              await this.esperar(1000);
+            }
+
+            await browser.close();
+
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoTributario
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "Tributario-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
+  async certificadoSubvencionesATC(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo ATC CCC...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoSubvencionesATC = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_SubvencionesATC-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_SubvencionesATC-Procesados",
+        "Resultados",
+      );
+      var pathSalidaFacturacion = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "Certificados_SubvencionesATC-Procesados",
+        "FACTURACIÓN",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalidaFacturacion)) {
+        fs.mkdirSync(pathSalidaFacturacion, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalidaFacturacion}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalidaFacturacion}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: CCC");
+            archivoSubvencionesATC = workbook;
+            var columnas = archivoSubvencionesATC
+              .sheet("DATOS")
+              .usedRange()._numColumns;
+            var filas = archivoSubvencionesATC
+              .sheet("DATOS")
+              .usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(
+                archivoSubvencionesATC.sheet("DATOS").cell(1, i).value(),
+              );
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+            for (var i = 2; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (
+                  archivoSubvencionesATC.sheet("DATOS").cell(i, j).value() !==
+                  undefined
+                ) {
+                  switch (cabeceras[j - 1]) {
+                    case "CCC COMPLETO":
+                      objetoCliente["ccc"] = archivoSubvencionesATC
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "EMPRESA":
+                      objetoCliente["empresa"] = archivoSubvencionesATC
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "CÓDIGO":
+                      objetoCliente["codigo"] = archivoSubvencionesATC
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "NIF":
+                      objetoCliente["nif"] = archivoSubvencionesATC
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+              objetoCliente["flagEvitarDuplicado"] = false;
+
+              if (
+                objetoCliente.ccc !== "" &&
+                objetoCliente.ccc !== null &&
+                objetoCliente.ccc !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["codigo"] +
+                  " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
+                  objetoCliente["empresa"] +
+                  " " +
+                  DateTime.now().setZone("Europe/Madrid").toFormat("ddMMyy") +
+                  ".pdf";
+
+                objetoCliente["nombreArchivoFacturacion"] =
+                  objetoCliente["codigo"] +
+                  "-" +
+                  objetoCliente["empresa"] +
+                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            //Procesar duplicados:
+            const vistos = new Set();
+            clientes = clientes.map((obj) => {
+              if (vistos.has(obj.nif)) {
+                obj["errores"] = [
+                  "Evitando generar certificado por NIF duplicado",
+                ];
+                return { ...obj, flagEvitarDuplicado: true };
+              } else {
+                vistos.add(obj.nif);
+                return obj;
+              }
+            });
+
+            console.log("Clientes: ");
+            console.log(clientes);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            //Confirma el cambio de pagina:
+            page.on("dialog", async (dialog) => {
+              console.log("Dialogo: ", dialog.type());
+              const tipo = dialog.type();
+              if (tipo == "beforeunload") {
+                await dialog.accept();
+              }
+            });
+
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            //Iniciando descarga de informes:
+            for (var i = 0; i < clientes.length; i++) {
+              if (clientes[i].flagEvitarDuplicado) {
+                archivoSubvencionesATC
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("WARNING: Solicitud evitada por duplicidad en NIF.");
+                continue;
+              }
+
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              console.log("Procesando cliente: " + i);
+              console.log(clientes[i]);
+
+              if (
+                clientes[i].ccc == "" ||
+                clientes[i].ccc == null ||
+                clientes[i].ccc == undefined
+              ) {
+                clientes[i]["errores"] = ["Campo CCC no definidos."];
+                continue;
+              }
+
+              await page.goto(
+                "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+                { waitUntil: "networkidle0" },
+              );
+
+              await this.esperar(1000);
+
+              let flagValidacionRequerida = true;
+              try {
+                const botonEntrar = await page.waitForSelector(
+                  'input[id="btnValidar"]',
+                  { timeout: 1000 },
+                );
+                if (botonEntrar) {
+                  await botonEntrar.click();
+                  flagValidacionRequerida = true;
+                  console.log("Botón clicado");
+                }
+              } catch (error) {
+                console.log("No se requiere validacion");
+                flagValidacionRequerida = false;
+              }
+
+              console.log("Flag validacion: " + flagValidacionRequerida);
+
+              //********
+              // Esperar a boton actualizar
+              //********
+              try {
+                const botonSolicitar = await page.waitForSelector(
+                  'input[id="btnSolicitar"]',
+                  { timeout: 60000 },
+                );
+                if (botonSolicitar) {
+                  await botonSolicitar.click();
+                  console.log("Botón clicado");
+                }
+              } catch (error) {
+                console.log(
+                  "Botón no encontrado después de 60 segundo, continuando...",
+                );
+                await browser.close();
+                resolve(false);
+              }
+
+              await page.locator(`select[name="tiposCertificado"]`).wait();
+              await this.esperar(500);
+              await page.select('select[name="tiposCertificado"]', "AS");
+
+              await page.locator(`input[id="id_tipo_terceros"]`).wait();
+              var radioButton = await page.$(`input[id="id_tipo_terceros"]`);
+
+              if (radioButton) {
+                await radioButton.click(); // Hacer clic en el radio button
+                console.log("Radio button seleccionado.");
+              } else {
+                console.log("No se encontró el radio button.");
+              }
+
+              await this.esperar(1000);
+
+              //********
+              // Introducir NIE
+              //********
+              await page.locator('input[id="idNifTitular"]').wait();
+              await page.type(
+                'input[id="idNifTitular"]',
+                String(clientes[i].nif),
+              );
+              await this.esperar(500);
+
+              //********
+              // Introducir Nombre y apellidos
+              //********
+              await page.locator('input[id="idNombreTitular"]').wait();
+              await page.type(
+                'input[id="idNombreTitular"]',
+                String(clientes[i].empresa),
+              );
+              await this.esperar(500);
+
+              //********
+              // Pulsar SOLICITAR
+              //********
+              await page.locator('input[id="btnSolicitar"]').wait();
+              await page.locator('input[id="btnSolicitar"]').click();
+
+              if (
+                (await page.evaluate(() => document.readyState)) != "complete"
+              ) {
+                await page.waitForNavigation({ waitUntil: "load" });
+              }
+
+              console.log("Solicitud realizada");
+
+              //********
+              // Pulsar Descargar
+              //********
+              if (
+                (await page.evaluate(() => document.readyState)) != "complete"
+              ) {
+                await page.waitForNavigation({ waitUntil: "load" });
+              }
+
+              console.log("Descargando...");
+              //*************
+              // Descargar resguardo solicitud
+              //*************
+              try {
+                const botonDescargar = await page.waitForSelector(
+                  'input[id="btnDescargar"]',
+                  { timeout: 40000 },
+                );
+              } catch (error) {
+                clientes[i]["errores"] = [
+                  "ERROR: No se ha podido generar la solicitud.",
+                ];
+                archivoSubvencionesATC
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("ERROR: No se ha podido generar la solicitud.");
+                console.log(
+                  "Boton de descarga no encontrado después de 40 segundo, continuando...",
+                );
+                console.log("Nuevo cliente");
+                await this.esperar(1000);
+                continue;
+              }
+
+              await this.esperar(1000);
+
+              let nuevaPagina;
+              try {
+                [nuevaPagina] = await Promise.all([
+                  new Promise((resolvePromise) => {
+                    setTimeout(() => {
+                      resolvePromise(false);
+                    }, 5000);
+
+                    browser.once("targetcreated", async (target) => {
+                      const newPage = await target.page();
+                      newPage.on("response", async (response) => {
+                        // Verificar si el contenido es un PDF
+                        if (
+                          !response.url().endsWith(".js") &&
+                          !response.url().endsWith(".css") &&
+                          response.url().startsWith("chrome-extension://")
+                        ) {
+                          console.log("PDF detectado:", response.url());
+                          // Intercepta el PDF:
+                          const pdfBuffer = await response.buffer();
+
+                          // Guardar el PDF en el sistema de archivos
+                          const filePath = path.join(
+                            pathSalida,
+                            clientes[i]["nombreArchivo"],
+                          );
+                          const filePathFacturacion = path.join(
+                            pathSalidaFacturacion,
+                            clientes[i]["nombreArchivoFacturacion"],
+                          );
+                          fs.writeFileSync(filePath, pdfBuffer);
+                          fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                          console.log("PDF descargado en:", filePath);
+                          resolvePromise(newPage);
+                        }
+                      });
+                    });
+                  }),
+                  await page.locator('input[id="btnDescargar"]').click(),
+                ]);
+              } catch (e) {
+                console.log("Error en catch");
+              }
+
+              //Comprueba si hubo error
+              if (!nuevaPagina) {
+                console.log("ERROR ABRIENDO DESCARGA");
+                archivoSubvencionesATC
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value(
+                    "ERROR: No se ha podido generar el resguardo de la solicitud.",
+                  );
+              } else {
+                archivoSubvencionesATC
+                  .sheet("DATOS")
+                  .cell(i + 2, 8)
+                  .value("OK, resguardo de solicitud descargado.");
+                await nuevaPagina.close();
+              }
+              console.log("Nuevo cliente");
+              await this.esperar(1000);
+            }
+
+            await browser.close();
+
+            console.log("Escribiendo archivo...");
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoSubvencionesATC
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "SubvencionesATC-Procesado.xlsx"),
                 ),
               )
               .then(() => {
