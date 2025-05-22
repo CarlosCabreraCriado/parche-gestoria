@@ -363,6 +363,53 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
       {
+        nombre: "CNAE25 Autónomos",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion: "",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
         nombre: "Informes ITA",
         categoria: "Asesoria",
         tipo: "proceso",
@@ -457,7 +504,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
-
       {
         nombre: "Certificado Tributario",
         categoria: "Asesoria",

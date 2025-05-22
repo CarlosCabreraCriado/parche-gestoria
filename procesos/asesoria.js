@@ -2896,6 +2896,550 @@ class ProcesosAsesoria {
     });
   }
 
+  async cNAE25Autonomos(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Archivo CNAE...");
+      console.log(argumentos.formularioControl[1]);
+      console.log("Ruta Google...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoCNAEAutonomos = {};
+      var clientes = [];
+      var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "CNAE-Autonomos-Procesados",
+      );
+      var pathSalida = path.join(
+        path.normalize(argumentos.formularioControl[2]),
+        "CNAE-Autonomos-Procesados",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathSalida)) {
+        fs.mkdirSync(pathSalida, { recursive: true });
+        console.log(`Carpeta creada: ${pathSalida}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathSalida}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: CNAE Autonomos");
+            archivoCNAEAutonomos = workbook;
+            var columnas = archivoCNAEAutonomos
+              .sheet(0)
+              .usedRange()._numColumns;
+            var filas = archivoCNAEAutonomos.sheet(0).usedRange()._numRows;
+            var objetoCliente = {};
+
+            var cabeceras = [];
+            for (var i = 1; i <= columnas; i++) {
+              cabeceras.push(archivoCNAEAutonomos.sheet(0).cell(4, i).value());
+            }
+
+            console.log("Cabeceras: " + cabeceras);
+
+            for (var i = 5; i <= filas; i++) {
+              objetoCliente = {};
+              for (var j = 1; j <= columnas; j++) {
+                if (
+                  archivoCNAEAutonomos.sheet(0).cell(i, j).value() !== undefined
+                ) {
+                  switch (cabeceras[j - 1]) {
+                    case "NAF (Autónomos)":
+                      objetoCliente["naf"] = archivoCNAEAutonomos
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "IPF (Autónomos)":
+                      objetoCliente["ipf"] = archivoCNAEAutonomos
+                        .sheet(0)
+                        .cell(i, j)
+                        .value()
+                        .slice(-9);
+                      break;
+
+                    case "Literal CNAE09":
+                      objetoCliente["literal"] = archivoCNAEAutonomos
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "CNAE09":
+                      objetoCliente["cnae09"] = archivoCNAEAutonomos
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+
+                    case "CNAE25":
+                      objetoCliente["cnae25"] = archivoCNAEAutonomos
+                        .sheet(0)
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+
+              objetoCliente["errores"] = [];
+
+              if (
+                objetoCliente.cnae25 !== "" &&
+                objetoCliente.cnae25 !== null &&
+                objetoCliente.cnae25 !== undefined
+              ) {
+                objetoCliente["nombreArchivo"] =
+                  objetoCliente["naf"] + "-" + objetoCliente["cnae25"] + ".pdf";
+                clientes.push(Object.assign({}, objetoCliente));
+              }
+            }
+
+            //Creación del objeto clientes agrupado:
+            const clientesAgrupados = [];
+            const clientesEvitadosPorMismoCNAE09 = [];
+            const mensajesError = [];
+            clientes.forEach((item, index) => {
+              mensajesError.push("");
+              const existente = clientesAgrupados.find(
+                (x) => x.naf === item.naf && x.ipf === item.ipf,
+              );
+
+              if (existente) {
+                let mismoCNAE09 = false;
+                for (let i = 0; i < existente.cnae25.length; i++) {
+                  if (existente.cnae09[i] == item.cnae09) {
+                    clientesEvitadosPorMismoCNAE09.push(index);
+                    mismoCNAE09 = true;
+                  }
+                }
+
+                if (!mismoCNAE09) {
+                  existente.cnae09.push(item.cnae09);
+                  existente.cnae25.push(item.cnae25);
+                  existente.literal.push(item.literal);
+                  existente.origen.push(index);
+                  existente.nombreArchivo.push(
+                    item.ipf + "-" + item.cnae25 + ".pdf",
+                  );
+                }
+              } else {
+                clientesAgrupados.push({
+                  naf: item.naf,
+                  ipf: item.ipf,
+                  cnae09: [item.cnae09],
+                  cnae25: [item.cnae25],
+                  literal: [item.literal],
+                  origen: [index],
+                  nombreArchivo: [item.ipf + "-" + item.cnae25 + ".pdf"],
+                });
+              }
+            });
+
+            console.log("Clientes Agrupados: ");
+            console.log(clientesAgrupados);
+            console.log("Clientes Evitados: ");
+            console.log(clientesEvitadosPorMismoCNAE09);
+            console.log("Mensajes Error");
+            console.log(mensajesError);
+
+            var chromiumExecutablePath = path.normalize(
+              argumentos.formularioControl[0],
+            );
+
+            //Inicio de procesamiento:
+            const browser = await puppeteer.launch({
+              executablePath: chromiumExecutablePath,
+              headless: false,
+            });
+            console.log(browser.executablePath);
+
+            var page = await browser.newPage();
+
+            page.on("dialog", async (dialog) => {
+              const tipo = dialog.type();
+              if (tipo == "beforeunload") {
+                await dialog.accept();
+              }
+            });
+            // Configurar el comportamiento de descarga
+            await page._client().send("Page.setDownloadBehavior", {
+              behavior: "allow",
+              downloadPath: pathSalida,
+            });
+
+            await page.setViewport({ width: 1080, height: 1024 });
+
+            for (var i = 0; i < clientesAgrupados.length; i++) {
+              //Recargar cada 10 clientes:
+              if (i % 10 == 0 && i > 0) {
+                //await browser.close();
+                await page.close();
+                page = await browser.newPage();
+
+                page.on("dialog", async (dialog) => {
+                  const tipo = dialog.type();
+                  if (tipo == "beforeunload") {
+                    await dialog.accept();
+                  }
+                });
+                // Configurar el comportamiento de descarga
+                await page._client().send("Page.setDownloadBehavior", {
+                  behavior: "allow",
+                  downloadPath: pathSalida,
+                });
+                await page.setViewport({ width: 1080, height: 1024 });
+              }
+
+              if (!Array.isArray(clientesAgrupados[i]["cnae25"])) {
+                continue;
+              }
+
+              for (var j = 0; j < clientesAgrupados[i]["cnae25"].length; j++) {
+                console.log("Procesando cliente: " + i + " - Seccion " + j);
+                console.log(clientesAgrupados[i]);
+                console.log(mensajesError);
+
+                await page.goto(
+                  "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV26C010",
+                  { waitUntil: "networkidle0" },
+                );
+
+                await this.esperar(500);
+
+                //***************************
+                // Pagina de condiciones:
+                //***************************
+                // Check Leido:
+                await page.locator('input[id="CHK_LEIDO"]').wait();
+                await page.locator('input[id="CHK_LEIDO"]').click();
+
+                await this.esperar(500);
+
+                // Boton Continuar:
+                await page
+                  .locator('button[name="SPM.ACC.CONTINUAR_CONS"]')
+                  .wait();
+                await page
+                  .locator('button[name="SPM.ACC.CONTINUAR_CONS"]')
+                  .click();
+
+                await this.esperar(500);
+
+                //********
+                // Numero Seguridad Social
+                //********
+                await page.locator('input[name="NSS"]').wait();
+                await page.type(
+                  'input[name="NSS"]',
+                  String(clientesAgrupados[i].naf),
+                );
+
+                //********
+                // Seleccionar DNI
+                //********
+                await page.locator('select[name="IPF_TIPO"]').wait();
+                await page.select('select[name="IPF_TIPO"]', "1");
+
+                //********
+                // Introducir DNI
+                //********
+                await page.locator('input[name="IPF_NUMERO"]').wait();
+                await page.type(
+                  'input[name="IPF_NUMERO"]',
+                  String(clientesAgrupados[i].ipf),
+                );
+
+                await this.esperar(1000);
+
+                //*************
+                // Continuar
+                //*************
+                await page
+                  .locator('button[name="SPM.ACC.CONTINUAR_TRAB"]')
+                  .wait();
+                await page
+                  .locator('button[name="SPM.ACC.CONTINUAR_TRAB"]')
+                  .click();
+
+                await this.esperar(2000);
+
+                //********************************
+                // Buscar CNAE en las filas
+                //********************************
+                const actividadBuscada =
+                  clientesAgrupados[i].literal[j].length > 40
+                    ? clientesAgrupados[i].literal[j].slice(0, 40)
+                    : clientesAgrupados[i].literal[j];
+
+                await page
+                  .locator('table[id="titulo_tabla_actividades"]')
+                  .wait();
+                const botonActividadBuscada = await page.evaluate(
+                  (actividadBuscada) => {
+                    const filas = Array.from(
+                      document.querySelectorAll(
+                        "#titulo_tabla_actividades tbody tr",
+                      ),
+                    );
+
+                    for (const fila of filas) {
+                      const celdas = fila.querySelectorAll("td");
+                      const actividad = celdas[2]?.textContent?.trim();
+                      console.log("evaluando: ", actividad);
+
+                      if (actividad === actividadBuscada) {
+                        console.log("Fila encontrada: " + actividadBuscada);
+                        // Buscar enlace con texto "Comunicar CNAE25" dentro de esta fila
+                        const enlaces = fila.querySelectorAll(
+                          'a[title="Comunicar CNAE25"]',
+                        );
+                        if (enlaces.length > 0) {
+                          enlaces[0].click();
+                          return enlaces[0];
+                        }
+                      }
+                    }
+                    return false;
+                  },
+                  actividadBuscada,
+                );
+
+                if (!botonActividadBuscada) {
+                  mensajesError[clientesAgrupados[i].origen[j]] =
+                    "Error, no se ha encontrado la actividad económica con el literal " +
+                    clientesAgrupados[i].literal[j];
+                  continue;
+                }
+
+                //********
+                // SELECCIONAR CNAE25
+                //********
+                await page.locator('select[name="CNAE25"]').wait();
+
+                const existeOption = await page.evaluate(() => {
+                  const select = document.querySelector(
+                    'select[name="CNAE25"]',
+                  ); // usa tu selector real
+                  if (!select) return false;
+                  return true;
+                });
+
+                if (existeOption) {
+                  await page.select(
+                    'select[name="CNAE25"]',
+                    String(clientesAgrupados[i].cnae25[j]),
+                  );
+                  await this.esperar(1000);
+                  await page
+                    .locator('button[name="SPM.ACC.CONTINUAR_ANOTAR_CNAE25"]')
+                    .wait();
+                  await page
+                    .locator('button[name="SPM.ACC.CONTINUAR_ANOTAR_CNAE25"]')
+                    .click();
+
+                  await page.waitForNavigation({ waitUntil: "load" });
+                  await this.esperar(1000);
+
+                  const yaNotificado = await page.evaluate(() => {
+                    const mensajes = Array.from(
+                      document.querySelectorAll(
+                        "#lista_mensajes li:not(.pr_oculto) .pr_pMensaje",
+                      ),
+                    );
+                    return mensajes.some(
+                      (el) =>
+                        el.textContent.trim() ===
+                        "La actividad económica 2025 debe ser distinta de la ya comunicada",
+                    );
+                  });
+
+                  console.log("yaNotificado: ", yaNotificado);
+                  if (yaNotificado) {
+                    mensajesError[clientesAgrupados[i].origen[j]] =
+                      "OK, CNAE25 ya notificado";
+                    continue;
+                  }
+
+                  await page
+                    .locator(
+                      'button[name="SPM.ACC.CONTINUAR_CONFIRMAR_CNAE25"]',
+                    )
+                    .wait();
+                  await page
+                    .locator(
+                      'button[name="SPM.ACC.CONTINUAR_CONFIRMAR_CNAE25"]',
+                    )
+                    .click();
+
+                  await page.waitForNavigation({ waitUntil: "load" });
+                  await this.esperar(1000);
+
+                  const exito = await page.evaluate(() => {
+                    const mensajes = Array.from(
+                      document.querySelectorAll(
+                        "#lista_mensajes li:not(.pr_oculto) .pr_pMensaje",
+                      ),
+                    );
+                    return mensajes.some(
+                      (el) =>
+                        el.textContent.trim() ===
+                        "Operación realizada correctamente.",
+                    );
+                  });
+
+                  console.log("exito: ", exito);
+                  if (!exito) {
+                    mensajesError[clientesAgrupados[i].origen[j]] =
+                      "ERROR: Error indeterminado";
+                    continue;
+                  }
+
+                  console.log("✅ Éxito detectado");
+                  await page.locator('button[title="Cerrar"]').wait();
+                  await page.locator('button[title="Cerrar"]').click();
+
+                  await this.esperar(1000);
+                  await page.locator('a[data-pc_tipo="documento"]').wait(),
+                    console.log("Descargando Resguardo");
+                  //*************
+                  // DESCARGANDO RESGUARDO
+                  //*************
+                  let nuevaPagina;
+                  try {
+                    [nuevaPagina] = await Promise.all([
+                      new Promise((resolvePromise) => {
+                        const timeout = setTimeout(() => {
+                          resolvePromise(false);
+                        }, 5000);
+
+                        browser.once("targetcreated", async (target) => {
+                          const newPage = await target.page();
+                          newPage.on("response", async (response) => {
+                            // Verificar si el contenido es un PDF
+                            if (
+                              !response.url().endsWith(".js") &&
+                              !response.url().endsWith(".css") &&
+                              response.url().startsWith("chrome-extension://")
+                            ) {
+                              console.log("PDF detectado:", response.url());
+
+                              // Intercepta el PDF:
+                              const pdfBuffer = await response.buffer();
+
+                              // Guardar el PDF en el sistema de archivos
+                              const filePath = path.join(
+                                pathSalida,
+                                clientesAgrupados[i]["nombreArchivo"][j],
+                              );
+                              fs.writeFileSync(filePath, pdfBuffer);
+                              console.log("PDF descargado en:", filePath);
+                              mensajesError[clientesAgrupados[i].origen[j]] =
+                                "OK: Resguardo descargado correctamente";
+                              resolvePromise(newPage);
+                            }
+                          });
+                        });
+                      }),
+
+                      await page.locator('a[data-pc_tipo="documento"]').wait(),
+                      await page.locator('a[data-pc_tipo="documento"]').click(),
+                    ]);
+                  } catch (e) {
+                    console.log("Error en catch");
+                    mensajesError[clientesAgrupados[i].origen[j]] =
+                      "ERROR: Error en la descarga del resguardo";
+                    continue;
+                  }
+
+                  //Comprueba si hubo error
+                  if (!nuevaPagina) {
+                    console.log("ERROR EN DESCARGA");
+                    mensajesError[clientesAgrupados[i].origen[j]] =
+                      "ERROR: Error en la descarga del resguardo";
+                    continue;
+                  } else {
+                    await nuevaPagina.close();
+                  }
+                } else {
+                  mensajesError[clientesAgrupados[i].origen[j]] =
+                    "ERROR: No se ha encontrado la opción con el CNAE25 especificado";
+                  continue;
+                }
+
+                await this.esperar(1000);
+              }
+            } //Fin iteracion de clientes
+
+            //ESCRIBIR EXCEL FINAL:
+            console.log("Escribiendo archivo...");
+            for (var k = 0; k < mensajesError.length; k++) {
+              archivoCNAEAutonomos
+                .sheet(0)
+                .cell(k + 5, 10)
+                .value(mensajesError[k]);
+            }
+
+            for (var k = 0; k < clientesEvitadosPorMismoCNAE09.length; k++) {
+              archivoCNAEAutonomos
+                .sheet(0)
+                .cell(k + 5, 10)
+                .value("Evitando por duplicidad en la declaración de CNAE25");
+            }
+
+            console.log("Path: " + path.normalize(pathSalidaExcel));
+            archivoCNAEAutonomos
+              .toFileAsync(
+                path.normalize(
+                  path.join(pathSalidaExcel, "CNAE25-Autonomos-Procesado.xlsx"),
+                ),
+              )
+              .then(() => {
+                console.log("XLSX escrito correctamente");
+              })
+              .catch((err) => {
+                console.log("Se ha producido un error interno: ");
+                console.log(err);
+                var tituloError =
+                  "Se ha producido un error escribiendo el archivo: " +
+                  path.normalize(pathSalidaExcel);
+                resolve(false);
+              });
+
+            await browser.close();
+            resolve(true);
+          })
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
+    });
+  }
+
   async informesITA(argumentos) {
     return new Promise((resolve) => {
       console.log("Archivo ITA...");
