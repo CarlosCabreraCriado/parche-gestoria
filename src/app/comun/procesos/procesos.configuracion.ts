@@ -11,7 +11,8 @@ interface LibreriaProcesos {
     | "Import"
     | "KPIs"
     | "Documentos"
-    | "Asesoria";
+    | "Asesoria"
+    | "Prueba";
   descripcion: string;
   autor?: string;
   opciones?: any;
@@ -600,6 +601,50 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   },
+  {
+    nombre: "Test Excel",
+    categoria: "Prueba",
+    tipo: "directorio",
+    descripcion: "Procesos de asesoría",
+    subCategoria: [
+      {
+        nombre: "Test Excel",
+        categoria: "Prueba",
+        tipo: "proceso",
+        descripcion:
+          "Obtiene los nombres de los clientes mediante excel y los pasa a mayúsculas",
+        autor: "Gonzalo",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  }
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
