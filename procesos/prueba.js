@@ -27,39 +27,52 @@ class ProcesosPrueba {
       // evitando el típico error TypeError: Cannot read properties of undefined
       const rutaFormulario = argumentos?.formularioControl?.[0]; 
 
-      // Validación de que la ruta es un texto no vacío.
+      // Carpeta de salida donde se guardarán los resultados.
+      // Motivo: permitir al usuario elegir el destino de los archivos generados.
+      const carpetaSalida = argumentos?.formularioControl?.[1];
+
+      // Validaciones básicas de entrada.
       // Motivo: evitar errores al trabajar con rutas incorrectas.
       if (typeof rutaFormulario !== "string" || !rutaFormulario.trim()) {
         console.error("No se ha proporcionado una ruta de archivo válida.");
         return false;
       }
+      if (typeof carpetaSalida !== "string" || !carpetaSalida.trim()) {
+        console.error("No se ha proporcionado una carpeta de salida válida.");
+        return false;
+      }
 
-      // Normalización a ruta absoluta.
-      // Motivo: garantizar que el sistema localiza el archivo sin ambigüedades.
+      // Normalización a rutas absolutas.
+      // Motivo: garantizar que el sistema localiza los recursos sin ambigüedades.
       const rutaExcel = path.isAbsolute(rutaFormulario) ? rutaFormulario : path.resolve(rutaFormulario);
+      const salidaDir = path.isAbsolute(carpetaSalida) ? carpetaSalida : path.resolve(carpetaSalida);
 
-      // Comprobación de existencia del archivo en disco.
-      // Motivo: informar de forma clara si el archivo no está disponible.
+      // Comprobación de existencia del archivo y preparación de la carpeta de salida.
+      // Motivo: asegurar que hay fuente y destino disponibles.
       if (!fs.existsSync(rutaExcel)) {
         console.error("El archivo indicado no existe:", rutaExcel);
         return false;
       }
+      if (!fs.existsSync(salidaDir)) {
+        fs.mkdirSync(salidaDir, { recursive: true });
+      }
+
 
       // Apertura del libro de Excel de forma asíncrona.
       // Motivo: no bloquear la aplicación durante la lectura del archivo.
       const workbook = await XlsxPopulate.fromFileAsync(rutaExcel);
       console.log("Confirmación: el archivo de Excel se ha abierto correctamente.");
 
+      // Nombres de salida (manteniendo el nombre base del archivo fuente).
+      // Motivo: generar archivos reconocibles en la carpeta de salida.
+      const baseName = path.basename(rutaExcel, path.extname(rutaExcel));
+      const rutaProcesado = path.normalize(path.join(salidaDir, `${baseName}_PROCESADO.xlsx`));
+
+
       // Selección de la primera hoja del libro.
       // Motivo: el archivo es sencillo y toda la información está en la primera hoja.
       const hoja = workbook.sheet(0);
       console.log("Confirmación: la hoja de trabajo se ha seleccionado correctamente.");
-
-      // Lectura de la celda A2 (A1 es cabecera).
-      // Motivo: obtener el primer registro real de la columna "nombre".
-      const primerNombre = hoja.cell("A2").value();
-      console.log("Primer nombre (A2):", primerNombre ?? "—");
-      console.log("Confirmación: la lectura del primer nombre se ha realizado correctamente.");
 
       // Cálculo del rango usado de la hoja (área que contiene datos).
       // Motivo: conocer cuántas filas y columnas tienen información.
@@ -72,8 +85,7 @@ class ProcesosPrueba {
 
       // Número total de columnas del rango.
       // Motivo: verificar que existen las columnas esperadas.
-      const totalColumnas =
-        totalFilas > 0 && Array.isArray(datos[0]) ? datos[0].length : 0;
+      const totalColumnas = totalFilas > 0 && Array.isArray(datos[0]) ? datos[0].length : 0;
 
       // Información de tamaño del rango.
       // Motivo: facilitar la revisión por consola.
@@ -81,42 +93,53 @@ class ProcesosPrueba {
       console.log("Columnas:", totalColumnas);
       console.log("Confirmación: el análisis de filas y columnas se ha completado correctamente.");
 
-      // Listado completo de la columna "nombre" (columna A) desde la fila 2 hasta la última.
-      // Motivo: mostrar por consola todos los nombres existentes en el documento.
+      // Asegura cabecera de la columna B si estuviera vacía.
+      // Motivo: claridad en el resultado final.
+      const cabeceraB = String(hoja.cell("B1").value() ?? "").trim();
+      if (!cabeceraB) {
+        hoja.cell("B1").value("nombre_formateado");
+      }
+
+      // Listado completo de la columna "nombre" (A) y escritura en B en MAYÚSCULAS.
+      // Motivo: mostrar por consola y generar la columna formateada.
       if (totalFilas < 2) {
-        // Si no hay filas de datos (solo cabecera o vacío), se informa y se finaliza.
         console.log("No se han encontrado nombres para listar.");
       } else {
-        // Recorrido de todas las filas con datos en la columna A.
         for (let fila = 2; fila <= totalFilas; fila++) {
-          // Construcción de la referencia de celda en la columna A para la fila actual.
-          // Motivo: acceder secuencialmente a cada nombre.
-          const celda = `A${fila}`;
+          const celdaA = `A${fila}`;                 // Referencia a la celda de origen (columna A).
+          const valor = hoja.cell(celdaA).value();   // Lectura del valor de la celda.
 
-          // Lectura del valor de la celda.
-          // Motivo: obtener el texto del nombre.
-          const valor = hoja.cell(celda).value();
-
-          // Comprobación de que la celda contiene un dato significativo.
-          // Motivo: evitar imprimir líneas vacías.
+          // Evita filas vacías.
           if (valor !== null && valor !== undefined && String(valor).trim() !== "") {
-            console.log(valor);
+
+            // Convierte a texto y a MAYÚSCULAS.
+            // Motivo: cumplir el requisito de salida en mayúsculas.
+            const textoMayus = String(valor).trim().toUpperCase();
+
+            // Escribe el resultado en la columna B de la misma fila.
+            // Motivo: rellenar la columna "nombre_formateado".
+            const celdaB = `B${fila}`;
+            hoja.cell(celdaB).value(textoMayus);
           }
         }
-        console.log("Confirmación: el listado completo de nombres se ha realizado correctamente.");
+        console.log("Confirmación: el listado y la escritura de la columna formateada se han realizado correctamente.");
       }
+
+      // Guarda el libro ya modificado con sufijo PROCESADO.
+      // Motivo: devolver un archivo con la segunda columna cumplimentada.
+      await workbook.toFileAsync(rutaProcesado);
+      console.log("Archivo procesado guardado en:", rutaProcesado);
 
       // Mensaje de fin para indicar que todo el flujo ha concluido con éxito.
       console.log("Proceso finalizado correctamente.");
       return true;
     } catch (error) {
       // Mensaje claro en caso de incidencia durante la ejecución.
-      console.error("Incidencia durante la lectura del Excel:", error);
+      console.error("Incidencia durante la lectura o escritura del Excel:", error);
       return false;
     }
   }
 }
-
 // Exportación de la clase o de una instancia según la arquitectura del proyecto.
 // Motivo: permitir su utilización desde el resto de la aplicación.
 // Si en tu proyecto ya existe la clase y su exportación, conserva ese patrón.
