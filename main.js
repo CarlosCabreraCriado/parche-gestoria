@@ -24,6 +24,7 @@ if (process.env !== undefined) {
 
 var procesosGenerales;
 var procesosAsesoria;
+var procesosFie;
 var procesosPrueba;
 var procesosDocumentos;
 var procesosSpool;
@@ -907,11 +908,7 @@ ipc.on("abrirProyecto", function (event, nombreProy) {
     nombreProyecto,
     proyecto,
   );
-    procesosPrueba = new ProcesosPrueba(
-    pathToDbFolder,
-    nombreProyecto,
-    proyecto,
-  );
+  procesosFie = new ProcesosFie(pathToDbFolder, nombreProyecto, proyecto);
   procesosDocumentos = new ProcesosDocumentos(
     pathToDbFolder,
     nombreProyecto,
@@ -1197,10 +1194,9 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
       //result = await procesosGenerales[identificador](argumentos.formularioControl);
       result = await procesosAsesoria[identificador](argumentos);
       break;
-        
-    case "prueba":
+    case "fie":
       //result = await procesosGenerales[identificador](argumentos.formularioControl);
-      result = await procesosPrueba[identificador](argumentos);
+      result = await procesosFie[identificador](argumentos);
       break;
     case "documentos":
       //result = await procesosDocumentos[identificador](argumentos.formularioControl);
@@ -1899,7 +1895,7 @@ module.exports = {
 //Importar Procesos:
 const ProcesosGenerales = require("./procesos/general.js");
 const ProcesosAsesoria = require("./procesos/asesoria.js");
-const ProcesosPrueba = require("./procesos/prueba.js");
+const ProcesosFie = require("./procesos/fie.js");
 const ProcesosDocumentos = require("./procesos/documentos.js");
 const ProcesosSpool = require("./procesos/spool.js");
 const ProcesosRemedy = require("./procesos/remedy.js");

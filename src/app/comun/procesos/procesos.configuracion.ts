@@ -13,6 +13,8 @@ interface LibreriaProcesos {
     | "Documentos"
     | "Asesoria"
     | "Prueba";
+    | "Asesoria"
+    | "Fie";
   descripcion: string;
   autor?: string;
   opciones?: any;
@@ -645,6 +647,61 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   }
+
+  {
+    nombre: "Fie",
+    categoria: "Fie",
+    tipo: "directorio",
+    descripcion: "Procesos de asesoría",
+    subCategoria: [
+      {
+        nombre: "fie",
+        categoria: "Fie",
+        tipo: "proceso",
+        descripcion: "Procesamiento del FIE",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "exelFie",
+            formulario: {
+              titulo: "Excel FIE",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder: "Introduzca la ruta del archivo de datos FIE.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
