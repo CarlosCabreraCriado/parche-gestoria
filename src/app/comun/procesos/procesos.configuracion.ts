@@ -12,7 +12,7 @@ interface LibreriaProcesos {
     | "KPIs"
     | "Documentos"
     | "Asesoria"
-    | "Prueba";
+    | "Prueba"
     | "Asesoria"
     | "Fie";
   descripcion: string;
@@ -603,6 +603,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   },
+  /*
   {
     nombre: "Test Excel",
     categoria: "Prueba",
@@ -646,33 +647,21 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
     ],
-  }
-
+  },
+    */
   {
-    nombre: "Fie",
+    nombre: "FIE",
     categoria: "Fie",
     tipo: "directorio",
     descripcion: "Procesos de asesoría",
     subCategoria: [
       {
-        nombre: "fie",
+        nombre: "FIE",
         categoria: "Fie",
         tipo: "proceso",
-        descripcion: "Procesamiento del FIE",
+        descripcion: "Proceso FIE",
         autor: "Carlos Cabrera",
         argumentos: [
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "googleChrome",
-            formulario: {
-              titulo: "Google .exe",
-              tipo: "archivo",
-              accept: ".exe, .EXE",
-              placeholder: "Introduzca la ruta del ejecutable de Google",
-              valorDefault: "",
-            },
-          },
           {
             tipo: "texto",
             obligado: true,
@@ -682,6 +671,44 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "archivo",
               accept: ".xlsm, .xlsx, .XLSX",
               placeholder: "Introduzca la ruta del archivo de datos FIE.",
+              valorDefault: "",
+            },
+          },
+
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "exelEmpresas",
+            formulario: {
+              titulo: "Excel Correos de Empresas",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder: "Introduzca la ruta del archivo...",
+              valorDefault: "",
+            },
+          },
+
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "exelEnfermedad",
+            formulario: {
+              titulo: "Excel 01 Enfermedad",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder: "Introduzca la ruta del archivo...",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "exelAccidentes",
+            formulario: {
+              titulo: "Excel 02 Accidentes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder: "Introduzca la ruta del archivo...",
               valorDefault: "",
             },
           },
