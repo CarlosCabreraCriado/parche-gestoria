@@ -66,15 +66,12 @@ function drawRow(doc, label, value, opts = {}) {
   const rowHeight = Math.max(labelHeight, valueHeight);
 
   // Dibuja etiqueta siempre en la misma X
-  doc
-    .fontSize(9)
-    .fillColor("#333")
-    .text(labelText, baseX, y, {
-      width: labelWidth,
-      align: labelAlign,
-      lineBreak: false,
-      ellipsis: true,
-    });
+  doc.fontSize(9).fillColor("#333").text(labelText, baseX, y, {
+    width: labelWidth,
+    align: labelAlign,
+    lineBreak: false,
+    ellipsis: true,
+  });
 
   // Dos puntos pegados al final de la columna de etiqueta
   doc.fillColor("#333").text(":", baseX + labelWidth, y, { lineBreak: false });

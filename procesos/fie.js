@@ -134,10 +134,14 @@ class ProcesosFie {
       try {
         //LECTURA EMPRESAS:
         var datosEmpresas = [];
+        const altas = [];
+        const bajas = [];
+        const confirmacion = [];
+
         XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEmpresas))
           .then(async (archivoEmpresas) => {
             console.log("Archivo Cargado: Empresas");
-            datosEmpresas = extraccionExcel(archivoEmpresas, 0, 1);
+            datosEmpresas = extraccionExcel(archivoEmpresas, 0); //1
             //resolve(true);
           })
           .then(() => {
@@ -149,8 +153,8 @@ class ProcesosFie {
                 console.log("Archivo Cargado: FIE");
                 archivoFIE = workbook;
 
-                const datosIncapacidad = extraccionExcel(archivoFIE, 0, 3);
-                const partesConfirmacion = extraccionExcel(archivoFIE, 4, 3);
+                const datosIncapacidad = extraccionExcel(archivoFIE, 0); //3
+                const partesConfirmacion = extraccionExcel(archivoFIE, 4); //3
 
                 console.log("Datos incapacidad:");
                 console.log(datosIncapacidad[0]);
@@ -159,9 +163,6 @@ class ProcesosFie {
                 console.log(partesConfirmacion[0]);
 
                 // PASO 1: IDENTIFICACION.
-                const altas = [];
-                const bajas = [];
-                const confirmacion = [];
 
                 var partesDetectados = [];
                 //Detectamos si los distintos casos:
@@ -243,21 +244,19 @@ class ProcesosFie {
                 //PASO 2: GENERACION DE JUSTIFICANTES:
 
                 // Generación
-                /*
-            const tasks = [];
-            for (const r of bajas)
-              tasks.push(generatePDF(r, "BAJAS", pathSalidaPDFBajas));
-            for (const r of altas)
-              tasks.push(generatePDF(r, "ALTAS", pathSalidaPDFAltas));
-            for (const r of confirmacion)
-              tasks.push(
-                generatePDF(r, "CONFIRMACIONES", pathSalidaPDFConfirmacion),
-              );
+                const tasks = [];
+                for (const r of bajas)
+                  tasks.push(generatePDF(r, "BAJAS", pathSalidaPDFBajas));
+                for (const r of altas)
+                  tasks.push(generatePDF(r, "ALTAS", pathSalidaPDFAltas));
+                for (const r of confirmacion)
+                  tasks.push(
+                    generatePDF(r, "CONFIRMACIONES", pathSalidaPDFConfirmacion),
+                  );
 
-            const generated = await Promise.all(tasks);
-            console.log("PDFs generados:");
-            generated.forEach((f) => console.log(" -", f));
-                        */
+                const generated = await Promise.all(tasks);
+                console.log("PDFs generados:");
+                generated.forEach((f) => console.log(" -", f));
 
                 //PASO 3: GENERACION DE CORREOS:
                 const toDefault = [
@@ -306,11 +305,6 @@ class ProcesosFie {
                   );
                   results.push(file);
                 }
-                //ESCRITURA XLSX:
-                console.log("Escribiendo archivo...");
-                console.log("Path: " + path.normalize(pathSalidaExcel));
-
-                //resolve(true);
               })
               .then(() => {
                 //RESCRITURA DE ENFERMEDADES
@@ -319,11 +313,301 @@ class ProcesosFie {
                 )
                   .then(async (archivoEnfermedad) => {
                     console.log("Archivo Cargado: Enfermedad");
+                    const hojas = archivoEnfermedad.sheets();
+                    const filas = archivoEnfermedad
+                      .sheet(hojas.length - 1)
+                      .usedRange()._numRows;
+                    const columnas = archivoEnfermedad
+                      .sheet(hojas.length - 1)
+                      .usedRange()._numColumns;
 
-                    //const datosIncapacidad = extraccionExcel(archivoFIE, 0, 3);
+                    console.log(filas);
+                    console.log(columnas);
+
+                    const ultimaHoja = hojas.length - 1;
+
+                    //Identificacion de cabeceras:
+                    const { cabeceras, columnaCabecera, filaCabecera } =
+                      deteccionCabeceras(archivoEnfermedad, ultimaHoja);
+
+                    //Identificar ultima fila:
+                    var filaVacia = 0;
+                    var flagVacia = true;
+                    for (var i = 3; i < filas; i++) {
+                      flagVacia = true;
+                      if (
+                        !archivoEnfermedad.sheet(ultimaHoja).cell(i, 1).value()
+                      ) {
+                        for (var j = 1; j < columnas; j++) {
+                          if (
+                            archivoEnfermedad
+                              .sheet(ultimaHoja)
+                              .cell(i, j)
+                              .value()
+                          ) {
+                            archivoEnfermedad
+                              .sheet(ultimaHoja)
+                              .cell(i, j)
+                              .value();
+                            flagVacia = false;
+                          }
+                        }
+                        if (flagVacia) {
+                          filaVacia = i;
+                          break;
+                        }
+                      }
+                    }
+
+                    console.log("Primera fila vacia Enfermedad: ", filaVacia);
+                    //Creacion de objeto para enfermedades:
+                    const enfermedades = [];
+                    for (var i = 0; i < bajas.length; i++) {
+                      if (bajas[i].contingencia) {
+                        if (
+                          bajas[i].contingencia[0] == 1 ||
+                          bajas[i].contingencia[0] == 2
+                        ) {
+                          enfermedades.push(bajas[i]);
+                          enfermedades[enfermedades.length - 1].tipo = "BAJA";
+                        }
+                      }
+                    }
+                    for (var i = 0; i < altas.length; i++) {
+                      if (altas[i].contingencia) {
+                        if (
+                          altas[i].contingencia[0] == 1 ||
+                          altas[i].contingencia[0] == 2
+                        ) {
+                          enfermedades.push(altas[i]);
+                          enfermedades[enfermedades.length - 1].tipo = "ALTA";
+                        }
+                      }
+                    }
+                    for (var i = 0; i < confirmacion.length; i++) {
+                      if (confirmacion[i].contingencia) {
+                        if (
+                          confirmacion[i].contingencia[0] == 1 ||
+                          confirmacion[i].contingencia[0] == 2
+                        ) {
+                          enfermedades.push(confirmacion[i]);
+                          enfermedades[enfermedades.length - 1].tipo =
+                            "CONFIRMACION";
+                        }
+                      }
+                    }
+
+                    console.log(enfermedades);
+
+                    //Insertar Filas nuevas
+                    /*archivoEnfermedad
+                      .sheet(hojas.length - 1)
+                      .row(filaVacia)
+                      .insert(enfermedades.length);
+                                        */
+
+                    var columnasClave = {
+                      columnaExpediente: 0,
+                      columnaNombre: 0,
+                      columnaNaf: 0,
+                      columnaDias180: 0,
+                      columnaFechaBaja: 0,
+                      columnaProximaRev: 0,
+                      columnaFechaAlta: 0,
+                      columnaDias3: 0,
+                      columnaDias5: 0,
+                      columnaDias12: 0,
+                      columnaDiasResto: 0,
+                      columnaDiasTotal: 0,
+                      columnaAnotacion: columnas,
+                    };
+
+                    console.log(cabeceras);
+
+                    for (var i = 0; i < cabeceras.length; i++) {
+                      console.log(cabeceras[i].toLowerCase().trim());
+                      switch (cabeceras[i].toLowerCase().trim()) {
+                        case "exp":
+                          columnasClave.columnaExpediente = i + columnaCabecera;
+                          break;
+                        case "apellidos y nombre":
+                          columnasClave.columnaNombre = i + columnaCabecera;
+                          break;
+                        case "n.a.f.-c.c.c.":
+                          columnasClave.columnaNaf = i + columnaCabecera;
+                          break;
+                        case "180 dias":
+                          columnasClave.columnaDias180 = i + columnaCabecera;
+                          break;
+                        case "f.  baja":
+                          columnasClave.columnaFechaBaja = i + columnaCabecera;
+                          break;
+                        case "próxima revision":
+                          columnasClave.columnaProximaRev = i + columnaCabecera;
+                          break;
+                        case "f. alta":
+                          columnasClave.columnaFechaAlta = i + columnaCabecera;
+                          break;
+                        case "dias  50 %(3)":
+                          columnasClave.columnaDias3 = i + columnaCabecera;
+                          break;
+                        case "dias 60%(12)":
+                          columnasClave.columnaDias12 = i + columnaCabecera;
+                          break;
+                        case "dias 60%(5)":
+                          columnasClave.columnaDias5 = i + columnaCabecera;
+                          break;
+                        case "dias 75% (resto)":
+                          columnasClave.columnaDiasResto = i + columnaCabecera;
+                          break;
+                        case "total dias":
+                          columnasClave.columnaDiasTotal = i + columnaCabecera;
+                          break;
+                      }
+                    }
+
+                    console.log(columnasClave);
+
+                    //Insertar datos:
+                    var fechaSerializada;
+                    var diasHastaFinDeMes;
+
+                    var comentario = "";
+                    for (var i = 0; i < enfermedades.length; i++) {
+                      console.log(
+                        "Escribiendo enfermedad para: ",
+                        enfermedades[i],
+                      );
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 1)
+                        .value(enfermedades[i].expedienteEmpresa);
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 2)
+                        .value(enfermedades[i].nombre);
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 3)
+                        .value(enfermedades[i].naf);
+
+                      if (enfermedades[i].indicadorCarencia[0] == "S") {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 5)
+                          .value("SI");
+                      }
+
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 6)
+                        .value(enfermedades[i].fechaBajaIt);
+
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 8)
+                        .value(enfermedades[i].fechaFinIt);
+                      if (
+                        Array.isArray(enfermedades[i].partesConfirmacion) &&
+                        enfermedades[i].partesConfirmacion?.length > 0
+                      ) {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 7)
+                          .value(
+                            enfermedades[i].partesConfirmacion[0]
+                              .fechaSiguienteRevisionMedica,
+                          );
+                      }
+
+                      //COMENTARIO:
+                      comentario =
+                        "Añadido automaticamente: " + enfermedades[i].tipo;
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 23)
+                        .value(comentario);
+
+                      //Calculo dias hasta fin de mes:
+                      //
+                      fechaSerializada = excelSerialToUTCDate(
+                        enfermedades[i].fechaBajaIt,
+                      );
+                      diasHastaFinDeMes =
+                        diasRestantesFinDeMesInclusive(fechaSerializada);
+
+                      //Todos los dias a =:
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 12)
+                        .value(0);
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 13)
+                        .value(0);
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 14)
+                        .value(0);
+                      archivoEnfermedad
+                        .sheet(hojas.length - 1)
+                        .cell(filaVacia + i, 15)
+                        .value(0);
+
+                      //PRIMER VALOR:
+                      if (diasHastaFinDeMes > 3) {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 12)
+                          .value(3);
+                      } else {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 12)
+                          .value(diasHastaFinDeMes);
+                      }
+
+                      //SEGUNDO VALOR:
+                      if (diasHastaFinDeMes > 15) {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 13)
+                          .value(12);
+                      } else {
+                        if (diasHastaFinDeMes > 3) {
+                          archivoEnfermedad
+                            .sheet(hojas.length - 1)
+                            .cell(filaVacia + i, 13)
+                            .value(diasHastaFinDeMes - 3);
+                        }
+                      }
+
+                      //Tercer VALOR:
+                      if (diasHastaFinDeMes > 20) {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 14)
+                          .value(5);
+                      } else {
+                        if (diasHastaFinDeMes > 15) {
+                          archivoEnfermedad
+                            .sheet(hojas.length - 1)
+                            .cell(filaVacia + i, 14)
+                            .value(diasHastaFinDeMes - 15);
+                        }
+                      }
+
+                      //Tercer VALOR:
+                      if (diasHastaFinDeMes > 20) {
+                        archivoEnfermedad
+                          .sheet(hojas.length - 1)
+                          .cell(filaVacia + i, 15)
+                          .value(diasHastaFinDeMes - 20);
+                      }
+                    }
 
                     //ESCRITURA XLSX:
-                    console.log("Escribiendo archivo...");
+                    console.log("Escribiendo archivo Enfermedad...");
                     console.log("Path: " + path.normalize(pathSalidaExcel));
 
                     archivoEnfermedad
@@ -357,12 +641,85 @@ class ProcesosFie {
                     ).then(async (archivoAccidentes) => {
                       console.log("Archivo Cargado: Accidentes");
 
-                      //const datosIncapacidad = extraccionExcel(archivoAccidentes, 0, 3);
+                      const hojas = archivoAccidentes.sheets();
+                      const filas = archivoAccidentes
+                        .sheet(hojas.length - 1)
+                        .usedRange()._numRows;
+                      const columnas = archivoAccidentes
+                        .sheet(hojas.length - 1)
+                        .usedRange()._numColumns;
+
+                      //Identificar ultima fila:
+                      var filaVacia = 0;
+                      var flagVacia = true;
+                      for (var i = 4; i < filas; i++) {
+                        flagVacia = true;
+                        if (
+                          !archivoAccidentes
+                            .sheet(hojas.length - 1)
+                            .cell(i, 1)
+                            .value()
+                        ) {
+                          for (var j = 1; j < columnas; j++) {
+                            if (
+                              archivoAccidentes
+                                .sheet(hojas.length - 1)
+                                .cell(i, j)
+                                .value()
+                            ) {
+                              flagVacia = false;
+                            }
+                          }
+                          if (flagVacia) {
+                            filaVacia = i;
+                            break;
+                          }
+                        }
+                      }
+
+                      console.log("Primera fila vacia Accidentes: ", filaVacia);
+
+                      //Creacion de objeto para accidentes:
+                      const accidentes = [];
+                      for (var i = 0; i < bajas.length; i++) {
+                        if (bajas[i].contingencia) {
+                          if (
+                            bajas[i].contingencia[0] != 1 &&
+                            bajas[i].contingencia[0] != 2
+                          ) {
+                            accidentes.push(bajas[i]);
+                            accidentes[accidentes.length - 1].tipo = "BAJA";
+                          }
+                        }
+                      }
+                      for (var i = 0; i < altas.length; i++) {
+                        if (altas[i].contingencia) {
+                          if (
+                            altas[i].contingencia[0] != 1 &&
+                            altas[i].contingencia[0] != 2
+                          ) {
+                            accidentes.push(altas[i]);
+                            accidentes[accidentes.length - 1].tipo = "ALTA";
+                          }
+                        }
+                      }
+                      for (var i = 0; i < confirmacion.length; i++) {
+                        if (confirmacion[i].contingencia) {
+                          if (
+                            confirmacion[i].contingencia[0] != 1 &&
+                            confirmacion[i].contingencia[0] != 2
+                          ) {
+                            accidentes.push(confirmacion[i]);
+                            accidentes[accidentes.length - 1].tipo =
+                              "CONFIRMACION";
+                          }
+                        }
+                      }
+
+                      console.log(accidentes);
 
                       //ESCRITURA XLSX:
-                      console.log("Escribiendo archivo...");
-                      console.log("Path: " + path.normalize(pathSalidaExcel));
-
+                      console.log("Escribiendo archivo Accidentes...");
                       archivoAccidentes
                         .toFileAsync(
                           path.normalize(
@@ -418,7 +775,23 @@ class ProcesosFie {
   }
 } //Fin Procesos Fie
 
-function extraccionExcel(workbook, sheet, filaCabecera, columnaCabecera = 1) {
+function extraccionExcel(workbook, sheet, opts = null) {
+  var filaCabecera = null;
+  var columnaCabecera = null;
+
+  //Activa la deteccion automatica:
+  if (!opts) {
+    var { columnaCabecera, filaCabecera } = deteccionCabeceras(workbook, sheet);
+  } else {
+    filaCabecera = opts.filaCabecera;
+    columnaCabecera = opts.columnaCabecera;
+  }
+
+  if (columnaCabecera == null || filaCabecera == null) {
+    console.log("Error, fallo en la extracción del excel.");
+    return null;
+  }
+
   const columnas = workbook.sheet(sheet).usedRange()._numColumns;
   const filas = workbook.sheet(sheet).usedRange()._numRows;
 
@@ -457,6 +830,63 @@ function extraccionExcel(workbook, sheet, filaCabecera, columnaCabecera = 1) {
   return registros;
 }
 
+function deteccionCabeceras(workbook, sheet) {
+  const columnas = workbook.sheet(sheet).usedRange()._numColumns;
+  const filas = workbook.sheet(sheet).usedRange()._numRows;
+
+  //Recorrer las primeras 10 filas e identificar el numero de columnas con valores:
+  const filasAnalisis = filas < 10 ? filas : 10;
+
+  const contadoresFilas = [];
+  var contadorCampoRelleno = 0;
+  for (var i = 1; i <= filasAnalisis; i++) {
+    contadorCampoRelleno = 0;
+    for (var j = 1; j <= columnas; j++) {
+      if (workbook.sheet(sheet).cell(i, j).value()) {
+        contadorCampoRelleno++;
+      }
+    }
+    contadoresFilas.push(contadorCampoRelleno);
+  }
+
+  //Analisis de filas:
+  var valorMedio = 0;
+  for (var i = 0; i < contadoresFilas.length; i++) {
+    valorMedio += contadoresFilas[i];
+  }
+  valorMedio = valorMedio / contadoresFilas.length;
+
+  //Detecta primera fila con campos rellenos superior al valor medio -1:
+  var filaCabecera = 0;
+  for (var i = 0; i < contadoresFilas.length; i++) {
+    if (contadoresFilas[i] > valorMedio - 1) {
+      filaCabecera = i + 1;
+      break;
+    }
+  }
+
+  //Obtiene las cabeceras y la columna de inicio:
+  var columnaCabecera = 0;
+  const cabeceras = [];
+  for (var i = 1; i < columnas; i++) {
+    if (workbook.sheet(sheet).cell(filaCabecera, i).value()) {
+      cabeceras.push(workbook.sheet(sheet).cell(filaCabecera, i).value());
+      if (columnaCabecera == 0) {
+        columnaCabecera = i;
+      }
+    }
+  }
+
+  //Identificacion de cabeceras:
+  const objetoReturn = {
+    cabeceras: cabeceras,
+    columnaCabecera: columnaCabecera,
+    filaCabecera: filaCabecera,
+  };
+
+  return objetoReturn;
+}
+
 function camelize(str) {
   str = String(str);
   return str
@@ -467,6 +897,24 @@ function camelize(str) {
       return index === 0 ? word.toLowerCase() : word.toUpperCase();
     })
     .replace(/\s+/g, "");
+}
+// 1) Serial de Excel (sistema 1900) -> Date en UTC
+function excelSerialToUTCDate(serial) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  // Base 30/12/1899: ya contempla el bug del 1900-02-29
+  const excelEpoch = Date.UTC(1899, 11, 30); // 1899-12-30
+  return new Date(excelEpoch + serial * dayMs);
+}
+
+// 2) Días restantes hasta fin de mes (incluyendo hoy)
+function diasRestantesFinDeMesInclusive(dateUTC) {
+  // Normalizamos a medianoche UTC para evitar desajustes por horas
+  const y = dateUTC.getUTCFullYear();
+  const m = dateUTC.getUTCMonth();
+  const hoyUTC = new Date(Date.UTC(y, m, dateUTC.getUTCDate()));
+  const finMesUTC = new Date(Date.UTC(y, m + 1, 0)); // día 0 del mes siguiente = último del mes actual
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((finMesUTC - hoyUTC) / dayMs) + 1; // +1 para incluir el día de hoy
 }
 
 module.exports = ProcesosFie;
