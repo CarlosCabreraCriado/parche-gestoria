@@ -1,4 +1,5 @@
 const fs = require("fs");
+const fsp = fs.promises;
 const path = require("path");
 const PDFDocument = require("pdfkit");
 
@@ -154,197 +155,227 @@ function sectionTitle(doc, title) {
 }
 
 // Mapa de campos por tipo
-const FIELD_MAPS = {
-  BAJAS: [
-    ["Clave autorización", "claveAutorizacion"],
-    ["Fecha recepción", (r) => formatDateFromExcel(r.fechaRecepcion)],
-    ["CCC", "ccc"],
-    ["Empresa", "empresa"],
-    ["NAF", "naf"],
-    ["NIF", "nif"],
-    ["Nombre", "nombre"],
-    [
-      "Inicio relación laboral",
-      (r) => formatDateFromExcel(r.fechaInicioRelacionLaboral),
-    ],
-    [
-      "Extinción relación laboral",
-      (r) => formatDateFromExcel(r.fechaExtincionRelacionLaboral),
-    ],
-    ["Fecha baja IT", (r) => formatDateFromExcel(r.fechaBajaIt)],
-    ["Contingencia", "contingencia"],
-    ["Entidad responsable", "entidadResponsable"],
-    ["Recaída", "indicadorDeRecaida"],
-    [
-      "Fecha proceso inicial",
-      (r) => formatDateFromExcel(r.fechaProcesoInicial),
-    ],
-    [
-      "Fecha proceso anterior",
-      (r) => formatDateFromExcel(r.fechaProcesoAnterior),
-    ],
-    ["Días acumulados", "diasAcumulados"],
-    [
-      "IT inexistente (fecha)",
-      (r) => formatDateFromExcel(r.fechaProcesoItInexistente),
-    ],
-    ["IT inexistente (causa)", "causaItProcesoInexistente"],
-    ["Carencia", "indicadorCarencia"],
-    ["Tipo de proceso", "tipoDeProceso"],
-    ["Duración estimada (días)", "duracionEstimada"],
-    [
-      "Fin pago delegado (fecha)",
-      (r) => formatDateFromExcel(r.fechaFinPagoDelegado),
-    ],
-    ["Fin pago delegado (causa)", "causaFinPagoDelegado"],
-    ["Fin IT (fecha)", (r) => formatDateFromExcel(r.fechaFinIt)],
-    ["Fin IT (causa)", "causaFinIt"],
-    ["Parte de baja anulado", "parteDeBajaAnulado"],
-    ["Parte de alta anulado", "parteDeAltaAnulado"],
-    ["Modalidad de pago", "modalidadDePago"],
-    ["Situaciones especiales IT", "situacionesEspecialesDeIt"],
-    [
-      "Peculiaridades pago/cotización",
-      "procesosConPeculiaridadesEnPagoYCotizacion",
-    ],
-    ["IT internacional", "indicadorDeItInternacional"],
+const FIELD_MAPS = [
+  ["Clave autorización", "claveAutorizacion"],
+  ["Fecha recepción", (r) => formatDateFromExcel(r.fechaRecepcion)],
+  ["CCC", "ccc"],
+  ["Empresa", "empresa"],
+  ["Expediente", "expte"],
+  ["NAF", "naf"],
+  ["NIF", "nif"],
+  ["Nombre", "nombre"],
+  ["CNAE", "cnae"],
+  ["Detalle CNAE", "detalleCnae"],
+  [
+    "Inicio relación laboral",
+    (r) => formatDateFromExcel(r.fechaInicioRelacionLaboral),
   ],
-  ALTAS: [
-    ["Clave autorización", "claveAutorizacion"],
-    ["Fecha recepción", (r) => formatDateFromExcel(r.fechaRecepcion)],
-    ["CCC", "ccc"],
-    ["Empresa", "empresa"],
-    ["NAF", "naf"],
-    ["NIF", "nif"],
-    ["Nombre", "nombre"],
-    [
-      "Inicio relación laboral",
-      (r) => formatDateFromExcel(r.fechaInicioRelacionLaboral),
-    ],
-    [
-      "Extinción relación laboral",
-      (r) => formatDateFromExcel(r.fechaExtincionRelacionLaboral),
-    ],
-    ["Fecha baja IT", (r) => formatDateFromExcel(r.fechaBajaIt)],
-    ["Contingencia", "contingencia"],
-    ["Entidad responsable", "entidadResponsable"],
-    ["Recaída", "indicadorDeRecaida"],
-    [
-      "Fecha proceso inicial",
-      (r) => formatDateFromExcel(r.fechaProcesoInicial),
-    ],
-    [
-      "Fecha proceso anterior",
-      (r) => formatDateFromExcel(r.fechaProcesoAnterior),
-    ],
-    ["Días acumulados", "diasAcumulados"],
-    [
-      "IT inexistente (fecha)",
-      (r) => formatDateFromExcel(r.fechaProcesoItInexistente),
-    ],
-    ["IT inexistente (causa)", "causaItProcesoInexistente"],
-    ["Carencia", "indicadorCarencia"],
-    ["Tipo de proceso", "tipoDeProceso"],
-    ["Duración estimada (días)", "duracionEstimada"],
-    [
-      "Fin pago delegado (fecha)",
-      (r) => formatDateFromExcel(r.fechaFinPagoDelegado),
-    ],
-    ["Fin pago delegado (causa)", "causaFinPagoDelegado"],
-    ["Fin IT (fecha)", (r) => formatDateFromExcel(r.fechaFinIt)],
-    ["Fin IT (causa)", "causaFinIt"],
-    ["Parte de baja anulado", "parteDeBajaAnulado"],
-    ["Parte de alta anulado", "parteDeAltaAnulado"],
-    ["Modalidad de pago", "modalidadDePago"],
-    ["Situaciones especiales IT", "situacionesEspecialesDeIt"],
-    [
-      "Peculiaridades pago/cotización",
-      "procesosConPeculiaridadesEnPagoYCotizacion",
-    ],
-    ["IT internacional", "indicadorDeItInternacional"],
+  [
+    "Extinción relación laboral",
+    (r) => formatDateFromExcel(r.fechaExtincionRelacionLaboral),
   ],
-  // Ajusta este bloque cuando compartas la estructura exacta de "Confirmaciones"
-  CONFIRMACIONES: [
-    ["Clave autorización", "claveAutorizacion"],
-    ["Fecha recepción", (r) => formatDateFromExcel(r.fechaRecepcion)],
-    ["CCC", "ccc"],
-    ["Empresa", "empresa"],
-    ["NAF", "naf"],
-    ["NIF", "nif"],
-    ["Nombre", "nombre"],
-    // ... añade aquí los campos específicos de Confirmación
+  ["Fecha baja IT", (r) => formatDateFromExcel(r.fechaBajaIt)],
+  ["Contingencia", "contingencia"],
+  ["Entidad responsable", "entidadResponsable"],
+  ["Recaída", "indicadorDeRecaida"],
+  ["Fecha proceso inicial", (r) => formatDateFromExcel(r.fechaProcesoInicial)],
+  [
+    "Fecha proceso anterior",
+    (r) => formatDateFromExcel(r.fechaProcesoAnterior),
   ],
-};
+  ["Días acumulados", "diasAcumulados"],
+  [
+    "IT inexistente (fecha)",
+    (r) => formatDateFromExcel(r.fechaProcesoItInexistente),
+  ],
+  ["IT inexistente (causa)", "causaItProcesoInexistente"],
+  ["Carencia", "indicadorCarencia"],
+  ["Tipo de proceso", "tipoDeProceso"],
+  ["Duración estimada (días)", "duracionEstimada"],
+  [
+    "Fin pago delegado (fecha)",
+    (r) => formatDateFromExcel(r.fechaFinPagoDelegado),
+  ],
+  ["Fin pago delegado (causa)", "causaFinPagoDelegado"],
+  ["Fin IT (fecha)", (r) => formatDateFromExcel(r.fechaFinIt)],
+  ["Fin IT (causa)", "causaFinIt"],
+  ["Parte de baja anulado", "parteDeBajaAnulado"],
+  ["Parte de alta anulado", "parteDeAltaAnulado"],
+  ["Modalidad de pago", "modalidadDePago"],
+  ["Situaciones especiales IT", "situacionesEspecialesDeIt"],
+  [
+    "Peculiaridades pago/cotización",
+    "procesosConPeculiaridadesEnPagoYCotizacion",
+  ],
+  ["IT internacional", "indicadorDeItInternacional"],
+];
 
 // Genera un PDF para un registro concreto
-function generatePDF(record, tipo, OUTPUT_DIR) {
+async function generatePDF(record, tipo, OUTPUT_DIR) {
+  //Validacion de campos obligatorios:
+  if (!record.expte) {
+    console.error(
+      "Error generando PDF: El campo 'expte' no puede estar vacío.",
+    );
+    return null;
+  }
+
+  if (!record.dni) {
+    console.error("Error generando PDF: El campo 'dni' no puede estar vacío.");
+    return null;
+  }
+
   const doc = new PDFDocument({
     size: "A4",
     margin: 50,
     info: {
-      Title: `Parte de ${tipo} - ${safeStr(record.nombre)}`,
-      Author: "Sistema de partes",
+      Title: `Parte de ${tipo} - ${safeStr(record.dni)}`,
+      Author: "Gestoría Castillo",
     },
   });
 
   // Archivo destino
-  const baseName = `${tipo}_${safeFilename(record.nif || record.naf || record.ccc)}_${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
-  const filepath = path.join(OUTPUT_DIR, baseName);
-  const stream = fs.createWriteStream(filepath);
-  doc.pipe(stream);
-
-  // Fuente Unicode para acentos, ñ, etc.
-  if (fs.existsSync(FONT_PATH)) {
-    doc.font(FONT_PATH);
+  var baseName = "";
+  switch (tipo) {
+    case "BAJAS":
+      baseName = `FIE B${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      break;
+    case "ALTAS":
+      baseName = `FIE A${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      break;
+    case "CONFIRMACIONES":
+      baseName = `PC${safeFilename(record.partesConfirmacion[0].numeroDeParteDeConfirmacion)} ${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      break;
   }
 
-  // Cabecera
-  drawHeader(doc, tipo);
-
-  // Sección datos de empresa/cliente
-  sectionTitle(doc, "Datos del cliente");
-
-  const datosBasicos = [
-    ["Nombre", "nombre"],
-    ["NIF", "nif"],
-    ["NAF", "naf"],
-    ["Empresa", "empresa"],
-    ["CCC", "ccc"],
-  ];
-  datosBasicos.forEach(([label, key]) =>
-    drawRow(doc, label, safeStr(record[key])),
+  const filepath = path.join(
+    OUTPUT_DIR,
+    String(record.expte),
+    String(record.dni),
+    baseName,
   );
 
-  // Sección proceso IT
-  sectionTitle(doc, "Datos del proceso");
-  const map = FIELD_MAPS[tipo];
-  map.forEach(([label, keyOrFn]) => {
-    const value =
-      typeof keyOrFn === "function"
-        ? keyOrFn(record)
-        : safeStr(record[keyOrFn]);
-    drawRow(doc, label, safeStr(value));
-    // Si se acerca al final de página, crear una nueva
-    if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
-      //addFooterWithPageNumbers(doc);
-      doc.addPage();
+  const outDir = path.dirname(filepath);
+
+  try {
+    // Crea todas las carpetas necesarias si no existen
+    await fsp.mkdir(outDir, { recursive: true });
+
+    const stream = fs.createWriteStream(filepath);
+    doc.pipe(stream);
+
+    // Fuente Unicode para acentos, ñ, etc.
+    if (fs.existsSync(FONT_PATH)) {
+      doc.font(FONT_PATH);
     }
-  });
 
-  // Pie
-  doc.moveDown(1.2);
-  doc
-    .fontSize(8)
-    .fillColor("#555")
-    .text(`Generado: ${new Date().toLocaleString()}`);
+    // Cabecera
+    drawHeader(doc, tipo);
 
-  //addFooterWithPageNumbers(doc);
+    // Sección datos de empresa/cliente
+    sectionTitle(doc, "Datos del cliente");
 
-  doc.end();
+    const datosBasicos = [
+      ["Nombre", "nombre"],
+      ["NIF", "nif"],
+      ["NAF", "naf"],
 
-  return new Promise((resolve) => {
-    stream.on("finish", () => resolve(filepath));
-  });
+      ["Empresa", "empresa"],
+      ["Expediente", "expte"],
+      ["CCC", "ccc"],
+    ];
+    datosBasicos.forEach(([label, key]) =>
+      drawRow(doc, label, safeStr(record[key])),
+    );
+
+    // Sección proceso IT
+    sectionTitle(doc, "Datos del proceso");
+    if (record.nif == "0000042267852Q") {
+      console.log("ANALISIS: ");
+      console.log(record);
+    }
+
+    const map = FIELD_MAPS;
+    map.forEach(([label, keyOrFn]) => {
+      const value =
+        typeof keyOrFn === "function"
+          ? keyOrFn(record)
+          : safeStr(record[keyOrFn]);
+      drawRow(doc, label, safeStr(value));
+      // Si se acerca al final de página, crear una nueva
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+        //addFooterWithPageNumbers(doc);
+        //doc.addPage();
+      }
+    });
+
+    if (
+      tipo === "CONFIRMACIONES" &&
+      Array.isArray(record.partesConfirmacion) &&
+      record.partesConfirmacion.length > 0
+    ) {
+      doc.addPage();
+      record.partesConfirmacion.forEach((parte, index) => {
+        sectionTitle(
+          doc,
+          `Parte de Confirmación ${parte.numeroDeParteDeConfirmacion}`,
+        );
+
+        const parteMap = [
+          ["Número de parte", "numeroDeParteDeConfirmacion"],
+          [
+            "Fecha del parte de confirmación",
+            (p) => formatDateFromExcel(p.fechaDelParteDeConfirmacion),
+          ],
+          ["Nombre", "nombre"],
+          ["Empresa", "empresa"],
+          ["NIF", "nif"],
+          [
+            "Fecha de inicio de relación laboral",
+            (p) => formatDateFromExcel(p.fechaInicioRelacionLaboral),
+          ],
+          [
+            "Fecha de extinción de relación laboral",
+            (p) => formatDateFromExcel(p.fechaExtincionRelacionLaboral),
+          ],
+          [
+            "Fecha de cumplimiento 365 días",
+            (p) => formatDateFromExcel(p.fechaDeCumplimientoDe365Dias),
+          ],
+          [
+            "Fecha siguiente revisión",
+            (p) => formatDateFromExcel(p.fechaSiguienteRevisionMedica),
+          ],
+        ];
+        parteMap.forEach(([label, keyOrFn]) => {
+          const value =
+            typeof keyOrFn === "function"
+              ? keyOrFn(parte)
+              : safeStr(parte[keyOrFn]);
+
+          drawRow(doc, label, safeStr(value));
+        });
+      });
+    }
+
+    // Pie
+    doc.moveDown(1.2);
+    doc
+      .fontSize(8)
+      .fillColor("#555")
+      .text(`Generado: ${new Date().toLocaleString()}`);
+
+    //addFooterWithPageNumbers(doc);
+
+    doc.end();
+
+    return new Promise((resolve) => {
+      stream.on("finish", () => resolve(filepath));
+    });
+  } catch (err) {
+    console.error("No se pudo guardar el PDF:", err);
+    return null;
+  }
 }
 
 module.exports = generatePDF;

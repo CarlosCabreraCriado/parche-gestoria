@@ -30,17 +30,36 @@ function safeFilename(str, max = 120) {
 }
 
 // ===== Config =====
-const TEMPLATE_EML = path.join(__dirname, "fie", "baja.eml"); // tu plantilla
+const TEMPLATE_EML_ALTA = path.join(__dirname, "fie", "alta.eml"); // tu plantilla
+const TEMPLATE_EML_BAJA = path.join(__dirname, "fie", "baja.eml"); // tu plantilla
+const TEMPLATE_EML_CONFIRMACION = path.join(
+  __dirname,
+  "fie",
+  "confirmacion.eml",
+); // tu plantilla
 
 // Puedes fijar un FROM/TO/CC por defecto si quieres sobreescribir los de la plantilla
-const DEFAULT_FROM = null; // { name: 'Carla Del Castillo', address: 'ccastillo@susasesores.com' }
-const DEFAULT_TO = null; // [{ name: 'Administración', address: 'administracion@tuempresa.com' }]
-const DEFAULT_CC = null; // [{ name: 'Alexandra', address: 'rolaboral3@susasesores.com' }]
+const DEFAULT_FROM = null;
+const DEFAULT_TO = null;
+const DEFAULT_CC = null;
 
 // Construye asunto nuevo a partir del record
 function buildSubject(record, tipoDoc) {
   const fechaRecep = formatDateFromExcel(record.fechaRecepcion);
-  return `COMUNICACIÓN IT - ${safe(record.nombre)} - ${tipoDoc} ${fechaRecep}`;
+  switch (tipoDoc) {
+    case "BAJAS":
+      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PB ${fechaRecep}`;
+    case "ALTAS":
+      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PA ${fechaRecep}`;
+    case "CONFIRMACION":
+      var parteConfirmacion = 0;
+      if (Array.isArray(record.parteConfirmacion)) {
+        parteConfirmacion =
+          record.parteConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+      }
+      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PC${parteConfirmacion} ${fechaRecep}`;
+  }
+  return `null`;
 }
 
 // Modifica el HTML de la plantilla para meter los datos del cliente
@@ -160,25 +179,19 @@ async function saveAsNewEml(
   // Forzamos borrador:
   const mergedHeaders = {
     ...originalHeaders,
-    "X-Unsent": "1", // <<--- CLAVE para que se abra como borrador
   };
 
-  // Opcional: puedes eliminar Message-ID/Date si quieres un borrador "virgen"
   delete mergedHeaders["Message-ID"];
   delete mergedHeaders["Date"];
 
   const message = {
     from: override.from || parsed.from?.value?.[0] || undefined,
-    to: override.to || parsed.to?.value || [],
-    cc: override.cc || parsed.cc?.value || [],
-    bcc: override.bcc || parsed.bcc?.value || [],
+    to: override.to || [],
+    cc: override.cc || [],
+    bcc: override.bcc || [],
     subject: newSubject || parsed.subject || "",
     date: parsed.date || new Date(),
-    headers:
-      parsed.headerLines?.reduce((acc, h) => {
-        acc[h.key] = h.line;
-        return acc;
-      }, {}) || undefined,
+    headers: mergedHeaders,
     text: newText,
     html: newHtml,
     attachments,
@@ -189,13 +202,29 @@ async function saveAsNewEml(
 }
 
 // Función principal: abre plantilla, personaliza y guarda
-async function generarDesdePlantilla(
+async function generarEmailFieDesdePlantilla(
   record,
   tipoDoc,
   OUTPUT_DIR,
   overrideAddresses = {},
 ) {
+  let TEMPLATE_EML = null;
+  switch (tipoDoc) {
+    case "BAJAS":
+      TEMPLATE_EML = TEMPLATE_EML_BAJA;
+      break;
+    case "ALTAS":
+      TEMPLATE_EML = TEMPLATE_EML_ALTA;
+      break;
+    case "CONFIRMACION":
+      TEMPLATE_EML = TEMPLATE_EML_CONFIRMACION;
+      break;
+    default:
+      throw new Error(`Tipo de documento desconocido: ${tipoDoc}`);
+  }
+
   const raw = fs.readFileSync(TEMPLATE_EML);
+
   const parsed = await simpleParser(raw);
 
   //console.log(parsed);
@@ -205,38 +234,95 @@ async function generarDesdePlantilla(
   var html = parsed.html || "";
 
   html = html.replaceAll(/{{\s*nombre\s*}}/g, record.nombre || "");
-  html = html.replaceAll(/{{\s*fechaAlta\s*}}/g, record.fechaAlta || "");
-
-  html = html.replaceAll(/{{\s*fechaBaja\s*}}/g, record.fechaBaja || "");
   html = html.replaceAll(
-    /{{\s*proximaRevision\s*}}/g,
-    record.proximaRevision || "",
+    /{{\s*fechaAlta\s*}}/g,
+    formatDateFromExcel(record.fechaFinIt) || "",
   );
+
   html = html.replaceAll(
-    /{{\s*observaciones\s*}}/g,
-    record.observaciones || "",
+    /{{\s*fechaBaja\s*}}/g,
+    formatDateFromExcel(record.fechaBajaIt) || "",
   );
   html = html.replaceAll(/{{\s*contingencia\s*}}/g, record.contingencia || "");
+
+  var numeroParteConfirmacion = 0;
+  if (
+    record.partesConfirmacion &&
+    Array.isArray(record.partesConfirmacion) &&
+    record.partesConfirmacion.length > 0
+  ) {
+    html = html.replaceAll(
+      /{{\s*proximaRevision\s*}}/g,
+      formatDateFromExcel(
+        record.partesConfirmacion[0].fechaSiguienteRevisionMedica,
+      ) || "",
+    );
+    html = html.replaceAll(
+      /{{\s*fechaConfirmacion\s*}}/g,
+      formatDateFromExcel(
+        record.partesConfirmacion[0].fechaDelParteDeConfirmacion,
+      ) || "",
+    );
+    numeroParteConfirmacion =
+      record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+  }
+
+  //Tipo de proceso:
+  var tipoProceso = "";
+  switch (Number(record.tipoDeProceso.slice(1))) {
+    case 1:
+      tipoProceso = "PROCESO MUY CORTO";
+      break;
+    case 2:
+      tipoProceso = "PROCESO CORTO";
+      break;
+    case 3:
+      tipoProceso = "PROCESO MEDIO";
+      break;
+    case 4:
+      tipoProceso = "PROCESO LARGO";
+      break;
+  }
+
+  //Procesar observaciones:
+  switch (tipoDoc) {
+    case "ALTAS":
+      html = html.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE ALTA MÉDICA. ",
+      );
+      break;
+    case "BAJAS":
+      html = html.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE BAJA MÉDICA. " + tipoProceso,
+      );
+      break;
+    case "CONFIRMACION":
+      html = html.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE CONFIRMACIÓN Nº" + numeroParteConfirmacion,
+      );
+      break;
+  }
 
   const text = personalizeText(parsed.text || "", record, tipoDoc);
 
   const rawNew = await saveAsNewEml(parsed, subject, html, text, {
-    from: DEFAULT_FROM ?? overrideAddresses.from,
-    to: DEFAULT_TO ?? overrideAddresses.to,
-    cc: DEFAULT_CC ?? overrideAddresses.cc,
+    to: overrideAddresses.to ?? [],
   });
 
   var base = "";
 
   switch (tipoDoc) {
     case "BAJAS":
-      base = `${tipoDoc}_${safeFilename(record.nif || record.naf || record.ccc)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
       break;
     case "ALTAS":
-      base = `${tipoDoc}_${safeFilename(record.nif || record.naf || record.ccc)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
       break;
     case "CONFIRMACION":
-      base = `${tipoDoc}_${safeFilename(record.nif || record.naf || record.ccc)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
       break;
   }
 
@@ -246,4 +332,4 @@ async function generarDesdePlantilla(
   return outPath;
 }
 
-module.exports = generarDesdePlantilla;
+module.exports = generarEmailFieDesdePlantilla;

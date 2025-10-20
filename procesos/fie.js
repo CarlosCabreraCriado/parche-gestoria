@@ -11,7 +11,7 @@ const { DateTime } = require("luxon");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
-const generarDesdePlantilla = require("./emails-fie");
+const generarEmailFieDesdePlantilla = require("./emails-fie");
 
 class ProcesosFie {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
@@ -26,6 +26,14 @@ class ProcesosFie {
     });
   }
 
+  getCurrentDateString() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0"); // los meses van de 0 a 11
+    const year = now.getFullYear();
+    return `${day}${month}${year}`;
+  }
+
   async fIE(argumentos) {
     return new Promise((resolve) => {
       console.log("Procesamiento de FIE...");
@@ -38,44 +46,44 @@ class ProcesosFie {
 
       var pathSalidaPDFBajas = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
-        "Bajas",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
+        "PDFs-Generados",
       );
       var pathSalidaPDFAltas = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
-        "Altas",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
+        "PDFs-Generados",
       );
       var pathSalidaPDFConfirmacion = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
-        "Confirmacion",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
+        "PDFs-Generados",
       );
 
       // Carpetas de emails:
       var pathSalidaPDFBajasCorreos = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
         "Bajas-Correos",
       );
       var pathSalidaPDFAltasCorreos = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
         "Altas-Correos",
       );
       var pathSalidaPDFConfirmacionCorreos = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
         "Confirmacion-Correos",
       );
 
       var pathSalidaExcel = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
       );
       var pathSalida = path.join(
         path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado",
+        "Fie-Procesado (" + this.getCurrentDateString() + ")",
         "Resultados",
       );
 
@@ -162,8 +170,22 @@ class ProcesosFie {
                 console.log("Partes confirmacion:");
                 console.log(partesConfirmacion[0]);
 
-                // PASO 1: IDENTIFICACION.
+                // -- EXTRACCION DNI
+                for (var i = 0; i < datosIncapacidad.length; i++) {
+                  if (
+                    datosIncapacidad[i].nif &&
+                    datosIncapacidad[i].nif.trim() != "" &&
+                    datosIncapacidad[i].nif.length >= 9
+                  ) {
+                    datosIncapacidad[i].dni = datosIncapacidad[i].nif
+                      .trim()
+                      .slice(-9, -1);
+                  } else {
+                    datosIncapacidad[i].dni = null;
+                  }
+                }
 
+                // -- IDENTIFICACION (ALTAS, BAJAS, CONFIRMACION)
                 var partesDetectados = [];
                 //Detectamos si los distintos casos:
                 for (var i = 0; i < datosIncapacidad.length; i++) {
@@ -191,9 +213,15 @@ class ProcesosFie {
                 var empresa = {};
                 for (var i = 0; i < altas.length; i++) {
                   empresa = {};
-                  empresa = datosEmpresas.find(
-                    (e) => e.empresa === altas[i].empresa,
-                  );
+                  if (altas[i].expte) {
+                    empresa = datosEmpresas.find(
+                      (e) => Number(e.codigo) === Number(altas[i].expte),
+                    );
+                  } else {
+                    empresa = datosEmpresas.find(
+                      (e) => e.empresa === altas[i].empresa,
+                    );
+                  }
                   if (!empresa) {
                     console.log(
                       "Altas: No se ha encontrado empresa para: ",
@@ -205,9 +233,16 @@ class ProcesosFie {
                 }
                 for (var i = 0; i < bajas.length; i++) {
                   empresa = {};
-                  empresa = datosEmpresas.find(
-                    (e) => e.empresa === bajas[i].empresa,
-                  );
+
+                  if (bajas[i].expte) {
+                    empresa = datosEmpresas.find(
+                      (e) => Number(e.codigo) === Number(bajas[i].expte),
+                    );
+                  } else {
+                    empresa = datosEmpresas.find(
+                      (e) => e.empresa === bajas[i].empresa,
+                    );
+                  }
                   if (!empresa) {
                     console.log(
                       "Bajas: No se ha encontrado empresa para: ",
@@ -219,9 +254,16 @@ class ProcesosFie {
                 }
                 for (var i = 0; i < confirmacion.length; i++) {
                   empresa = {};
-                  empresa = datosEmpresas.find(
-                    (e) => e.empresa === confirmacion[i].empresa,
-                  );
+
+                  if (confirmacion[i].expte) {
+                    empresa = datosEmpresas.find(
+                      (e) => Number(e.codigo) === Number(confirmacion[i].expte),
+                    );
+                  } else {
+                    empresa = datosEmpresas.find(
+                      (e) => e.empresa === confirmacion[i].empresa,
+                    );
+                  }
                   if (!empresa) {
                     console.log(
                       "Confirmacion: No se ha encontrado empresa para: ",
@@ -259,22 +301,15 @@ class ProcesosFie {
                 generated.forEach((f) => console.log(" -", f));
 
                 //PASO 3: GENERACION DE CORREOS:
-                const toDefault = [
-                  {
-                    name: "Administración",
-                    address: "administracion@tuempresa.com",
-                  },
-                ];
-
                 const results = [];
                 //const altasTest = [altas[0]];
                 for (const r of altas) {
-                  const file = await generarDesdePlantilla(
+                  const file = await generarEmailFieDesdePlantilla(
                     r,
                     "ALTAS",
                     pathSalidaPDFAltasCorreos,
                     {
-                      to: toDefault,
+                      to: r.emailsEmpresa?.split(";") ?? [],
                     },
                   );
                   results.push(file);
@@ -282,12 +317,12 @@ class ProcesosFie {
 
                 //Correos Bajas:
                 for (const r of bajas) {
-                  const file = await generarDesdePlantilla(
+                  const file = await generarEmailFieDesdePlantilla(
                     r,
                     "BAJAS",
                     pathSalidaPDFBajasCorreos,
                     {
-                      to: toDefault,
+                      to: r.emailsEmpresa?.split(";") ?? [],
                     },
                   );
                   results.push(file);
@@ -295,12 +330,12 @@ class ProcesosFie {
 
                 //Correos Confirmacion:
                 for (const r of confirmacion) {
-                  const file = await generarDesdePlantilla(
+                  const file = await generarEmailFieDesdePlantilla(
                     r,
                     "CONFIRMACION",
                     pathSalidaPDFConfirmacionCorreos,
                     {
-                      to: toDefault,
+                      to: r.emailsEmpresa?.split(";") ?? [],
                     },
                   );
                   results.push(file);
@@ -321,10 +356,10 @@ class ProcesosFie {
                       .sheet(hojas.length - 1)
                       .usedRange()._numColumns;
 
-                    console.log(filas);
-                    console.log(columnas);
-
                     const ultimaHoja = hojas.length - 1;
+                    const nuevaHoja = archivoEnfermedad.addSheet(
+                      "Procesamiento automatico",
+                    );
 
                     //Identificacion de cabeceras:
                     const { cabeceras, columnaCabecera, filaCabecera } =
@@ -335,20 +370,10 @@ class ProcesosFie {
                     var flagVacia = true;
                     for (var i = 3; i < filas; i++) {
                       flagVacia = true;
-                      if (
-                        !archivoEnfermedad.sheet(ultimaHoja).cell(i, 1).value()
-                      ) {
+                      if (!nuevaHoja.cell(i, 1).value()) {
                         for (var j = 1; j < columnas; j++) {
-                          if (
-                            archivoEnfermedad
-                              .sheet(ultimaHoja)
-                              .cell(i, j)
-                              .value()
-                          ) {
-                            archivoEnfermedad
-                              .sheet(ultimaHoja)
-                              .cell(i, j)
-                              .value();
+                          if (nuevaHoja.cell(i, j).value()) {
+                            nuevaHoja.cell(i, j).value();
                             flagVacia = false;
                           }
                         }
@@ -359,7 +384,6 @@ class ProcesosFie {
                       }
                     }
 
-                    console.log("Primera fila vacia Enfermedad: ", filaVacia);
                     //Creacion de objeto para enfermedades:
                     const enfermedades = [];
                     for (var i = 0; i < bajas.length; i++) {
@@ -373,6 +397,7 @@ class ProcesosFie {
                         }
                       }
                     }
+
                     for (var i = 0; i < altas.length; i++) {
                       if (altas[i].contingencia) {
                         if (
@@ -397,14 +422,11 @@ class ProcesosFie {
                       }
                     }
 
-                    console.log(enfermedades);
+                    console.log("ENFERMEDADES [0]:");
+                    console.log(enfermedades[0]);
 
-                    //Insertar Filas nuevas
-                    /*archivoEnfermedad
-                      .sheet(hojas.length - 1)
-                      .row(filaVacia)
-                      .insert(enfermedades.length);
-                                        */
+                    //Sobrescribir fila Vacia por ser hoja nueva:
+                    filaVacia = 2;
 
                     var columnasClave = {
                       columnaExpediente: 0,
@@ -419,100 +441,165 @@ class ProcesosFie {
                       columnaDias12: 0,
                       columnaDiasResto: 0,
                       columnaDiasTotal: 0,
-                      columnaAnotacion: columnas,
+                      columnaAnotacion: columnas || 23,
                     };
 
-                    console.log(cabeceras);
-
+                    //ESCRITURA DE CABECERAS:
+                    var columnaMaxima = 0;
                     for (var i = 0; i < cabeceras.length; i++) {
-                      console.log(cabeceras[i].toLowerCase().trim());
                       switch (cabeceras[i].toLowerCase().trim()) {
                         case "exp":
                           columnasClave.columnaExpediente = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "apellidos y nombre":
                           columnasClave.columnaNombre = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "n.a.f.-c.c.c.":
                           columnasClave.columnaNaf = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "180 dias":
                           columnasClave.columnaDias180 = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "f.  baja":
                           columnasClave.columnaFechaBaja = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "próxima revision":
                           columnasClave.columnaProximaRev = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "f. alta":
                           columnasClave.columnaFechaAlta = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "dias  50 %(3)":
                           columnasClave.columnaDias3 = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "dias 60%(12)":
                           columnasClave.columnaDias12 = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "dias 60%(5)":
                           columnasClave.columnaDias5 = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "dias 75% (resto)":
                           columnasClave.columnaDiasResto = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                         case "total dias":
                           columnasClave.columnaDiasTotal = i + columnaCabecera;
+                          nuevaHoja
+                            .cell(filaVacia - 1, columnaCabecera + i)
+                            .value(cabeceras[i]);
+                          if (columnaMaxima < columnaCabecera + i) {
+                            columnaMaxima = columnaCabecera + i;
+                          }
                           break;
                       }
                     }
 
-                    console.log(columnasClave);
+                    //Columna anotacion:
+                    columnasClave.columnaAnotacion = columnaMaxima + 1;
 
                     //Insertar datos:
                     var fechaSerializada;
                     var diasHastaFinDeMes;
-
                     var comentario = "";
                     for (var i = 0; i < enfermedades.length; i++) {
-                      console.log(
-                        "Escribiendo enfermedad para: ",
-                        enfermedades[i],
-                      );
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
+                      if (i == 0) {
+                        console.log(
+                          "Escribiendo enfermedad para [0]: ",
+                          enfermedades[i],
+                        );
+                      }
+                      nuevaHoja
                         .cell(filaVacia + i, 1)
                         .value(enfermedades[i].expedienteEmpresa);
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
+                      nuevaHoja
                         .cell(filaVacia + i, 2)
                         .value(enfermedades[i].nombre);
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
+
+                      nuevaHoja
                         .cell(filaVacia + i, 3)
                         .value(enfermedades[i].naf);
 
                       if (enfermedades[i].indicadorCarencia[0] == "S") {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
-                          .cell(filaVacia + i, 5)
-                          .value("SI");
+                        nuevaHoja.cell(filaVacia + i, 5).value("SI");
                       }
 
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
+                      nuevaHoja
                         .cell(filaVacia + i, 6)
                         .value(enfermedades[i].fechaBajaIt);
 
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
+                      nuevaHoja
                         .cell(filaVacia + i, 8)
                         .value(enfermedades[i].fechaFinIt);
                       if (
                         Array.isArray(enfermedades[i].partesConfirmacion) &&
                         enfermedades[i].partesConfirmacion?.length > 0
                       ) {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
+                        nuevaHoja
                           .cell(filaVacia + i, 7)
                           .value(
                             enfermedades[i].partesConfirmacion[0]
@@ -523,9 +610,9 @@ class ProcesosFie {
                       //COMENTARIO:
                       comentario =
                         "Añadido automaticamente: " + enfermedades[i].tipo;
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
-                        .cell(filaVacia + i, 23)
+
+                      nuevaHoja
+                        .cell(filaVacia + i, columnasClave.columnaAnotacion)
                         .value(comentario);
 
                       //Calculo dias hasta fin de mes:
@@ -537,46 +624,27 @@ class ProcesosFie {
                         diasRestantesFinDeMesInclusive(fechaSerializada);
 
                       //Todos los dias a =:
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
-                        .cell(filaVacia + i, 12)
-                        .value(0);
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
-                        .cell(filaVacia + i, 13)
-                        .value(0);
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
-                        .cell(filaVacia + i, 14)
-                        .value(0);
-                      archivoEnfermedad
-                        .sheet(hojas.length - 1)
-                        .cell(filaVacia + i, 15)
-                        .value(0);
+                      nuevaHoja.cell(filaVacia + i, 12).value(0);
+                      nuevaHoja.cell(filaVacia + i, 13).value(0);
+                      nuevaHoja.cell(filaVacia + i, 14).value(0);
+
+                      nuevaHoja.cell(filaVacia + i, 15).value(0);
 
                       //PRIMER VALOR:
                       if (diasHastaFinDeMes > 3) {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
-                          .cell(filaVacia + i, 12)
-                          .value(3);
+                        nuevaHoja.cell(filaVacia + i, 12).value(3);
                       } else {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
+                        nuevaHoja
                           .cell(filaVacia + i, 12)
                           .value(diasHastaFinDeMes);
                       }
 
                       //SEGUNDO VALOR:
                       if (diasHastaFinDeMes > 15) {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
-                          .cell(filaVacia + i, 13)
-                          .value(12);
+                        nuevaHoja.cell(filaVacia + i, 13).value(12);
                       } else {
                         if (diasHastaFinDeMes > 3) {
-                          archivoEnfermedad
-                            .sheet(hojas.length - 1)
+                          nuevaHoja
                             .cell(filaVacia + i, 13)
                             .value(diasHastaFinDeMes - 3);
                         }
@@ -584,14 +652,10 @@ class ProcesosFie {
 
                       //Tercer VALOR:
                       if (diasHastaFinDeMes > 20) {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
-                          .cell(filaVacia + i, 14)
-                          .value(5);
+                        nuevaHoja.cell(filaVacia + i, 14).value(5);
                       } else {
                         if (diasHastaFinDeMes > 15) {
-                          archivoEnfermedad
-                            .sheet(hojas.length - 1)
+                          nuevaHoja
                             .cell(filaVacia + i, 14)
                             .value(diasHastaFinDeMes - 15);
                         }
@@ -599,8 +663,7 @@ class ProcesosFie {
 
                       //Tercer VALOR:
                       if (diasHastaFinDeMes > 20) {
-                        archivoEnfermedad
-                          .sheet(hojas.length - 1)
+                        nuevaHoja
                           .cell(filaVacia + i, 15)
                           .value(diasHastaFinDeMes - 20);
                       }
@@ -649,6 +712,15 @@ class ProcesosFie {
                         .sheet(hojas.length - 1)
                         .usedRange()._numColumns;
 
+                      const ultimaHoja = hojas.length - 1;
+                      const nuevaHoja = archivoAccidentes.addSheet(
+                        "Procesamiento automatico",
+                      );
+
+                      //Identificacion de cabeceras:
+                      const { cabeceras, columnaCabecera, filaCabecera } =
+                        deteccionCabeceras(archivoAccidentes, ultimaHoja);
+
                       //Identificar ultima fila:
                       var filaVacia = 0;
                       var flagVacia = true;
@@ -676,8 +748,6 @@ class ProcesosFie {
                           }
                         }
                       }
-
-                      console.log("Primera fila vacia Accidentes: ", filaVacia);
 
                       //Creacion de objeto para accidentes:
                       const accidentes = [];
@@ -716,7 +786,154 @@ class ProcesosFie {
                         }
                       }
 
-                      console.log(accidentes);
+                      console.log("ACCIDENTES [0]:");
+                      console.log(accidentes[0]);
+
+                      //Sobrescribir fila Vacia por ser hoja nueva:
+                      filaVacia = 2;
+
+                      var columnasClave = {
+                        columnaExpediente: 0,
+                        columnaNombre: 0,
+                        columnaNaf: 0,
+                        columnaDni: 0,
+                        columnaFechaBaja: 0,
+                        columnaProximaRev: 0,
+                        columnaFechaAlta: 0,
+                        columnaDias3: 0,
+                        columnaDias5: 0,
+                        columnaDias12: 0,
+                        columnaDiasResto: 0,
+                        columnaDiasTotal: 0,
+                        columnaAnotacion: 0,
+                      };
+
+                      var columnaMaxima = 0;
+                      for (var i = 0; i < cabeceras.length; i++) {
+                        switch (cabeceras[i].toLowerCase().trim()) {
+                          case "exp":
+                            columnasClave.columnaExpediente =
+                              i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "apellidos y nombre":
+                            columnasClave.columnaNombre = i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "c.c.c.":
+                            columnasClave.columnaNaf = i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "dni":
+                            columnasClave.columnaDni = i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "f.  baja":
+                            columnasClave.columnaFechaBaja =
+                              i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "próxima revision":
+                            columnasClave.columnaProximaRev =
+                              i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                          case "f. alta":
+                            columnasClave.columnaFechaAlta =
+                              i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
+                        }
+                      }
+
+                      //Columna anotacion:
+                      columnasClave.columnaAnotacion = columnaMaxima + 1;
+
+                      var comentario = "";
+                      for (var i = 0; i < accidentes.length; i++) {
+                        if (i == 0) {
+                          console.log(
+                            "Escribiendo accidentes para [0]: ",
+                            accidentes[i],
+                          );
+                        }
+                        nuevaHoja
+                          .cell(filaVacia + i, 1)
+                          .value(accidentes[i].expedienteEmpresa);
+                        nuevaHoja
+                          .cell(filaVacia + i, 2)
+                          .value(accidentes[i].nombre);
+
+                        nuevaHoja
+                          .cell(filaVacia + i, 3)
+                          .value(accidentes[i].naf);
+
+                        if (accidentes[i].indicadorCarencia[0] == "S") {
+                          nuevaHoja.cell(filaVacia + i, 5).value("SI");
+                        }
+
+                        nuevaHoja
+                          .cell(filaVacia + i, 6)
+                          .value(accidentes[i].fechaBajaIt);
+
+                        nuevaHoja
+                          .cell(filaVacia + i, 8)
+                          .value(accidentes[i].fechaFinIt);
+                        if (
+                          Array.isArray(accidentes[i].partesConfirmacion) &&
+                          accidentes[i].partesConfirmacion?.length > 0
+                        ) {
+                          nuevaHoja
+                            .cell(filaVacia + i, 7)
+                            .value(
+                              accidentes[i].partesConfirmacion[0]
+                                .fechaSiguienteRevisionMedica,
+                            );
+                        }
+
+                        //COMENTARIO:
+                        comentario =
+                          "Añadido automaticamente: " + accidentes[i].tipo;
+
+                        nuevaHoja
+                          .cell(filaVacia + i, columnasClave.columnaAnotacion)
+                          .value(comentario);
+                      }
 
                       //ESCRITURA XLSX:
                       console.log("Escribiendo archivo Accidentes...");
