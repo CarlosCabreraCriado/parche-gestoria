@@ -139,6 +139,312 @@ class ProcesosPrueba {
       return false;
     }
   }
+
+
+  //----------------------------------------------------
+
+  // Método que actuará como MVP para el proceso de posts (Strapi -> Directus).
+  // Importante: en esta primera entrega SOLO preparamos las rutas y validaciones básicas,
+  // sin implementar todavía la lectura del CSV/XLSX ni la escritura del CSV de salida.
+  // Lo hacemos así para confirmar el flujo y los puntos de extensión antes de codificar la lógica.
+  async procesoPosts(argumentos) {
+    try {
+      // 1) Mensaje inicial para localizar el inicio en consola.
+      console.log("Inicio del proceso: Proceso Posts (MVP sin transformación)");
+
+      // 2) Recogemos los argumentos que vienen del formulario (UI Angular).
+      //    En tu config, el orden es:
+      //    0: excelstrapi (ruta de archivo CSV/XLSX),
+      //    1: rutaSalida (carpeta donde guardar el resultado).
+      const rutaFormulario = argumentos?.formularioControl?.[0]; // excelstrapi
+      const carpetaSalida  = argumentos?.formularioControl?.[1]; // rutaSalida
+
+      // 3) Validaciones básicas de entrada para evitar errores comunes.
+      if (typeof rutaFormulario !== "string" || !rutaFormulario.trim()) {
+        console.error("No se ha proporcionado una ruta de archivo válida para 'excelstrapi'.");
+        return false;
+      }
+      if (typeof carpetaSalida !== "string" || !carpetaSalida.trim()) {
+        console.error("No se ha proporcionado una carpeta de salida válida para 'rutaSalida'.");
+        return false;
+      }
+
+      // 4) Normalizamos rutas a absolutas para que no haya ambigüedades.
+      const rutaInput = path.isAbsolute(rutaFormulario) ? rutaFormulario : path.resolve(rutaFormulario);
+      const salidaDir = path.isAbsolute(carpetaSalida)  ? carpetaSalida  : path.resolve(carpetaSalida);
+
+      // 5) Comprobamos existencia del archivo de entrada y preparamos la carpeta de salida.
+      if (!fs.existsSync(rutaInput)) {
+        console.error("El archivo de entrada no existe:", rutaInput);
+        return false;
+      }
+      if (!fs.existsSync(salidaDir)) {
+        fs.mkdirSync(salidaDir, { recursive: true });
+      }
+
+      // 6) Calculamos el nombre del archivo de salida según el MVP:
+      //    "<nombre_entrada>_directus.csv"
+      const baseName          = path.basename(rutaInput, path.extname(rutaInput));
+      const nombreSalidaCsv   = `${baseName}_directus.csv`;
+      const rutaSalidaCsvFull = path.normalize(path.join(salidaDir, nombreSalidaCsv));
+
+      // 7) Solo mostramos por consola la ruta de salida planificada.
+      //    AÚN NO escribimos el CSV de salida (se hará en el siguiente paso).
+      console.log("Ruta de entrada:", rutaInput);
+      console.log("Carpeta de salida:", salidaDir);
+      console.log("Nombre de salida planificado:", rutaSalidaCsvFull);
+
+            // ============================================================
+      // MVP: Leer el input (CSV o XLSX) y generar <input>_directus.csv
+      // ============================================================
+
+      // Función auxiliar: convierte valores "NULL" o nulos a vacío
+      // Motivo: en Strapi a veces viene el texto "NULL" y no queremos usarlo.
+      const norm = (v) => {
+        if (v === null || v === undefined) return "";
+        const s = String(v).trim();
+        if (s.toUpperCase() === "NULL") return "";
+        return s;
+      };
+
+      // Función auxiliar: slugify simple para construir url_slug si faltase
+      // Motivo: Directus necesita un slug consistente si no viene de Strapi.
+      const slugify = (txt) => {
+        const s = String(txt ?? "")
+          .normalize("NFD")                  // separa acentos
+          .replace(/[\u0300-\u036f]/g, "")   // elimina diacríticos
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")       // todo lo que no sea [a-z0-9] -> guión
+          .replace(/^-+|-+$/g, "");          // quita guiones al inicio y fin
+        return s || "sin-slug";
+      };
+
+      // Función auxiliar: formatea fecha/fecha-hora en "YYYY-MM-DDTHH:mm:ss"
+      // Motivo: para el MVP replicamos la hora del archivo SIN hacer conversiones.
+      const formatDateTime = (input) => {
+        const raw = norm(input);
+        if (!raw) return "";
+        // Si viene con espacio en medio, lo pasamos a formato con 'T'.
+        // Cortamos a los primeros 19 caracteres para eliminar microsegundos si los hubiese.
+        const compact = raw.replace(" ", "T");
+        // Si tiene microsegundos, recortamos:
+        // - ejemplo "2025-10-13T14:03:19.750000" -> "2025-10-13T14:03:19"
+        const base = compact.length >= 19 ? compact.slice(0, 19) : compact;
+        // Si no tiene 'T' y es sólo fecha "YYYY-MM-DD", lo devolvemos tal cual.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(base)) return base;
+        return base;
+      };
+
+      // Función auxiliar: valor CSV seguro con comillas si hace falta
+      // Motivo: evitar romper el CSV si hay comas o comillas en el texto.
+      const csvSafe = (val) => {
+        // Arrays y booleanos tal cual (según formato de Directus que usaremos aquí)
+        if (Array.isArray(val)) return JSON.stringify(val);
+        if (typeof val === "boolean") return val ? "true" : "false";
+        const s = String(val ?? "");
+        // Si contiene comillas dobles, las duplicamos (estándar CSV)
+        const needsQuotes = /[",\n]/.test(s);
+        const escaped = s.replace(/"/g, '""');
+        return needsQuotes ? `"${escaped}"` : escaped;
+      };
+
+      // 1) Leemos el input en memoria (CSV o XLSX)
+      //    - Si es XLSX/XLSM: usamos XlsxPopulate (como testExcel)
+      //    - Si es CSV: hacemos un parse sencillo por filas, respetando comillas
+      let rows = [];   // aquí dejaremos un array de objetos {columna: valor}
+      let headers = []; // cabeceras originales del input
+
+      const ext = path.extname(rutaInput).toLowerCase();
+
+      if (ext === ".xlsx" || ext === ".xlsm" || ext === ".xls") {
+        // --- Lectura de Excel con XlsxPopulate (misma forma que testExcel) ---
+        const wb = await XlsxPopulate.fromFileAsync(rutaInput);
+        const hoja = wb.sheet(0);
+        const used = hoja.usedRange();
+        const data = used.value(); // matriz [filas][columnas]
+
+        if (!Array.isArray(data) || data.length < 2) {
+          console.error("El Excel no contiene filas suficientes (cabecera + datos).");
+          return false;
+        }
+
+        // La primera fila será la cabecera
+        headers = (data[0] || []).map((h) => norm(h));
+
+        // Convertimos el resto de filas en objetos {cabecera: valor}
+        for (let i = 1; i < data.length; i++) {
+          const fila = data[i] || [];
+          if (!Array.isArray(fila)) continue;
+
+          const obj = {};
+          for (let c = 0; c < headers.length; c++) {
+            obj[headers[c]] = norm(fila[c]);
+          }
+          // Evitar filas totalmente vacías
+          const hayAlgo = Object.values(obj).some((v) => String(v).trim() !== "");
+          if (hayAlgo) rows.push(obj);
+        }
+      } else if (ext === ".csv") {
+        // --- Lectura de CSV con parser muy sencillo (MVP) ---
+        // NOTA: Para el MVP (1 registro) y porque no usaremos 'post_content',
+        // este parser simple nos vale. Si en el futuro hay comas con comillas anidadas,
+        // valoraremos endurecerlo o pedir XLSX.
+        const raw = fs.readFileSync(rutaInput, "utf8");
+
+        // Función: parsea una línea CSV respetando comillas dobles
+        const parseCsvLine = (line) => {
+          const out = [];
+          let cur = "";
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') {
+              // Doble comilla
+              if (inQuotes && line[i + 1] === '"') {
+                cur += '"'; // comilla escapada
+                i++;        // saltar la siguiente
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (ch === "," && !inQuotes) {
+              out.push(cur);
+              cur = "";
+            } else {
+              cur += ch;
+            }
+          }
+          out.push(cur);
+          return out;
+        };
+
+        const lines = raw.split(/\r?\n/).filter((l) => l.trim() !== "");
+        if (lines.length < 2) {
+          console.error("El CSV no contiene filas suficientes (cabecera + datos).");
+          return false;
+        }
+
+        // Cabeceras:
+        headers = parseCsvLine(lines[0]).map((h) => norm(h));
+
+        // Filas de datos:
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCsvLine(lines[i]).map((v) => norm(v));
+          // Alinear con nº de cabeceras
+          while (cols.length < headers.length) cols.push("");
+          const obj = {};
+          for (let c = 0; c < headers.length; c++) {
+            obj[headers[c]] = cols[c] ?? "";
+          }
+          // Evitar filas completamente vacías
+          const hayAlgo = Object.values(obj).some((v) => String(v).trim() !== "");
+          if (hayAlgo) rows.push(obj);
+        }
+      } else {
+        console.error("Formato de entrada no soportado en este MVP. Use .csv o .xlsx");
+        return false;
+      }
+
+      // 2) Si no hay filas, salimos
+      if (rows.length === 0) {
+        console.warn("No se encontraron filas de datos en el input.");
+        return false;
+      }
+
+      // 3) Preparamos cabecera EXACTA de Directus (confirmada)
+      const headerDirectus = [
+        "categorias",
+        "publicacion_automatica",
+        "status",
+        "url_slug",
+        "id",
+        "sort",
+        "user_created",
+        "date_created",
+        "user_updated",
+        "date_updated",
+        "fecha",
+        "etiquetas",
+        "titulo",
+        "contenido",
+        "imagenes",
+      ];
+
+      // 4) Reglas fijas del MVP
+      const UUID_FIJO = "0c839678-2c25-45ea-950a-10c0c9a50195";
+
+      // 5) Transformación por fila (MVP: contenido vacío)
+      const salidaLineas = [];
+      // Añadimos la cabecera al CSV de salida
+      salidaLineas.push(headerDirectus.join(","));
+
+      for (const r of rows) {
+        // Orígenes
+        const postTitle = norm(r["post_title"]);
+        const postName  = norm(r["post_name"]);
+        const slug      = norm(r["slug"]);
+        const postDate  = formatDateTime(r["post_date"]);     // sin cambios de hora
+        const createdAt = formatDateTime(r["created_at"]);    // sin cambios de hora
+        const updatedAt = formatDateTime(r["updated_at"]) || formatDateTime(r["post_modified"]) || formatDateTime(r["post_modified_gmt"]);
+
+        // Fallbacks
+        const titulo = postTitle || (norm(r["id"]) ? `Sin título (ID: ${norm(r["id"])})` : "Sin título");
+        const urlSlug = postName || slug || slugify(titulo);
+
+        // 1) Fecha “pública” del post: priorizamos post_date y si no, created_at.
+        //    Importante: NO usamos la fecha actual como fallback.
+        const fecha = postDate || createdAt || "";
+              
+        // 2) Fecha de creación real en Directus = created_at del origen.
+        //    Si faltara (no debería), caemos a post_date o, en último caso, vacío.
+        const date_created = createdAt || postDate || "";
+              
+        // 3) Fecha de actualización: priorizamos updated_at; si no hay, usamos date_created.
+        const date_updated = updatedAt || date_created;
+              
+
+        // Construimos la fila Directus (contenido vacío, arrays vacíos, status draft, etc.)
+        const fila = [
+          "[]",                                  // categorias
+          false,                                 // publicacion_automatica
+          "draft",                               // status
+          csvSafe(urlSlug),                      // url_slug
+          "",                                    // id (lo genera Directus)
+          "",                                    // sort (vacío)
+          UUID_FIJO,                             // user_created
+          csvSafe(date_created),                 // date_created (misma hora, sin Z)
+          UUID_FIJO,                             // user_updated
+          csvSafe(date_updated),                 // date_updated (misma hora, sin Z)
+          csvSafe(fecha),                        // fecha (misma hora, sin Z)
+          "[]",                                  // etiquetas
+          csvSafe(titulo),                       // titulo
+          csvSafe(""),                           // contenido (MVP: vacío)
+          "[]",                                  // imagenes
+        ];
+
+        salidaLineas.push(fila.join(","));
+      }
+
+      // 6) Escribimos el archivo CSV de salida
+      fs.writeFileSync(rutaSalidaCsvFull, salidaLineas.join("\n"), "utf8");
+      console.log("CSV de Directus generado en:", rutaSalidaCsvFull);
+
+
+      // 8) TODO (siguiente paso):
+      //    - Detectar si rutaInput es CSV o XLSX.
+      //    - Leer el archivo (si CSV: parse; si XLSX: XlsxPopulate).
+      //    - Mapear columnas al formato de Directus.
+      //    - Dejar 'contenido' vacío y rellenar el resto de campos.
+      //    - Escribir el CSV final en 'rutaSalidaCsvFull'.
+
+      // 9) Fin del MVP de estructura.
+      console.log("Proceso Posts (MVP): estructura validada. Pendiente implementar transformación.");
+      return true;
+    } catch (error) {
+      console.error("Incidencia en Proceso Posts (MVP):", error);
+      return false;
+    }
+  }
+
 }
 // Exportación de la clase o de una instancia según la arquitectura del proyecto.
 // Motivo: permitir su utilización desde el resto de la aplicación.
