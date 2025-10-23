@@ -380,15 +380,14 @@ class ProcesosPrueba {
       for (const r of rows) {
         // Orígenes
         const postTitle = norm(r["post_title"]);
-        const postName  = norm(r["post_name"]);
         const slug      = norm(r["slug"]);
-        const postDate  = formatDateTime(r["post_date"]);     // sin cambios de hora
-        const createdAt = formatDateTime(r["created_at"]);    // sin cambios de hora
+        const postDate  = formatDateTime(r["post_date"]);
+        const createdAt = formatDateTime(r["created_at"]);
         const updatedAt = formatDateTime(r["updated_at"]) || formatDateTime(r["post_modified"]) || formatDateTime(r["post_modified_gmt"]);
 
         // Fallbacks
         const titulo = postTitle || (norm(r["id"]) ? `Sin título (ID: ${norm(r["id"])})` : "Sin título");
-        const urlSlug = postName || slug || slugify(titulo);
+        const urlSlug = slug || slugify(titulo);
 
         // 1) Fecha “pública” del post: priorizamos post_date y si no, created_at.
         //    Importante: NO usamos la fecha actual como fallback.
