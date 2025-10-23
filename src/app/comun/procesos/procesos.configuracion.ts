@@ -658,7 +658,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             formulario: {
               titulo: "Excel de Strapi",
               tipo: "archivo",
-              accept: ".csv, .xlsm, .xlsx, .XLSX",
+              accept: ".json",
               placeholder:
                 "Introduzca la ruta del archivo de Strapi.",
               valorDefault: "",
