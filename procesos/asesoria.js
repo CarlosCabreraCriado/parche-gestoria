@@ -1985,7 +1985,7 @@ class ProcesosAsesoria {
             );
 
             //Inicio de procesamiento:
-            const browser = await puppeteer.launch({
+            const browser = await puppeteer.launch({  //<-------
               executablePath: chromiumExecutablePath,
               headless: false,
             });

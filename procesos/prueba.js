@@ -141,8 +141,6 @@ class ProcesosPrueba {
   }
 
 
-  //----------------------------------------------------
-
 // Método que procesa SÓLO JSON (Strapi -> Directus) y genera un JSON importable en Directus.
 // Esta versión incluye:
 //  - Mapeo de categorias/etiquetas (ya hecho en el paso anterior).
@@ -432,6 +430,289 @@ async procesoPosts(argumentos) {
     return false;
   }
 }
+
+// =============================
+// PROCESO: Webscrapping YouTube
+// =============================
+// Argumentos esperados (en este orden: 0,1,2):
+// 0: rutaChromium   -> Ruta al ejecutable de Chrome/Chromium.
+// 1: excelEntrada   -> Ruta del Excel (.xlsx/.xlsm) con columna 'url_video' en la primera hoja.
+// 2: rutaSalida     -> Carpeta donde guardar el Excel *_METRICAS.xlsx.
+//
+// Este método abre cada URL de YouTube, extrae métricas básicas y las escribe en un nuevo Excel.
+// Está muy comentado (nivel principiante) y con selectores bastante robustos.
+async webscrappingYoutube(argumentos) {
+  // Cargamos puppeteer aquí para que otros procesos no fallen si no está instalado.
+  // Si usas "puppeteer-core", cambia esta línea a require("puppeteer-core")
+  const puppeteer = require("puppeteer-core");
+
+  try {
+    console.log("Inicio del proceso: Webscrapping YouTube");
+
+    // 1) Leemos los argumentos en el orden acordado.
+    const rutaChromium  = argumentos?.formularioControl?.[0]; // ejecutable del navegador
+    const rutaExcel     = argumentos?.formularioControl?.[1]; // excel con url_video
+    const carpetaSalida = argumentos?.formularioControl?.[2]; // carpeta destino
+
+    // 2) Validaciones básicas para evitar errores tontos.
+    if (typeof rutaChromium !== "string" || !rutaChromium.trim()) {
+      console.error("Falta la ruta del ejecutable de Chrome/Chromium (argumento 0).");
+      return false;
+    }
+    if (typeof rutaExcel !== "string" || !rutaExcel.trim()) {
+      console.error("Falta la ruta del Excel de entrada (argumento 1).");
+      return false;
+    }
+    if (typeof carpetaSalida !== "string" || !carpetaSalida.trim()) {
+      console.error("Falta la ruta de la carpeta de salida (argumento 2).");
+      return false;
+    }
+
+    // 3) Normalizamos rutas para evitar problemas por el sistema operativo.
+    const chromiumExecutablePath = path.normalize(rutaChromium);
+    const inputPath  = path.isAbsolute(rutaExcel) ? rutaExcel : path.resolve(rutaExcel);
+    const outputDir  = path.isAbsolute(carpetaSalida) ? carpetaSalida : path.resolve(carpetaSalida);
+
+    // 4) Comprobamos existencia del Excel y preparamos carpeta de salida.
+    if (!fs.existsSync(inputPath)) {
+      console.error("El Excel indicado no existe:", inputPath);
+      return false;
+    }
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // 5) Abrimos el Excel con XlsxPopulate y leemos la primera hoja.
+    const wb = await XlsxPopulate.fromFileAsync(inputPath);
+    const hoja = wb.sheet(0); // primera hoja
+    const used = hoja.usedRange();
+    const data = used ? used.value() : [];
+    if (!Array.isArray(data) || data.length < 2) {
+      console.error("El Excel no tiene filas suficientes (se necesita cabecera + al menos 1 URL).");
+      return false;
+    }
+
+    // 6) Buscamos la cabecera 'url_video' (asumimos que está en la primera fila).
+    const headers = (data[0] || []).map((h) => String(h ?? "").trim());
+    const colUrlIdx = headers.findIndex((h) => h.toLowerCase() === "url_video");
+    if (colUrlIdx === -1) {
+      console.error("No se ha encontrado la columna 'url_video' en la fila 1 del Excel.");
+      return false;
+    }
+
+    // 7) Construimos la lista de URLs desde la columna 'url_video' (filas 2..N).
+    const urls = [];
+    for (let i = 1; i < data.length; i++) {
+      const fila = data[i] || [];
+      const url  = String(fila[colUrlIdx] ?? "").trim();
+      if (url) urls.push(url);
+    }
+    if (urls.length === 0) {
+      console.error("No se han encontrado URLs en la columna 'url_video'.");
+      return false;
+    }
+
+    // 8) Definimos los nombres de las columnas nuevas que vamos a escribir.
+    const outputCols = [
+      "title",
+      "channel_name",
+      "channel_url",
+      "views_text",
+      "publish_date_text",
+      "likes_text",
+      "category_best_effort",
+      "ok",
+      "error",
+    ];
+
+    // 9) Calculamos desde qué columna empezamos a escribir las nuevas métricas.
+    const totalColumnas = headers.length;
+    const startColIndex = totalColumnas; // 0-based en nuestro array "data"; en Excel será +1
+    // Escribimos las cabeceras nuevas en la fila 1.
+    outputCols.forEach((colName, i) => {
+      hoja.cell(1, startColIndex + 1 + i).value(colName);
+    });
+
+    // 10) Lanzamos el navegador (Puppeteer) según tu formato.
+    const browser = await puppeteer.launch({
+      executablePath: chromiumExecutablePath,
+      headless: false,
+    });
+    const page = await browser.newPage();
+
+    // 11) Ajustamos un viewport estándar para consistencia, y userAgent para parecer un navegador real.
+    await page.setViewport({ width: 1366, height: 768 });
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36");
+
+    // 12) Helper: clic automático en el consentimiento si aparece (YouTube/GDPR).
+    const tryAcceptConsent = async () => {
+      try {
+        // Botones típicos en español/inglés
+        const selectors = [
+          'button:has-text("Aceptar todo")',
+          'button:has-text("Acepto")',
+          'button:has-text("I agree")',
+          'button:has-text("Agree to all")',
+          'form[action*="consent"] button', // genérico
+          '#introAgreeButton', // antiguas UIs
+        ];
+
+        for (const sel of selectors) {
+          const el = await page.$(sel).catch(() => null);
+          if (el) { await el.click(); await page.waitForTimeout(500); break; }
+        }
+      } catch { /* ignoramos */ }
+    };
+
+    // 13) Helper: intenta varias estrategias para obtener un texto por selector.
+    const getText = async (selectors) => {
+      for (const sel of selectors) {
+        try {
+          const handle = await page.$(sel);
+          if (!handle) continue;
+          const txt = await page.$eval(sel, (el) => el.textContent?.trim() || "");
+          if (txt) return txt;
+        } catch { /* probamos el siguiente */ }
+      }
+      return "";
+    };
+
+    // 14) Recorremos cada URL y extraemos métricas.
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      console.log(`→ [${i + 1}/${urls.length}] Navegando a: ${url}`);
+
+      // Fila Excel a escribir (i+2 porque fila 1 es cabecera).
+      const excelRow = i + 2;
+
+      let title = "", channel_name = "", channel_url = "", views_text = "", publish_date_text = "", likes_text = "", category_best_effort = "";
+      let ok = false, errorMsg = "";
+
+      try {
+        // 14.1) Navegamos a la URL y esperamos a que la red esté estable.
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+
+        // 14.2) Intentamos aceptar consentimiento si aparece.
+        await tryAcceptConsent();
+
+        // 14.3) Esperamos un contenedor principal del watch de YouTube.
+        // Nota: YouTube cambia mucho, por eso usamos varios selectores alternativos.
+        await page.waitForSelector("ytd-watch-flexy, #columns", { timeout: 15000 });
+
+        // 14.4) Extraemos el título del vídeo (varias rutas + fallback document.title).
+        title = await getText([
+          "h1.title",                         // UIs antiguas
+          "#title h1",                        // UIs intermedias
+          "ytd-watch-metadata h1",            // UIs nuevas
+        ]);
+        if (!title) {
+          title = await page.title();         // Fallback final
+        }
+
+        // 14.5) Nombre y URL del canal.
+        channel_name = await getText([
+          "#owner #text",                     // habitual
+          "ytd-channel-name a",               // alternativa
+          "a.yt-simple-endpoint.style-scope.yt-formatted-string", // genérica
+        ]);
+
+        try {
+          const channelEl = await page.$("ytd-channel-name a[href], #owner a[href]");
+          if (channelEl) {
+            channel_url = await page.evaluate((a) => a.getAttribute("href") || "", channelEl);
+            if (channel_url && !/^https?:\/\//i.test(channel_url)) {
+              channel_url = "https://www.youtube.com" + channel_url;
+            }
+          }
+        } catch { /* nada */ }
+
+        // 14.6) Vistas (texto tal cual muestra la página).
+        views_text = await getText([
+          "#info ytd-video-view-count-renderer",
+          "ytd-video-view-count-renderer span",
+          "span.view-count",
+          "ytd-watch-metadata #info span",
+        ]);
+
+        // 14.7) Fecha de publicación (texto estilo “23 oct 2025”).
+        publish_date_text = await getText([
+          "#info-strings yt-formatted-string",
+          "ytd-watch-metadata #info-strings yt-formatted-string",
+          "div#info-strings yt-formatted-string",
+        ]);
+
+        // 14.8) Likes (best-effort: YouTube oculta/traslada a veces).
+        likes_text = await getText([
+          // UIs recientes
+          "ytd-segmented-like-dislike-button-renderer yt-formatted-string",
+          // UIs intermedias
+          "ytd-toggle-button-renderer[is-icon-button][aria-pressed] yt-formatted-string",
+          // UIs antiguas
+          "ytd-toggle-button-renderer[is-icon-button] #text",
+        ]);
+
+        // 14.9) Intento de categoría (si aparece el bloque “Mostrar más” con metadatos).
+        // Abrimos "Mostrar más" si existe para descubrir metadata adicional.
+        try {
+          const showMore = await page.$("tp-yt-paper-button#expand, #description #expand");
+          if (showMore) { await showMore.click(); await page.waitForTimeout(300); }
+        } catch { /* nada */ }
+
+        // Buscamos pistas de “Categoría” en descripción (cambia según idioma)
+        const descText = await getText([
+          "#description ytd-text-inline-expander",
+          "#description",
+          "ytd-text-inline-expander[collapsed] #content",
+        ]);
+        // Heurística muy simple: busca "Categoría" o "Category" y corta la línea.
+        if (descText) {
+          const m = descText.match(/Categor[ií]a:\s*([^\n\r]+)/i) || descText.match(/Category:\s*([^\n\r]+)/i);
+          category_best_effort = m ? m[1].trim() : "";
+        }
+
+        ok = true;
+      } catch (err) {
+        ok = false;
+        errorMsg = err?.message || "Error desconocido navegando o seleccionando elementos.";
+        console.warn("   ⚠️  Error:", errorMsg);
+      }
+
+      // 14.10) Escribimos las métricas en la misma fila, empezando en la primera columna libre.
+      const valores = [
+        title,
+        channel_name,
+        channel_url,
+        views_text,
+        publish_date_text,
+        likes_text,
+        category_best_effort,
+        ok ? "true" : "false",
+        errorMsg,
+      ];
+
+      for (let c = 0; c < valores.length; c++) {
+        // .cell(fila, columna) es 1-based en XlsxPopulate.
+        hoja.cell(excelRow, startColIndex + 1 + c).value(valores[c]);
+      }
+    }
+
+    // 15) Guardamos el Excel con sufijo *_METRICAS.xlsx en la carpeta de salida.
+    const baseName = path.basename(inputPath, path.extname(inputPath));
+    const rutaSalida = path.join(outputDir, `${baseName}_METRICAS.xlsx`);
+    await wb.toFileAsync(rutaSalida);
+
+    // 16) Cerramos el navegador y listo.
+    await browser.close();
+
+    console.log("Archivo con métricas guardado en:", rutaSalida);
+    console.log("Proceso Webscrapping YouTube finalizado correctamente.");
+    return true;
+  } catch (error) {
+    console.error("Incidencia en Webscrapping YouTube:", error);
+    return false;
+  }
+}
+
 
 
 
