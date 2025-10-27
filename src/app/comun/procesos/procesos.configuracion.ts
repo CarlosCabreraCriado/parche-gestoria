@@ -602,10 +602,10 @@ var libreriaProcesos: LibreriaProcesos[] = [
     ],
   },
   {
-    nombre: "Test Excel",
+    nombre: "Prueba",
     categoria: "Prueba",
     tipo: "directorio",
-    descripcion: "Procesos de asesoría",
+    descripcion: "Procesos de prueba",
     subCategoria: [
       {
         nombre: "Test Excel",
@@ -643,8 +643,44 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
+      {
+        nombre: "Proceso Posts",
+        categoria: "Prueba",
+        tipo: "proceso",
+        descripcion:
+          "Tranformación posts",
+        autor: "Gonzalo",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelstrapi",
+            formulario: {
+              titulo: "Excel de Strapi",
+              tipo: "archivo",
+              accept: ".json",
+              placeholder:
+                "Introduzca la ruta del archivo de Strapi.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
     ],
-  }
+  },
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
