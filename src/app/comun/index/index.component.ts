@@ -4,6 +4,7 @@ import { AppService } from '../../app.service';
 import { MatDialog} from '@angular/material/dialog';
 import { DialogoComponent } from '../dialogos/dialogos.component'
 import { MatSidenav} from '@angular/material/sidenav';
+import { environment } from "src/environments/environment";
 
 //Modulos:
 import { MatIconModule } from '@angular/material/icon';
@@ -27,6 +28,11 @@ import { MatButtonModule } from '@angular/material/button';
 export class IndexComponent implements OnInit{
 
 	constructor(public appService: AppService, public dialog: MatDialog) { }
+
+	abrirSoporte(): void {
+	const w = window.open(environment.URL_SOPORTE, '_blank');
+	if (w) { w.opener = null; }
+	}
 
 	public proyectoActivo = false;
 	public nombreProyectoActivo = "Selecciona un proyecto";
