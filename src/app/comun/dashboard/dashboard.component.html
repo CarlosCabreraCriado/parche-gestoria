@@ -9,10 +9,6 @@
 
     <!-- BOTON CERRAR PROYECTO -->
     <div class="containerBotonesProyecto">
-      <button class="version" mat-stroked-button>
-        v{{ appService.version }}
-      </button>
-
       <button
         mat-icon-button
         class="botonToggleMenu"
@@ -480,4 +476,24 @@
       </div>
     </mat-drawer-content>
   </mat-drawer-container>
+
+  <!-- BARRA INFERIOR -->
+  <div class="barraInferior">
+    <div class="barraInferior__contenido">
+      <button class="version" mat-stroked-button>
+        v{{ appService.version }}
+      </button>
+
+      <button
+        mat-stroked-button
+        class="soporte"
+        color="primary"
+        (click)="abrirSoporte()"
+      >
+        Soporte
+      </button>
+
+    </div>
+  </div>
+
 </div>

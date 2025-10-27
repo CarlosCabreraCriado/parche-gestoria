@@ -17,6 +17,7 @@ import {
 import { InsertarElementoComponent } from "../insertarElemento/insertarElemento.component";
 import { AddCursoComponent } from "../addCurso/addCurso.component";
 import { EditorDocumentoComponent } from "../editorDocumento/editorDocumento.component";
+import { environment } from "src/environments/environment";
 
 //Modulos:
 import { MatTableModule } from "@angular/material/table";
@@ -29,6 +30,8 @@ import { MatTreeModule } from "@angular/material/tree";
 import { MatMenuModule } from "@angular/material/menu";
 import { MatTabsModule } from "@angular/material/tabs";
 import { MatButtonModule } from "@angular/material/button";
+
+
 
 interface ArchivoNode {
   nombre: string;
@@ -74,6 +77,11 @@ export class DashboardComponent implements OnInit {
   ) {
     this.arbolArchivosDataSource.data = this.datosArbolArchivos;
     this.elementosRender = {};
+  }
+
+  abrirSoporte(): void {
+    const w = window.open(environment.URL_SOPORTE, '_blank');
+    if (w) { w.opener = null; }
   }
 
   public selectedTab = 2;
