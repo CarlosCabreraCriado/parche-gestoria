@@ -679,6 +679,55 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
+      {
+        nombre: "Webscrapping Youtube",
+        categoria: "Prueba",
+        tipo: "proceso",
+        descripcion: "Extrae métricas de vídeos de YouTube desde un Excel de URLs",
+        autor: "Gonzalo",
+    
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaChromium",
+            formulario: {
+              titulo: "Ruta del ejecutable de Chrome/Chromium",
+              tipo: "archivo",
+              accept: "",
+              placeholder: "Selecciona el ejecutable de Chrome/Chromium",
+              valorDefault: ""
+            }
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelEntrada",
+            formulario: {
+              titulo: "Excel con URLs de YouTube",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder: "Selecciona el Excel (columna 'url_video' en la primera hoja)",
+              valorDefault: ""
+            }
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida",
+              tipo: "ruta",
+              placeholder: "Selecciona una carpeta donde guardar el resultado",
+              valorDefault: ""
+            }
+          }
+        ],
+      
+        opciones: null,
+      
+        salida: [{ tipo: "boolean", valor: false }]
+      }
     ],
   },
 ];
