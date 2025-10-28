@@ -238,13 +238,13 @@ async function generatePDF(record, tipo, OUTPUT_DIR) {
   var baseName = "";
   switch (tipo) {
     case "BAJAS":
-      baseName = `FIE B${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      baseName = `FIE B${safeFilename(formatDateFromExcel(record.fechaBajaIt))}.pdf`;
       break;
     case "ALTAS":
-      baseName = `FIE A${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      baseName = `FIE A${safeFilename(formatDateFromExcel(record.fechaFinIt))}.pdf`;
       break;
     case "CONFIRMACIONES":
-      baseName = `PC${safeFilename(record.partesConfirmacion[0].numeroDeParteDeConfirmacion)} ${safeFilename(formatDateFromExcel(record.fechaRecepcion))}.pdf`;
+      baseName = `PC${safeFilename(record.partesConfirmacion[0].numeroDeParteDeConfirmacion)} ${safeFilename(formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion))}.pdf`;
       break;
   }
 

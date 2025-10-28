@@ -45,17 +45,23 @@ const DEFAULT_CC = null;
 
 // Construye asunto nuevo a partir del record
 function buildSubject(record, tipoDoc) {
-  const fechaRecep = formatDateFromExcel(record.fechaRecepcion);
+  var fechaRecep = formatDateFromExcel(record.fechaRecepcion);
   switch (tipoDoc) {
     case "BAJAS":
+      fechaRecep = formatDateFromExcel(record.fechaBajaIt) || fechaRecep;
       return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PB ${fechaRecep}`;
     case "ALTAS":
+      fechaRecep = formatDateFromExcel(record.fechaFinIt) || fechaRecep;
       return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PA ${fechaRecep}`;
     case "CONFIRMACION":
       var parteConfirmacion = 0;
-      if (Array.isArray(record.parteConfirmacion)) {
+      if (Array.isArray(record.partesConfirmacion)) {
+        fechaRecep =
+          formatDateFromExcel(
+            record.partesConfirmacion[0].fechaDelParteDeConfirmacion,
+          ) || fechaRecep;
         parteConfirmacion =
-          record.parteConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+          record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
       }
       return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PC${parteConfirmacion} ${fechaRecep}`;
   }
@@ -245,6 +251,13 @@ async function generarEmailFieDesdePlantilla(
   );
   html = html.replaceAll(/{{\s*contingencia\s*}}/g, record.contingencia || "");
 
+  if (tipoDoc === "BAJAS") {
+    html = html.replaceAll(
+      /{{\s*proximaRevision\s*}}/g,
+      formatDateFromExcel(record.fechaProximaRevisionParteBaja) || "",
+    );
+  }
+
   var numeroParteConfirmacion = 0;
   if (
     record.partesConfirmacion &&
@@ -269,7 +282,7 @@ async function generarEmailFieDesdePlantilla(
 
   //Tipo de proceso:
   var tipoProceso = "";
-  switch (Number(record.tipoDeProceso.slice(1))) {
+  switch (Number(record.tipoDeProceso[0])) {
     case 1:
       tipoProceso = "PROCESO MUY CORTO";
       break;
@@ -289,25 +302,27 @@ async function generarEmailFieDesdePlantilla(
     case "ALTAS":
       html = html.replaceAll(
         /{{\s*observaciones\s*}}/g,
-        "PARTE DE ALTA MÉDICA. ",
+        "PARTE DE ALTA MÉDICA. <br/>" + tipoProceso,
       );
       break;
     case "BAJAS":
       html = html.replaceAll(
         /{{\s*observaciones\s*}}/g,
-        "PARTE DE BAJA MÉDICA. " + tipoProceso,
+        "PARTE DE BAJA MÉDICA. <br/>" + tipoProceso,
       );
       break;
     case "CONFIRMACION":
       html = html.replaceAll(
         /{{\s*observaciones\s*}}/g,
-        "PARTE DE CONFIRMACIÓN Nº" + numeroParteConfirmacion,
+        "PARTE DE CONFIRMACIÓN Nº" +
+          numeroParteConfirmacion +
+          "<br/>" +
+          tipoProceso,
       );
       break;
   }
 
   const text = personalizeText(parsed.text || "", record, tipoDoc);
-
   const rawNew = await saveAsNewEml(parsed, subject, html, text, {
     to: overrideAddresses.to ?? [],
   });
@@ -316,13 +331,13 @@ async function generarEmailFieDesdePlantilla(
 
   switch (tipoDoc) {
     case "BAJAS":
-      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
       break;
     case "ALTAS":
-      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaFinIt) || "")}`;
       break;
     case "CONFIRMACION":
-      base = `${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+      base = `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || "")}`;
       break;
   }
 

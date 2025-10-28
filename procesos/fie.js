@@ -12,6 +12,7 @@ const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
 const generarEmailFieDesdePlantilla = require("./emails-fie");
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 class ProcesosFie {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
@@ -81,19 +82,6 @@ class ProcesosFie {
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
       );
-      var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "Resultados",
-      );
-
-      // Verificar si la carpeta "Resultados" existe y crearla si no
-      if (!fs.existsSync(pathSalida)) {
-        fs.mkdirSync(pathSalida, { recursive: true });
-        console.log(`Carpeta creada: ${pathSalida}`);
-      } else {
-        console.log(`La carpeta ya existe: ${pathSalida}`);
-      }
 
       if (!fs.existsSync(pathSalidaPDFConfirmacion)) {
         fs.mkdirSync(pathSalidaPDFConfirmacion, { recursive: true });
@@ -161,14 +149,19 @@ class ProcesosFie {
                 console.log("Archivo Cargado: FIE");
                 archivoFIE = workbook;
 
-                const datosIncapacidad = extraccionExcel(archivoFIE, 0); //3
-                const partesConfirmacion = extraccionExcel(archivoFIE, 4); //3
+                const datosIncapacidad = extraccionExcel(archivoFIE, 0);
+                const partesConfirmacion = extraccionExcel(archivoFIE, 4);
+
+                const datosIncapacidad2 = extraccionExcel(archivoFIE, 1);
 
                 console.log("Datos incapacidad:");
                 console.log(datosIncapacidad[0]);
 
                 console.log("Partes confirmacion:");
                 console.log(partesConfirmacion[0]);
+
+                console.log("Incapadidad 2");
+                console.log(datosIncapacidad2[1]);
 
                 // -- EXTRACCION DNI
                 for (var i = 0; i < datosIncapacidad.length; i++) {
@@ -182,6 +175,25 @@ class ProcesosFie {
                       .slice(-9, -1);
                   } else {
                     datosIncapacidad[i].dni = null;
+                  }
+                }
+
+                // EXTRACCION FECHA PROXIMA REVISON (BAJA CON SEGUNDA HOJA)
+                for (var i = 0; i < datosIncapacidad.length; i++) {
+                  datosIncapacidad[i].fechaProximaRevisionParteBaja = null;
+                  for (var j = 0; j < datosIncapacidad2.length; j++) {
+                    if (
+                      datosIncapacidad[i].nif == datosIncapacidad2[j].nif &&
+                      datosIncapacidad[i].nif &&
+                      datosIncapacidad2[j]
+                        .fechaSiguienteRevisionMedicaParteDeBaja
+                    ) {
+                      console.log("Encontrado", datosIncapacidad2[j]);
+                      datosIncapacidad[i].fechaProximaRevisionParteBaja =
+                        datosIncapacidad2[
+                          j
+                        ].fechaSiguienteRevisionMedicaParteDeBaja;
+                    }
                   }
                 }
 
@@ -368,7 +380,7 @@ class ProcesosFie {
                     //Identificar ultima fila:
                     var filaVacia = 0;
                     var flagVacia = true;
-                    for (var i = 3; i < filas; i++) {
+                    for (var i = filaCabecera; i < filas; i++) {
                       flagVacia = true;
                       if (!nuevaHoja.cell(i, 1).value()) {
                         for (var j = 1; j < columnas; j++) {
@@ -560,10 +572,11 @@ class ProcesosFie {
                     }
 
                     //Columna anotacion:
-                    columnasClave.columnaAnotacion = columnaMaxima + 1;
+                    columnasClave.columnaAnotacion = columnaMaxima + 2;
+                    columnasClave.columnaMesProcesamiento = columnaMaxima + 1;
 
                     //Insertar datos:
-                    var fechaSerializada;
+                    var fechaBajaSerializada;
                     var diasHastaFinDeMes;
                     var comentario = "";
                     for (var i = 0; i < enfermedades.length; i++) {
@@ -590,11 +603,12 @@ class ProcesosFie {
 
                       nuevaHoja
                         .cell(filaVacia + i, 6)
-                        .value(enfermedades[i].fechaBajaIt);
-
+                        .value(enfermedades[i].fechaBajaIt)
+                        .style("numberFormat", "dd/mm/yyyy");
                       nuevaHoja
                         .cell(filaVacia + i, 8)
-                        .value(enfermedades[i].fechaFinIt);
+                        .value(enfermedades[i].fechaFinIt)
+                        .style("numberFormat", "dd/mm/yyyy");
                       if (
                         Array.isArray(enfermedades[i].partesConfirmacion) &&
                         enfermedades[i].partesConfirmacion?.length > 0
@@ -604,7 +618,8 @@ class ProcesosFie {
                           .value(
                             enfermedades[i].partesConfirmacion[0]
                               .fechaSiguienteRevisionMedica,
-                          );
+                          )
+                          .style("numberFormat", "dd/mm/yyyy");
                       }
 
                       //COMENTARIO:
@@ -616,12 +631,85 @@ class ProcesosFie {
                         .value(comentario);
 
                       //Calculo dias hasta fin de mes:
-                      //
-                      fechaSerializada = excelSerialToUTCDate(
+                      fechaBajaSerializada = excelSerialToUTCDate(
                         enfermedades[i].fechaBajaIt,
                       );
-                      diasHastaFinDeMes =
-                        diasRestantesFinDeMesInclusive(fechaSerializada);
+
+                      //Obtine el mes en el que se evalua:
+                      var fechaRecepcionSerializada = excelSerialToUTCDate(
+                        enfermedades[i].fechaRecepcion,
+                      );
+
+                      var mesActualIndex = fechaRecepcionSerializada.getMonth();
+                      var mesBajaIndex = fechaBajaSerializada.getMonth();
+                      var nombreMesActual =
+                        obtenerNombreMesByIndex(mesActualIndex);
+
+                      //Marcando mes de procesamiento:
+                      nuevaHoja
+                        .cell(
+                          filaVacia + i,
+                          columnasClave.columnaMesProcesamiento,
+                        )
+                        .value("Mes base: " + nombreMesActual);
+
+                      //Detecta si esta evaluandose en el mismo mes:
+                      var diasDeMesAnterior = 0;
+                      var primeroDeMes = obtenerPrimeroDeMes(
+                        fechaRecepcionSerializada,
+                      );
+                      var fechaFinal = obtenerUltimoDeMes(
+                        fechaRecepcionSerializada,
+                      );
+
+                      if (enfermedades[i].fechaFinIt) {
+                        fechaFinal = excelSerialToUTCDate(
+                          enfermedades[i].fechaFinIt,
+                        );
+                      }
+
+                      function startOfDayUTC(d) {
+                        return Date.UTC(
+                          d.getUTCFullYear(),
+                          d.getUTCMonth(),
+                          d.getUTCDate(),
+                        );
+                      }
+
+                      function diasEntreFechasUTC(a, b) {
+                        const au = startOfDayUTC(a);
+                        const bu = startOfDayUTC(b);
+                        return Math.round((bu - au) / DAY_MS); // o Math.floor si prefieres
+                      }
+
+                      if (mesActualIndex !== mesBajaIndex) {
+                        diasDeMesAnterior = diasEntreFechasUTC(
+                          fechaBajaSerializada,
+                          primeroDeMes,
+                        );
+                      }
+
+                      //Calculo de dias entre fecha inicio y fin:
+                      if (diasDeMesAnterior == 0) {
+                        diasHastaFinDeMes =
+                          diasEntreFechasUTC(fechaBajaSerializada, fechaFinal) +
+                          1;
+                      } else {
+                        diasHastaFinDeMes =
+                          diasEntreFechasUTC(primeroDeMes, fechaFinal) + 1;
+                      }
+
+                      console.log("CALCULO FECHAS:");
+                      console.log("fecha baja:", fechaBajaSerializada);
+                      console.log("fecha primero de mes:", primeroDeMes);
+                      console.log("Mes actual:", nombreMesActual);
+                      console.log("Dias mes anterior: ", diasDeMesAnterior);
+                      console.log(
+                        "Dias restantes fin de mes:",
+                        diasHastaFinDeMes,
+                      );
+
+                      console.log("mes actual:", nombreMesActual);
 
                       //Todos los dias a =:
                       nuevaHoja.cell(filaVacia + i, 12).value(0);
@@ -630,43 +718,42 @@ class ProcesosFie {
 
                       nuevaHoja.cell(filaVacia + i, 15).value(0);
 
-                      //PRIMER VALOR:
-                      if (diasHastaFinDeMes > 3) {
-                        nuevaHoja.cell(filaVacia + i, 12).value(3);
-                      } else {
-                        nuevaHoja
-                          .cell(filaVacia + i, 12)
-                          .value(diasHastaFinDeMes);
-                      }
+                      var valorEscritura = 0;
+                      var restante = diasHastaFinDeMes;
+                      var valoresUmbral = [3, 12, 5]; //Umbrales de dias
 
-                      //SEGUNDO VALOR:
-                      if (diasHastaFinDeMes > 15) {
-                        nuevaHoja.cell(filaVacia + i, 13).value(12);
-                      } else {
-                        if (diasHastaFinDeMes > 3) {
-                          nuevaHoja
-                            .cell(filaVacia + i, 13)
-                            .value(diasHastaFinDeMes - 3);
+                      for (var k = 0; k < valoresUmbral.length; k++) {
+                        if (restante <= 0) {
+                          continue;
                         }
-                      }
-
-                      //Tercer VALOR:
-                      if (diasHastaFinDeMes > 20) {
-                        nuevaHoja.cell(filaVacia + i, 14).value(5);
-                      } else {
-                        if (diasHastaFinDeMes > 15) {
-                          nuevaHoja
-                            .cell(filaVacia + i, 14)
-                            .value(diasHastaFinDeMes - 15);
+                        if (restante >= valoresUmbral[k]) {
+                          if (diasDeMesAnterior >= valoresUmbral[k]) {
+                            valorEscritura = 0;
+                            diasDeMesAnterior =
+                              diasDeMesAnterior - valoresUmbral[k];
+                          } else {
+                            valorEscritura =
+                              valoresUmbral[k] - diasDeMesAnterior;
+                            diasDeMesAnterior = 0;
+                          }
+                        } else {
+                          if (diasDeMesAnterior >= restante) {
+                            valorEscritura = 0;
+                            diasDeMesAnterior = diasDeMesAnterior - restante;
+                          } else {
+                            valorEscritura = restante - diasDeMesAnterior;
+                            diasDeMesAnterior = 0;
+                          }
                         }
+
+                        nuevaHoja
+                          .cell(filaVacia + i, 12 + k)
+                          .value(valorEscritura);
+                        restante = restante - valorEscritura;
                       }
 
-                      //Tercer VALOR:
-                      if (diasHastaFinDeMes > 20) {
-                        nuevaHoja
-                          .cell(filaVacia + i, 15)
-                          .value(diasHastaFinDeMes - 20);
-                      }
+                      //VALOR RESTANTE:
+                      nuevaHoja.cell(filaVacia + i, 15).value(restante);
                     }
 
                     //ESCRITURA XLSX:
@@ -721,10 +808,11 @@ class ProcesosFie {
                       const { cabeceras, columnaCabecera, filaCabecera } =
                         deteccionCabeceras(archivoAccidentes, ultimaHoja);
 
+                      console.log("Fila Cabedera Accidentes:", filaCabecera);
                       //Identificar ultima fila:
                       var filaVacia = 0;
                       var flagVacia = true;
-                      for (var i = 4; i < filas; i++) {
+                      for (var i = filaCabecera; i < filas; i++) {
                         flagVacia = true;
                         if (
                           !archivoAccidentes
@@ -788,6 +876,7 @@ class ProcesosFie {
 
                       console.log("ACCIDENTES [0]:");
                       console.log(accidentes[0]);
+                      console.log("Cabeceras Accidentes:", cabeceras);
 
                       //Sobrescribir fila Vacia por ser hoja nueva:
                       filaVacia = 2;
@@ -800,9 +889,7 @@ class ProcesosFie {
                         columnaFechaBaja: 0,
                         columnaProximaRev: 0,
                         columnaFechaAlta: 0,
-                        columnaDias3: 0,
-                        columnaDias5: 0,
-                        columnaDias12: 0,
+                        columnaDias: 0,
                         columnaDiasResto: 0,
                         columnaDiasTotal: 0,
                         columnaAnotacion: 0,
@@ -858,7 +945,7 @@ class ProcesosFie {
                               columnaMaxima = columnaCabecera + i;
                             }
                             break;
-                          case "próxima revision":
+                          case "próxima revisión":
                             columnasClave.columnaProximaRev =
                               i + columnaCabecera;
                             nuevaHoja
@@ -868,6 +955,7 @@ class ProcesosFie {
                               columnaMaxima = columnaCabecera + i;
                             }
                             break;
+
                           case "f. alta":
                             columnasClave.columnaFechaAlta =
                               i + columnaCabecera;
@@ -878,8 +966,23 @@ class ProcesosFie {
                               columnaMaxima = columnaCabecera + i;
                             }
                             break;
+
+                          case "dias 75%":
+                            columnasClave.columnaDias = i + columnaCabecera;
+                            nuevaHoja
+                              .cell(filaVacia - 1, columnaCabecera + i)
+                              .value(cabeceras[i]);
+                            if (columnaMaxima < columnaCabecera + i) {
+                              columnaMaxima = columnaCabecera + i;
+                            }
+                            break;
                         }
                       }
+
+                      //Cabecera custom para indicador de carencia:
+                      nuevaHoja
+                        .cell(filaVacia - 1, 5)
+                        .value("INDICADOR CARENCIA");
 
                       //Columna anotacion:
                       columnasClave.columnaAnotacion = columnaMaxima + 1;
@@ -893,33 +996,41 @@ class ProcesosFie {
                           );
                         }
                         nuevaHoja
-                          .cell(filaVacia + i, 1)
+                          .cell(filaVacia + i, columnasClave.columnaExpediente)
                           .value(accidentes[i].expedienteEmpresa);
                         nuevaHoja
-                          .cell(filaVacia + i, 2)
+                          .cell(filaVacia + i, columnasClave.columnaNombre)
                           .value(accidentes[i].nombre);
 
                         nuevaHoja
-                          .cell(filaVacia + i, 3)
+                          .cell(filaVacia + i, columnasClave.columnaNaf)
                           .value(accidentes[i].naf);
+
+                        nuevaHoja
+                          .cell(filaVacia + i, columnasClave.columnaDni)
+                          .value(accidentes[i].dni);
 
                         if (accidentes[i].indicadorCarencia[0] == "S") {
                           nuevaHoja.cell(filaVacia + i, 5).value("SI");
                         }
 
                         nuevaHoja
-                          .cell(filaVacia + i, 6)
-                          .value(accidentes[i].fechaBajaIt);
-
+                          .cell(filaVacia + i, columnasClave.columnaFechaBaja)
+                          .value(accidentes[i].fechaBajaIt)
+                          .style("numberFormat", "dd/mm/yyyy");
                         nuevaHoja
-                          .cell(filaVacia + i, 8)
-                          .value(accidentes[i].fechaFinIt);
+                          .cell(filaVacia + i, columnasClave.columnaFechaAlta)
+                          .value(accidentes[i].fechaFinIt)
+                          .style("numberFormat", "dd/mm/yyyy");
                         if (
                           Array.isArray(accidentes[i].partesConfirmacion) &&
                           accidentes[i].partesConfirmacion?.length > 0
                         ) {
                           nuevaHoja
-                            .cell(filaVacia + i, 7)
+                            .cell(
+                              filaVacia + i,
+                              columnasClave.columnaProximaRev,
+                            )
                             .value(
                               accidentes[i].partesConfirmacion[0]
                                 .fechaSiguienteRevisionMedica,
@@ -933,6 +1044,86 @@ class ProcesosFie {
                         nuevaHoja
                           .cell(filaVacia + i, columnasClave.columnaAnotacion)
                           .value(comentario);
+
+                        //Obtine el mes en el que se evalua:
+                        var fechaRecepcionSerializada = excelSerialToUTCDate(
+                          accidentes[i].fechaRecepcion,
+                        );
+                        var fechaBajaSerializada = excelSerialToUTCDate(
+                          accidentes[i].fechaBajaIt,
+                        );
+
+                        var mesActualIndex =
+                          fechaRecepcionSerializada.getMonth();
+                        var mesBajaIndex = fechaBajaSerializada.getMonth();
+                        var nombreMesActual =
+                          obtenerNombreMesByIndex(mesActualIndex);
+
+                        //Marcando mes de procesamiento:
+                        nuevaHoja
+                          .cell(
+                            filaVacia + i,
+                            columnasClave.columnaAnotacion + 1,
+                          )
+                          .value("Mes base: " + nombreMesActual);
+
+                        console.log("Escribiendo mes: ", nombreMesActual);
+                        console.log(filaVacia + i);
+
+                        //Detecta si esta evaluandose en el mismo mes:
+                        var diasDeMesAnterior = 0;
+                        var primeroDeMes = obtenerPrimeroDeMes(
+                          fechaRecepcionSerializada,
+                        );
+                        var fechaFinal = obtenerUltimoDeMes(
+                          fechaRecepcionSerializada,
+                        );
+
+                        if (accidentes[i].fechaFinIt) {
+                          fechaFinal = excelSerialToUTCDate(
+                            accidentes[i].fechaFinIt,
+                          );
+                        }
+
+                        function startOfDayUTC(d) {
+                          return Date.UTC(
+                            d.getUTCFullYear(),
+                            d.getUTCMonth(),
+                            d.getUTCDate(),
+                          );
+                        }
+
+                        function diasEntreFechasUTC(a, b) {
+                          const au = startOfDayUTC(a);
+                          const bu = startOfDayUTC(b);
+                          return Math.round((bu - au) / DAY_MS); // o Math.floor si prefieres
+                        }
+
+                        if (mesActualIndex !== mesBajaIndex) {
+                          diasDeMesAnterior = diasEntreFechasUTC(
+                            fechaBajaSerializada,
+                            primeroDeMes,
+                          );
+                        }
+
+                        //Calculo de dias entre fecha inicio y fin:
+                        var diasHastaFinDeMes = 0;
+                        if (diasDeMesAnterior == 0) {
+                          diasHastaFinDeMes =
+                            diasEntreFechasUTC(
+                              fechaBajaSerializada,
+                              fechaFinal,
+                            ) + 1;
+                        } else {
+                          diasHastaFinDeMes =
+                            diasEntreFechasUTC(primeroDeMes, fechaFinal) + 1;
+                        }
+
+                        nuevaHoja
+                          .cell(filaVacia + i, columnasClave.columnaDias)
+                          .value(diasHastaFinDeMes);
+
+                        console.log("Escribiendo dias: ", diasHastaFinDeMes);
                       }
 
                       //ESCRITURA XLSX:
@@ -1115,6 +1306,7 @@ function camelize(str) {
     })
     .replace(/\s+/g, "");
 }
+
 // 1) Serial de Excel (sistema 1900) -> Date en UTC
 function excelSerialToUTCDate(serial) {
   const dayMs = 24 * 60 * 60 * 1000;
@@ -1132,6 +1324,51 @@ function diasRestantesFinDeMesInclusive(dateUTC) {
   const finMesUTC = new Date(Date.UTC(y, m + 1, 0)); // día 0 del mes siguiente = último del mes actual
   const dayMs = 24 * 60 * 60 * 1000;
   return Math.floor((finMesUTC - hoyUTC) / dayMs) + 1; // +1 para incluir el día de hoy
+}
+
+//Funcion obtener el mes de una fecha:
+function obtenerMesFecha(fecha) {
+  const dateObj = excelSerialToUTCDate(fecha);
+  return dateObj.getUTCMonth() + 1; // Los meses en JavaScript son 0-indexados
+}
+
+function obtenerPrimeroDeMes(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function obtenerUltimoDeMes(d) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+}
+
+function obtenerNombreMesByIndex(mesIndex) {
+  switch (mesIndex) {
+    case 0:
+      return "Enero";
+    case 1:
+      return "Febrero";
+    case 2:
+      return "Marzo";
+    case 3:
+      return "Abril";
+    case 4:
+      return "Mayo";
+    case 5:
+      return "Junio";
+    case 6:
+      return "Julio";
+    case 7:
+      return "Agosto";
+    case 8:
+      return "Septiembre";
+    case 9:
+      return "Octubre";
+    case 10:
+      return "Noviembre";
+    case 11:
+      return "Diciembre";
+    default:
+      return null;
+  }
 }
 
 module.exports = ProcesosFie;

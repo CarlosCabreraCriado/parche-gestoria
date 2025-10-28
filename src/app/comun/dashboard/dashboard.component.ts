@@ -30,6 +30,8 @@ import { MatMenuModule } from "@angular/material/menu";
 import { MatTabsModule } from "@angular/material/tabs";
 import { MatButtonModule } from "@angular/material/button";
 
+import { environment } from "src/environments/environment";
+
 interface ArchivoNode {
   nombre: string;
   tipo: string;
@@ -588,5 +590,12 @@ export class DashboardComponent implements OnInit {
 
   comandoAddCurso(comando: string) {
     this.addCursoComponent.comandoHerramienta(comando);
+  }
+
+  abrirSoporte(): void {
+    const w = window.open(environment.URL_SOPORTE, "_blank");
+    if (w) {
+      w.opener = null;
+    }
   }
 }
