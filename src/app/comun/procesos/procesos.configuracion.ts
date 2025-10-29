@@ -727,7 +727,43 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
       
         salida: [{ tipo: "boolean", valor: false }]
-      }
+      },
+            {
+        nombre: "Imagen Post",
+        categoria: "Prueba",
+        tipo: "proceso",
+        descripcion:
+          "Ejecución url imágenes posts",
+        autor: "Gonzalo",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "json_strapi",
+            formulario: {
+              titulo: "JSON de Strapi",
+              tipo: "archivo",
+              accept: ".json",
+              placeholder:
+                "Introduzca la ruta del archivo de Strapi.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
     ],
   },
 ];

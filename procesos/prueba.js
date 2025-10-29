@@ -714,6 +714,270 @@ async webscrappingYoutube(argumentos) {
 }
 
 
+// =============================
+// PROCESO: Imágenes de Posts
+// Lee un JSON (post_id, post_date, order, file_url) y DESCARGA las imágenes
+// Guardando con el nombre: post_id-YYYYMMDD_HHMMSS-order.ext
+// =============================
+// =============================
+// PROCESO: Imágenes de Posts
+// Lee un JSON (post_id, post_date, order, file_url),
+// DESCARGA las imágenes con nombre: post_id-YYYYMMDD_HHMMSS-order.ext
+// y genera un JSON resumen con la ruta local y el enlace file:///
+// =============================
+async imagenPost(argumentos) {
+  // Cargamos módulos nativos necesarios SÓLO aquí para no afectar a otros procesos.
+  // Motivo: escribir código aislado y fácil de mantener.
+  const path = require("path");                 // unir rutas (evita problemas entre Windows/Mac/Linux)
+  const fs = require("fs");                     // leer archivos, crear carpetas y escribir ficheros
+  const http = require("http");                 // descarga si la URL es http://
+  const https = require("https");               // descarga si la URL es https://
+  const { URL, pathToFileURL } = require("url");// URL para parsear direcciones y pathToFileURL para crear file://
+
+  try {
+    console.log("Inicio del proceso: Imágenes de Posts (validación + descarga + resumen)");
+
+    // 1) Recuperamos las entradas del formulario tal y como las definiste en la librería de procesos.
+    //    argumentos?.formularioControl es un array con los valores del UI. Orden:
+    //    [0] -> json_strapi (ruta del archivo .json de entrada)
+    //    [1] -> rutaSalida  (carpeta donde guardar las imágenes y el resumen)
+    const rutaJsonStrapi = argumentos?.formularioControl?.[0];
+    const carpetaSalida  = argumentos?.formularioControl?.[1];
+
+    // 2) Validamos que el usuario ha introducido textos (evita errores tipo .trim de undefined)
+    //    Motivo: evitar fallos de ejecución por parámetros vacíos.
+    if (typeof rutaJsonStrapi !== "string" || !rutaJsonStrapi.trim()) {
+      console.error("No se ha proporcionado una ruta válida para el JSON de Strapi.");
+      return false;
+    }
+    if (typeof carpetaSalida !== "string" || !carpetaSalida.trim()) {
+      console.error("No se ha proporcionado una carpeta de salida válida.");
+      return false;
+    }
+
+    // 3) Normalizamos rutas a absolutas (así el sistema siempre encuentra bien los recursos)
+    //    Motivo: compatibilidad total entre Windows, macOS y Linux.
+    const rutaInput = path.isAbsolute(rutaJsonStrapi) ? rutaJsonStrapi : path.resolve(rutaJsonStrapi);
+    const salidaDir = path.isAbsolute(carpetaSalida)  ? carpetaSalida  : path.resolve(carpetaSalida);
+
+    // 4) Comprobamos que el JSON existe y preparamos la carpeta de salida (si no existe, la creamos)
+    //    Motivo: garantizar fuente y destino disponibles antes de procesar.
+    if (!fs.existsSync(rutaInput)) {
+      console.error("El archivo JSON indicado no existe:", rutaInput);
+      return false;
+    }
+    if (!fs.existsSync(salidaDir)) {
+      fs.mkdirSync(salidaDir, { recursive: true });
+    }
+
+    // 5) Leemos y parseamos el JSON. Debe ser un ARRAY de objetos con
+    //    { post_id, post_date, order, file_url } por fila.
+    //    Motivo: disponer en memoria de la lista de descargas a realizar.
+    const raw = fs.readFileSync(rutaInput, "utf8");
+    let filas;
+    try {
+      filas = JSON.parse(raw);
+    } catch (e) {
+      console.error("El JSON no tiene un formato válido. Detalle:", e.message);
+      return false;
+    }
+    if (!Array.isArray(filas) || filas.length === 0) {
+      console.error("Se esperaba un ARRAY con al menos un elemento.");
+      return false;
+    }
+
+    // 6) Función auxiliar: convertir la fecha a formato simple "YYYYMMDD_HHMMSS"
+    //    Entradas como "2025-10-29 10:15:45.841000" -> "20251029_101545"
+    //    Motivo: generar nombres de archivo homogéneos y ordenables por fecha.
+    const fechaSimple = (isoLike) => {
+      if (!isoLike) return "fecha";
+      const base = String(isoLike).slice(0, 19).replace("T", " "); // limpiamos posibles 'T' y milisegundos
+      const [f, h] = base.split(" ");
+      if (!f) return "fecha";
+      const y = f.slice(0, 4);
+      const m = f.slice(5, 7);
+      const d = f.slice(8, 10);
+      const hh = (h || "00:00:00").slice(0, 2);
+      const mm = (h || "00:00:00").slice(3, 5);
+      const ss = (h || "00:00:00").slice(6, 8);
+      return `${y}${m}${d}_${hh}${mm}${ss}`;
+    };
+
+    // 7) Función auxiliar: deducir la extensión a partir de la URL.
+    //    Si no hay extensión en la URL, usaremos ".bin" como acordamos.
+    //    Motivo: guardar con la extensión correcta siempre que sea posible.
+    const deducirExtension = (fileUrl) => {
+      let extension = ".bin";
+      try {
+        const u = new URL(String(fileUrl));
+        const base = u.pathname.split("/").pop() || "";
+        const punto = base.lastIndexOf(".");
+        if (punto !== -1) extension = base.slice(punto).toLowerCase();
+      } catch {
+        // Si la URL está mal formada, nos quedamos con ".bin"
+      }
+      return extension || ".bin";
+    };
+
+    // 8) Función auxiliar: descarga una URL en disco, con soporte básico de redirecciones.
+    //    Motivo: Cloudinary/CDNs suelen responder con redirecciones temporales/firmadas.
+    const descargar = (urlStr, destino, maxRedirects = 5) => {
+      return new Promise((resolve, reject) => {
+        let redirRestantes = maxRedirects;
+
+        const hacerPeticion = (currentUrl) => {
+          const client = currentUrl.startsWith("https") ? https : http;
+
+          const req = client.get(currentUrl, { headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume();
+              if (redirRestantes <= 0) return reject(new Error("Demasiadas redirecciones."));
+              redirRestantes--;
+              const nuevaUrl = new URL(res.headers.location, currentUrl).toString();
+              return hacerPeticion(nuevaUrl);
+            }
+
+            if (res.statusCode !== 200) {
+              res.resume();
+              return reject(new Error(`Respuesta HTTP inesperada: ${res.statusCode}`));
+            }
+
+            const fileStream = fs.createWriteStream(destino);
+            fileStream.on("finish", () => fileStream.close(() => resolve(true)));
+            fileStream.on("error", (err) => {
+              req.destroy();
+              reject(err);
+            });
+
+            res.pipe(fileStream);
+          });
+
+          req.on("error", (err) => reject(err));
+        };
+
+        hacerPeticion(urlStr);
+      });
+    };
+
+    // 9) PREPARAMOS todas las tareas (una por imagen) con su nombre final y su ruta destino.
+    //    Motivo: disponer de una lista cerrada para iterar y descargar secuencialmente.
+    const trabajos = [];
+    for (const fila of filas) {
+      const postId   = fila?.post_id;
+      const postDate = fila?.post_date;
+      const order    = fila?.order;
+      const fileUrl  = fila?.file_url;
+
+      if (!postId || !postDate || !order || !fileUrl) {
+        console.warn("Fila incompleta. Se omite:", fila);
+        continue;
+      }
+
+      const nombreFecha   = fechaSimple(postDate);
+      const extension     = deducirExtension(fileUrl);
+      const nombreArchivo = `${postId}-${nombreFecha}-${order}${extension}`;
+      const rutaDestino   = path.join(salidaDir, nombreArchivo);
+
+      trabajos.push({ post_id: postId, post_date: postDate, order, file_url: fileUrl, destino: rutaDestino });
+    }
+
+    // 10) Si no hay tareas válidas, salimos sin error crítico para que el usuario lo vea claro.
+    console.log(`Tareas preparadas: ${trabajos.length}`);
+    if (trabajos.length === 0) {
+      console.warn("No hay tareas válidas para descargar. Revisa el JSON.");
+      return false;
+    }
+    console.log("Ejemplo de primera tarea:", trabajos[0]);
+
+    // *** NUEVO ***: estructura para acumular resultados y luego escribir el JSON resumen.
+    // Motivo: replicar el input y añadir local_path + local_uri + flags de estado.
+    const resultados = [];
+
+    // 11) Ejecutamos las descargas de forma SENCILLA y SECUENCIAL (más estable y fácil de depurar).
+    //     Motivo: mantenerlo simple. Si se requiere velocidad, luego añadimos concurrencia.
+    let ok = 0, ko = 0;
+    for (let i = 0; i < trabajos.length; i++) {
+      const t = trabajos[i];
+      const idx = i + 1;
+
+      try {
+        if (fs.existsSync(t.destino)) {
+          console.log(`[${idx}/${trabajos.length}] Ya existe, se omite: ${path.basename(t.destino)}`);
+
+          // Registramos en resultados el caso "skip"
+          resultados.push({
+            post_id: t.post_id,
+            post_date: t.post_date,
+            order: t.order,
+            file_url: t.file_url,
+            local_path: t.destino,
+            local_uri: pathToFileURL(t.destino).href,
+            ok: true,
+            skipped: true,
+            error: null
+          });
+
+          ok++;
+          continue;
+        }
+
+        console.log(`[${idx}/${trabajos.length}] Descargando: ${t.file_url}`);
+        await descargar(t.file_url, t.destino);
+        console.log(`    ✔ Guardado como: ${t.destino}`);
+
+        // Registramos en resultados la descarga correcta
+        resultados.push({
+          post_id: t.post_id,
+          post_date: t.post_date,
+          order: t.order,
+          file_url: t.file_url,
+          local_path: t.destino,
+          local_uri: pathToFileURL(t.destino).href,
+          ok: true,
+          skipped: false,
+          error: null
+        });
+
+        ok++;
+      } catch (e) {
+        console.warn(`    ✖ Error descargando (se omite): ${e.message}`);
+
+        // Registramos en resultados el error de descarga (dejamos constancia de la ruta prevista)
+        resultados.push({
+          post_id: t.post_id,
+          post_date: t.post_date,
+          order: t.order,
+          file_url: t.file_url,
+          local_path: t.destino,
+          local_uri: pathToFileURL(t.destino).href,
+          ok: false,
+          skipped: false,
+          error: e.message || "Error desconocido"
+        });
+
+        ko++;
+      }
+    }
+
+    // 12) Escribimos el JSON resumen en la MISMA carpeta de salida, con sufijo *_con_ruta.json.
+    //     Motivo: no sobrescribir el input y disponer de un resultado listo para consultas rápidas.
+    const baseNameInput = path.basename(rutaInput, path.extname(rutaInput));
+    const rutaResumen   = path.join(salidaDir, `${baseNameInput}_con_ruta.json`);
+    fs.writeFileSync(rutaResumen, JSON.stringify(resultados, null, 2), "utf8");
+    console.log("Resumen con rutas locales guardado en:", rutaResumen);
+
+    // 13) Resumen final por consola y retorno
+    console.log(`Finalizado. Correctas: ${ok}, Fallidas: ${ko}, Total: ${trabajos.length}`);
+    return ok > 0; // devolvemos true si al menos una descarga fue correcta
+
+  } catch (error) {
+    console.error("Incidencia en Imágenes de Posts:", error);
+    return false;
+  }
+}
+
+
+
 
 
 
