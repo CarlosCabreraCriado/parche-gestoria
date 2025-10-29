@@ -714,6 +714,235 @@ async webscrappingYoutube(argumentos) {
 }
 
 
+// =============================
+// PROCESO: Imágenes de Posts
+// Lee un JSON (post_id, post_date, order, file_url) y DESCARGA las imágenes
+// Guardando con el nombre: post_id-YYYYMMDD_HHMMSS-order.ext
+// =============================
+async imagenPost(argumentos) {
+  // Cargamos módulos nativos necesarios SÓLO aquí para no afectar a otros procesos.
+  const path = require("path");      // unir rutas (evita problemas entre Windows/Mac/Linux)
+  const fs = require("fs");          // leer archivos, crear carpetas y escribir ficheros
+  const http = require("http");      // descarga si la URL es http://
+  const https = require("https");    // descarga si la URL es https://
+  const { URL } = require("url");    // parsear URLs de forma segura
+
+  try {
+    console.log("Inicio del proceso: Imágenes de Posts (validación + descarga)");
+
+    // 1) Recuperamos las entradas del formulario tal y como las definiste en el proceso.
+    //    - argumentos?.formularioControl es un array con los valores del UI
+    const rutaJsonStrapi = argumentos?.formularioControl?.[0]; // archivo JSON de Strapi
+    const carpetaSalida  = argumentos?.formularioControl?.[1]; // directorio donde guardar las imágenes
+
+    // 2) Validamos que el usuario ha introducido textos (evita errores tipo .trim de undefined)
+    if (typeof rutaJsonStrapi !== "string" || !rutaJsonStrapi.trim()) {
+      console.error("No se ha proporcionado una ruta válida para el JSON de Strapi.");
+      return false;
+    }
+    if (typeof carpetaSalida !== "string" || !carpetaSalida.trim()) {
+      console.error("No se ha proporcionado una carpeta de salida válida.");
+      return false;
+    }
+
+    // 3) Normalizamos rutas a absolutas (así el sistema siempre encuentra bien los recursos)
+    const rutaInput = path.isAbsolute(rutaJsonStrapi) ? rutaJsonStrapi : path.resolve(rutaJsonStrapi);
+    const salidaDir = path.isAbsolute(carpetaSalida)  ? carpetaSalida  : path.resolve(carpetaSalida);
+
+    // 4) Comprobamos que el JSON existe y preparamos la carpeta de salida
+    if (!fs.existsSync(rutaInput)) {
+      console.error("El archivo JSON indicado no existe:", rutaInput);
+      return false;
+    }
+    if (!fs.existsSync(salidaDir)) {
+      // Creamos la carpeta de salida (y subcarpetas) si no existe
+      fs.mkdirSync(salidaDir, { recursive: true });
+    }
+
+    // 5) Leemos y parseamos el JSON. Debe ser un ARRAY de objetos con
+    //    { post_id, post_date, order, file_url } por fila.
+    const raw = fs.readFileSync(rutaInput, "utf8");
+    let filas;
+    try {
+      filas = JSON.parse(raw);
+    } catch (e) {
+      console.error("El JSON no tiene un formato válido. Detalle:", e.message);
+      return false;
+    }
+    if (!Array.isArray(filas) || filas.length === 0) {
+      console.error("Se esperaba un ARRAY con al menos un elemento.");
+      return false;
+    }
+
+    // 6) Función auxiliar: convertir la fecha a formato simple "YYYYMMDD_HHMMSS"
+    //    Entradas como "2025-10-29 10:15:45.841000" -> "20251029_101545"
+    const fechaSimple = (isoLike) => {
+      if (!isoLike) return "fecha";
+      // Nos quedamos con 19 primeros caracteres "YYYY-MM-DD HH:mm:ss" y unificamos posibles 'T'
+      const base = String(isoLike).slice(0, 19).replace("T", " ");
+      const [f, h] = base.split(" ");
+      if (!f) return "fecha";
+      const y = f.slice(0, 4);
+      const m = f.slice(5, 7);
+      const d = f.slice(8, 10);
+      const hh = (h || "00:00:00").slice(0, 2);
+      const mm = (h || "00:00:00").slice(3, 5);
+      const ss = (h || "00:00:00").slice(6, 8);
+      return `${y}${m}${d}_${hh}${mm}${ss}`;
+    };
+
+    // 7) Función auxiliar: deducir la extensión a partir de la URL.
+    //    Si no hay extensión en la URL, usaremos ".bin" como acordamos.
+    const deducirExtension = (fileUrl) => {
+      let extension = ".bin"; // valor por defecto si no se puede deducir
+      try {
+        const u = new URL(String(fileUrl));
+        const base = u.pathname.split("/").pop() || "";
+        const punto = base.lastIndexOf(".");
+        if (punto !== -1) extension = base.slice(punto).toLowerCase();
+      } catch {
+        // Si la URL está mal formada, nos quedamos con ".bin"
+      }
+      return extension || ".bin";
+    };
+
+    // 8) Función auxiliar: descarga una URL en disco, con soporte básico de redirecciones.
+    //    - urlStr: URL a descargar
+    //    - destino: ruta de archivo donde guardar
+    //    - maxRedirects: para evitar bucles si el servidor redirige muchas veces
+    const descargar = (urlStr, destino, maxRedirects = 5) => {
+      // Devolvemos una Promesa para poder "await"
+      return new Promise((resolve, reject) => {
+        let redirRestantes = maxRedirects;
+
+        // Función interna que hace la petición (se llama a sí misma si hay redirección)
+        const hacerPeticion = (currentUrl) => {
+          // Elegimos el módulo adecuado según el protocolo (http/https)
+          const client = currentUrl.startsWith("https") ? https : http;
+
+          // Preparamos la petición con un User-Agent "realista" (algunos CDNs son exigentes)
+          const req = client.get(currentUrl, { headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+            // Si el servidor responde con una redirección (3xx) y trae "location", seguimos allí
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume(); // liberamos el stream actual para no quedar colgados
+              if (redirRestantes <= 0) {
+                return reject(new Error("Demasiadas redirecciones."));
+              }
+              redirRestantes--;
+              const nuevaUrl = new URL(res.headers.location, currentUrl).toString();
+              return hacerPeticion(nuevaUrl);
+            }
+
+            // Comprobamos código de estado: 200 es OK. Otros (404, 500, etc) los tratamos como error.
+            if (res.statusCode !== 200) {
+              res.resume();
+              return reject(new Error(`Respuesta HTTP inesperada: ${res.statusCode}`));
+            }
+
+            // Creamos un stream de escritura hacia el archivo de destino
+            const fileStream = fs.createWriteStream(destino);
+
+            // Cuando el stream de respuesta 'res' termine de copiar al disco, resolvemos OK
+            fileStream.on("finish", () => fileStream.close(() => resolve(true)));
+
+            // Si ocurre un error escribiendo en disco, abortamos la petición y rechazamos
+            fileStream.on("error", (err) => {
+              req.destroy();
+              reject(err);
+            });
+
+            // Conectamos (pipe) los bytes de la respuesta HTTP al archivo en disco
+            res.pipe(fileStream);
+          });
+
+          // Si hay error de red (DNS, socket, etc.) rechazamos
+          req.on("error", (err) => reject(err));
+        };
+
+        // Lanzamos la primera petición
+        hacerPeticion(urlStr);
+      });
+    };
+
+    // 9) PREPARAMOS todas las tareas (una por imagen) con su nombre final
+    const trabajos = [];
+    for (const fila of filas) {
+      const postId   = fila?.post_id;
+      const postDate = fila?.post_date;
+      const order    = fila?.order;
+      const fileUrl  = fila?.file_url;
+
+      // Si falta algún dato clave, avisamos y saltamos la fila
+      if (!postId || !postDate || !order || !fileUrl) {
+        console.warn("Fila incompleta. Se omite:", fila);
+        continue;
+      }
+
+      // Construimos el nombre final del archivo tal y como acordamos
+      const nombreFecha   = fechaSimple(postDate);
+      const extension     = deducirExtension(fileUrl);
+      const nombreArchivo = `${postId}-${nombreFecha}-${order}${extension}`;
+
+      // Ruta final de guardado en la carpeta indicada
+      const rutaDestino = path.join(salidaDir, nombreArchivo);
+
+      // Añadimos la tarea a la lista
+      trabajos.push({
+        post_id: postId,
+        post_date: postDate,
+        order,
+        file_url: fileUrl,
+        destino: rutaDestino,
+      });
+    }
+
+    // 10) Si no hay tareas válidas, salimos sin error crítico para que el usuario lo vea claro
+    console.log(`Tareas preparadas: ${trabajos.length}`);
+    if (trabajos.length === 0) {
+      console.warn("No hay tareas válidas para descargar. Revisa el JSON.");
+      return false;
+    }
+    console.log("Ejemplo de primera tarea:", trabajos[0]);
+
+    // 11) Ejecutamos las descargas de forma SENCILLA y SECUENCIAL.
+    //     Motivo: mantenerlo simple y evitar bloqueos de red/servidor al lanzar todo a la vez.
+    //     (Si más adelante necesitas rapidez, meteríamos cola con concurrencia limitada.)
+    let ok = 0, ko = 0;
+    for (let i = 0; i < trabajos.length; i++) {
+      const t = trabajos[i];
+      const idx = i + 1;
+      try {
+        // Si el archivo ya existe, lo saltamos (así el proceso es re-ejecutable)
+        if (fs.existsSync(t.destino)) {
+          console.log(`[${idx}/${trabajos.length}] Ya existe, se omite: ${path.basename(t.destino)}`);
+          ok++;
+          continue;
+        }
+
+        console.log(`[${idx}/${trabajos.length}] Descargando: ${t.file_url}`);
+        await descargar(t.file_url, t.destino);
+        console.log(`    ✔ Guardado como: ${t.destino}`);
+        ok++;
+      } catch (e) {
+        console.warn(`    ✖ Error descargando (se omite): ${e.message}`);
+        ko++;
+      }
+    }
+
+    // 12) Resumen final por consola para que el usuario vea el resultado del proceso
+    console.log(`Finalizado. Correctas: ${ok}, Fallidas: ${ko}, Total: ${trabajos.length}`);
+
+    // Si al menos una descarga fue bien, devolvemos true (proceso útil)
+    return ok > 0;
+
+  } catch (error) {
+    console.error("Incidencia en Imágenes de Posts:", error);
+    return false;
+  }
+}
+
+
+
 
 
 
