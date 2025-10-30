@@ -887,7 +887,7 @@ async imagenPost(argumentos) {
       const idComp   = construirId(postId, postDate, order); // id = post_id-YYYYMMDD_HHMMSS-order
       const uuid     = randomUUID();                         // uuid aleatorio estándar RFC 4122
       const ext      = deducirExtension(fileUrl);            // extensión (p.ej. ".jpg")
-      const archivo  = `${uuid}${ext}`;                      // nombre final del archivo = UUID.ext
+      const archivo  = `AWS_${uuid}${ext}`;  // nombre final del archivo = AWS_UUID.ext
       const destino  = path.join(salidaDir, archivo);        // ruta absoluta donde se guardará
 
       trabajos.push({
