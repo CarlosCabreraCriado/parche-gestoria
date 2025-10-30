@@ -887,7 +887,7 @@ async imagenPost(argumentos) {
       const idComp   = construirId(postId, postDate, order); // id = post_id-YYYYMMDD_HHMMSS-order
       const uuid     = randomUUID();                         // uuid aleatorio estándar RFC 4122
       const ext      = deducirExtension(fileUrl);            // extensión (p.ej. ".jpg")
-      const archivo  = `AWS_${uuid}${ext}`;  // nombre final del archivo = AWS_UUID.ext
+      const archivo  = `${uuid}${ext}`;                  // nombre final del archivo = UUID.ext
       const destino  = path.join(salidaDir, archivo);        // ruta absoluta donde se guardará
 
       trabajos.push({
@@ -931,9 +931,9 @@ async imagenPost(argumentos) {
             post_date: t.post_date,
             order: t.order,
             file_url: t.file_url,
-            // Nuevos
             id: t.id,
             uuid: t.uuid,
+            aws_filename: "AWS_" + t.uuid + path.extname(t.destino),
             // Rutas locales
             local_path: t.destino,
             local_uri: pathToFileURL(t.destino).href,
@@ -955,8 +955,9 @@ async imagenPost(argumentos) {
           post_date: t.post_date,
           order: t.order,
           file_url: t.file_url,
-          id: t.id,              // ← id compuesto solicitado
-          uuid: t.uuid,          // ← uuid aleatorio solicitado
+          id: t.id,
+          uuid: t.uuid,
+          aws_filename: "AWS_" + t.uuid + path.extname(t.destino),
           local_path: t.destino, // ruta absoluta en disco
           local_uri: pathToFileURL(t.destino).href, // enlace file:///
           ok: true,
@@ -975,6 +976,7 @@ async imagenPost(argumentos) {
           file_url: t.file_url,
           id: t.id,
           uuid: t.uuid,
+          aws_filename: "AWS_" + t.uuid + path.extname(t.destino),
           local_path: t.destino,
           local_uri: pathToFileURL(t.destino).href,
           ok: false,
