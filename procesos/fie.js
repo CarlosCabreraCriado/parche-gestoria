@@ -1181,6 +1181,142 @@ class ProcesosFie {
       });
     });
   }
+
+  async fIE_2(argumentos) {
+    console.log("[FIE_2] Iniciando paso 1: lectura de Excel → array");
+
+    return new Promise(async (resolve) => {
+      try {
+        // 1) Entradas (nuevo orden)
+        const chromeExePath   = argumentos?.formularioControl?.[0];
+        const pathArchivoFIE_2 = argumentos?.formularioControl?.[1];
+        const pathSalidaBase   = argumentos?.formularioControl?.[2];
+
+        if (!chromeExePath || !fs.existsSync(chromeExePath)) {
+          console.error("[FIE_2] Ruta a chrome.exe no válida.");
+          return resolve(false);
+        }
+        if (!pathArchivoFIE_2 || typeof pathArchivoFIE_2 !== "string") {
+          console.error("[FIE_2] argumentos.formularioControl[1] (Excel) no es una ruta válida.");
+          return resolve(false);
+        }
+
+        // 2) Carpeta de salida (igual que antes)
+        let pathSalidaPDFConfirmacion = null;
+        if (pathSalidaBase && typeof pathSalidaBase === "string") {
+          pathSalidaPDFConfirmacion = path.join(
+            path.normalize(pathSalidaBase),
+            `FIE_2-Procesado (${this.getCurrentDateString()})`,
+            "PDFs-Generados"
+          );
+          if (!fs.existsSync(pathSalidaPDFConfirmacion)) {
+            fs.mkdirSync(pathSalidaPDFConfirmacion, { recursive: true });
+            console.log(`[FIE_2] Carpeta creada: ${pathSalidaPDFConfirmacion}`);
+          } else {
+            console.log(`[FIE_2] Carpeta ya existente: ${pathSalidaPDFConfirmacion}`);
+          }
+        } else {
+          console.log("[FIE_2] No se proporcionó carpeta de salida (arg[2]).");
+        }
+
+        // 3) Lectura Excel
+        const rutaNormalizada = path.normalize(pathArchivoFIE_2);
+        console.log(`[FIE_2] Cargando Excel: ${rutaNormalizada}`);
+        const workbook = await XlsxPopulate.fromFileAsync(rutaNormalizada);
+        console.log("[FIE_2] Archivo cargado correctamente.");
+        const datos = extraccionExcel(workbook, 0);
+        if (!Array.isArray(datos)) {
+          console.error("[FIE_2] extraccionExcel no devolvió un array (null/undefined).");
+          return resolve(false);
+        }
+        console.log(`[FIE_2] Filas leídas: ${datos.length}`);
+        if (datos.length > 0) console.log("[FIE_2] Muestra primer registro:", datos[0]);
+
+        // 4) Abrir navegador real (tu Chrome) y dejar seleccionar el certificado
+        try {
+          const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
+          const browser = await puppeteer.launch({
+            headless: false,           // Necesario para ver el diálogo del certificado
+            defaultViewport: null,
+            executablePath: chromeExePath, // Usamos tu Chrome (no Chromium)
+            args: [
+              "--start-maximized",
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              // En sitios legacy a veces ayuda:
+              "--disable-features=IsolateOrigins,site-per-process",
+            ],
+          });
+
+          const [page] = (await browser.pages()).length
+            ? await browser.pages()
+            : [await browser.newPage()];
+
+          await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+          // === tras await page.goto(urlFS, { waitUntil: "domcontentloaded" }); ===
+
+          // Intenta localizar el enlace dentro de cualquiera de los frames y hacer un único click.
+          try {
+            // 1) Primer intento: por href + clase (selector estable del portal)
+            let clicked = false;
+            for (const fr of page.frames()) {
+              const link = await fr.$('a.a2[href*="IWXP0002"]');
+              if (link) {
+                await link.click({ delay: 50 });
+                clicked = true;
+                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (por href).");
+                break;
+              }
+            }
+          
+            // 2) Fallback por texto visible (por si cambian la clase/atributos)
+            if (!clicked) {
+              for (const fr of page.frames()) {
+                const ok = await fr.evaluate(() => {
+                  const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+                  const target = "incapacidad temporal online";
+                  const a = Array.from(document.querySelectorAll("a"))
+                    .find(x => norm(x.textContent).includes(target));
+                  if (a) { a.click(); return true; }
+                  return false;
+                });
+                if (ok) {
+                  console.log("[FIE_2] Click en 'Incapacidad temporal Online' (por texto).");
+                  break;
+                }
+              }
+            }
+            await page.waitForTimeout(1000);
+          } catch (e) {
+            console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
+          }
+
+          await page.bringToFront();
+
+          console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado en el diálogo de Chrome/Windows.");
+          // No cerramos el navegador. El usuario selecciona y continúa manualmente.
+        } catch (navErr) {
+          console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
+          // Seguimos devolviendo los datos igualmente
+        }
+
+        // 5) Devolver el array como antes
+        return resolve(datos);
+
+      } catch (err) {
+        console.error("[FIE_2] Error leyendo el Excel:", err);
+        try {
+          if (globalThis?.mainProcess?.mostrarError) {
+            await globalThis.mainProcess.mostrarError(
+              "No se ha podido cargar el archivo",
+              "Se ha producido un error interno cargando el Excel de FIE_2."
+            );
+          }
+        } catch (_) {}
+        return resolve(false);
+      }
+    });
+  }
 } //Fin Procesos Fie
 
 function extraccionExcel(workbook, sheet, opts = null) {
