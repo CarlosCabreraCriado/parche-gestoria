@@ -1201,7 +1201,7 @@ class ProcesosFie {
           return resolve(false);
         }
 
-        // 2) Carpeta de salida (igual que antes)
+        // 2) Carpeta de salida
         let pathSalidaPDFConfirmacion = null;
         if (pathSalidaBase && typeof pathSalidaBase === "string") {
           pathSalidaPDFConfirmacion = path.join(
@@ -1232,194 +1232,398 @@ class ProcesosFie {
         console.log(`[FIE_2] Filas leídas: ${datos.length}`);
         if (datos.length > 0) console.log("[FIE_2] Muestra primer registro:", datos[0]);
 
-        // 4) Abrir navegador real (tu Chrome) y dejar seleccionar el certificado
+        // 4) Abrir navegador real (tu Chrome)
         let browser = null;
         let page = null;
 
         try {
-          const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
-          browser = await puppeteer.launch({
-            headless: false,
-            defaultViewport: null,
-            executablePath: chromeExePath,
-            args: [
-              "--start-maximized",
-              "--no-sandbox",
-              "--disable-setuid-sandbox",
-              "--disable-features=IsolateOrigins,site-per-process",
-            ],
-          });
+        const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
+        browser = await puppeteer.launch({
+          headless: false,
+          defaultViewport: null,
+          executablePath: chromeExePath,
+          args: [
+            "--start-maximized",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-features=IsolateOrigins,site-per-process",
+          ],
+        });
 
-          const opened = await browser.pages();
-          page = opened.length ? opened[0] : await browser.newPage();
+        const opened = await browser.pages();
+        page = opened.length ? opened[0] : await browser.newPage();
 
-          await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+        await page.goto(urlFS, { waitUntil: "domcontentloaded" });
 
-          // === Anti popups en TODOS los frames
-          for (const fr of page.frames()) {
-            try {
-              await fr.evaluate(() => {
-                // 0.1) Forzar que todo abra en la misma pestaña
-                document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-                // 0.2) Neutralizar window.open
-                window.open = new Proxy(window.open, {
-                  apply(target, thisArg, args) { return null; }
-                });
-              });
-            } catch {}
-          }
-          page.on("popup", async (p) => { try { await p.close(); } catch {} });
-
-          // 1 click al enlace de IT Online
+        // Anti popups en TODOS los frames
+        for (const fr of page.frames()) {
           try {
-            let clicked = false;
+            await fr.evaluate(() => {
+              document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+              window.open = new Proxy(window.open, {
+                apply(target, thisArg, args) { return null; }
+              });
+            });
+          } catch {}
+        }
+        page.on("popup", async (p) => { try { await p.close(); } catch {} });
+
+        // Click al enlace de IT Online
+        try {
+          let clicked = false;
+          for (const fr of page.frames()) {
+            const link = await fr.$('a.a2[href*="IWXP0002"]');
+            if (link) {
+              await link.click({ delay: 40 });
+              clicked = true;
+              console.log("[FIE_2] Click en 'Incapacidad temporal Online' (href).");
+              break;
+            }
+          }
+          if (!clicked) {
             for (const fr of page.frames()) {
-              const link = await fr.$('a.a2[href*="IWXP0002"]');
-              if (link) {
-                await link.click({ delay: 40 });
-                clicked = true;
-                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (href).");
+              const ok = await fr.evaluate(() => {
+                const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+                const target = "incapacidad temporal online";
+                const a = Array.from(document.querySelectorAll("a"))
+                  .find(x => norm(x.textContent).includes(target));
+                if (a) { a.target = "_self"; a.click(); return true; }
+                return false;
+              });
+              if (ok) {
+                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (texto).");
                 break;
               }
             }
-            if (!clicked) {
-              for (const fr of page.frames()) {
-                const ok = await fr.evaluate(() => {
-                  const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-                  const target = "incapacidad temporal online";
-                  const a = Array.from(document.querySelectorAll("a"))
-                    .find(x => norm(x.textContent).includes(target));
-                  if (a) { a.target = "_self"; a.click(); return true; }
-                  return false;
-                });
-                if (ok) {
-                  console.log("[FIE_2] Click en 'Incapacidad temporal Online' (texto).");
-                  break;
-                }
-              }
-            }
-            await this.esperar(1000);
-          } catch (e) {
-            console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
           }
+          await this.esperar(1000);
+        } catch (e) {
+          console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
+        }
 
-          await page.bringToFront();
-          console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado si aparece diálogo.");
+        await page.bringToFront();
+        console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado si aparece diálogo.");
 
         } catch (navErr) {
-          console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
-          // Seguimos, pero sin navegador no podremos rellenar.
+        console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
         }
 
         // 5) Rellenar formulario (primer registro) y enviar
         if (page && datos.length > 0) {
-          // Helpers inline (usan excelSerialToUTCDate global)
-          const toDDMMYYYY = (date) => {
-            const dd = String(date.getUTCDate()).padStart(2, "0");
-            const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-            const yyyy = String(date.getUTCFullYear());
-            return `${dd}/${mm}/${yyyy}`;
-          };
-          const formateaFechaExcelSerial = (serial) => toDDMMYYYY(excelSerialToUTCDate(serial));
-          const extraeRegimenYCCC = (cccRaw) => {
-            const digits = String(cccRaw ?? "").replace(/\D/g, "");
-            return { regimen: digits.slice(0,4).padStart(4,"0"), cccResto: digits.slice(4) };
-          };
-          const limpiaDigitos = (n) => String(n ?? "").replace(/\D/g, "");
-          const extraeCodigoContingencia = (campo) => {
-            const s = String(campo ?? ""); const m = s.match(/^(\d+)\s*=/); return m ? m[1] : "";
-          };
-          const setInputValueWithEvents = async (frame, selector, value) => {
-            await frame.waitForSelector(selector, { visible: true });
-            await frame.evaluate((sel, val) => {
-              const el = document.querySelector(sel);
-              if (!el) return;
-              el.focus();
-              el.value = "";
-              el.dispatchEvent(new Event("input", { bubbles: true }));
-              el.value = val;
-              el.dispatchEvent(new Event("input", { bubbles: true }));
-              el.dispatchEvent(new Event("change", { bubbles: true }));
-              el.blur();
-            }, selector, value);
-          };
-          const setSelectValueWithEvents = async (frame, selector, value) => {
-            await frame.waitForSelector(selector, { visible: true });
-            const ok = await frame.evaluate((sel, val) => {
-              const el = document.querySelector(sel);
-              if (!el) return false;
-              el.value = val;
-              el.dispatchEvent(new Event("change", { bubbles: true }));
-              return true;
-            }, selector, value);
-            return ok;
-          };
-          const findFrameWithSelector = async (selector, timeoutMs = 20000, pollMs = 400) => {
-            const start = Date.now();
-            while (Date.now() - start < timeoutMs) {
-              for (const fr of page.frames()) {
-                try {
-                  const el = await fr.$(selector);
-                  if (el) return fr;
-                } catch {}
-              }
-              await this.esperar(pollMs);
-            }
-            return null;
-          };
+        // ------- Helpers robustos (reintentos + verificación) -------
+        const pause = (ms) => new Promise(r => setTimeout(r, ms));
 
-          console.log("[FIE_2] Buscando frame con el formulario...");
-          const formFrame = await findFrameWithSelector("#regimen", 20000, 400);
-          if (!formFrame) {
-            console.warn("[FIE_2] No encontré el formulario (#regimen) en ningún frame.");
-          } else {
-            console.log("[FIE_2] Formulario encontrado.");
-            const r = datos[0];
+        // IMPORTANTE: usamos el ElementHandle + page.keyboard (Frame no tiene keyboard)
+        const fillTextWithRetry = async (
+          frame, selector, rawValue,
+          { tries = 4, typeDelay = 60, betweenTriesMs = 250, commitTab = true, digitsOnlyCompare = true } = {}
+        ) => {
+          const value = String(rawValue ?? "");
+          const el = await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
+          await el.evaluate(e => e.scrollIntoView({ block: "center" }));
 
-            // REGIMEN y CCC
-            const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
-            console.log("[FIE_2] Régimen:", regimen, "CCC resto:", cccResto);
-            await setInputValueWithEvents(formFrame, "#regimen", regimen);
-            await setInputValueWithEvents(formFrame, "#ccc", cccResto);
+          const isMac = process.platform === "darwin";
+          const modKey = isMac ? "Meta" : "Control";
 
-            // NAF
-            const naf = limpiaDigitos(r?.naf);
-            await setInputValueWithEvents(formFrame, "#naf", naf);
-
-            // CONTINGENCIAS -> solo "1" (Enfermedad Común) en este paso
-            const contCode = extraeCodigoContingencia(r?.contingencia);
-            const valueCont = contCode === "1" ? "1" : "";
-            if (valueCont) {
-              const ok = await setSelectValueWithEvents(formFrame, "#contingencias", valueCont);
-              if (!ok) console.warn("[FIE_2] No se pudo seleccionar contingencias=1.");
-            } else {
-              console.warn("[FIE_2] Contingencia no soportada aún:", r?.contingencia);
-            }
-
-            // FECHA DE BAJA
-            let fechaBajaStr = "";
-            if (r?.fechaBajaIt) {
-              try { fechaBajaStr = formateaFechaExcelSerial(r.fechaBajaIt); }
-              catch { console.warn("[FIE_2] Fecha baja no formateable:", r?.fechaBajaIt); }
-            }
-            if (fechaBajaStr) {
-              await setInputValueWithEvents(formFrame, "#fechaBaja", fechaBajaStr);
-            } else {
-              console.warn("[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja.");
-            }
-
-            // ENVIAR
+          for (let i = 1; i <= tries; i++) {
             try {
-              await formFrame.waitForSelector("#ENVIO_7", { visible: true });
-              await formFrame.click("#ENVIO_7", { delay: 40 });
-              console.log("[FIE_2] Click en Aceptar (ENVIO_7).");
+              // Foco + seleccionar todo y borrar
+              await el.click({ clickCount: 3, delay: 30 });
+              await page.keyboard.down(modKey);
+              await page.keyboard.press("KeyA");
+              await page.keyboard.up(modKey);
+              await page.keyboard.press("Backspace");
+              await pause(40);
+
+              // Escribir como humano sobre el ELEMENT HANDLE
+              await el.type(value, { delay: typeDelay });
+
+              // Disparar eventos
+              await el.evaluate(e => {
+                e.dispatchEvent(new Event("input", { bubbles: true }));
+                e.dispatchEvent(new Event("change", { bubbles: true }));
+              });
+
+              // Confirmar con Tab (usando page.keyboard)
+              if (commitTab) {
+                await page.keyboard.press("Tab");
+                await pause(120);
+                await page.keyboard.down("Shift");
+                await page.keyboard.press("Tab");
+                await page.keyboard.up("Shift");
+              }
+
+              // Verificar en DOM
+              const current = await el.evaluate(e => e.value ?? "");
+              const norm = s => digitsOnlyCompare ? String(s).replace(/\D/g, "") : String(s);
+              console.log(`[FIE_2] Verificación ${selector} intento ${i}:`, current);
+
+              if (norm(current) === norm(value)) return true;
+
+              // Fallback duro: setear valor por JS y volver a disparar eventos
+              await el.evaluate((_, val) => {
+                _.value = val;
+                _.dispatchEvent(new Event("input", { bubbles: true }));
+                _.dispatchEvent(new Event("change", { bubbles: true }));
+                _.blur?.();
+              }, value);
+
+              const after = await el.evaluate(e => e.value ?? "");
+              if (norm(after) === norm(value)) return true;
+
             } catch (e) {
-              console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
+              console.warn(`[FIE_2] fillTextWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
             }
+            await pause(betweenTriesMs + i * 150);
           }
+          console.warn(`[FIE_2] ❌ ${selector} no se pudo fijar tras ${tries} intentos`);
+          return false;
+        };
+
+        const selectWithRetry = async (
+          frame, selector, rawValue,
+          { tries = 4, betweenTriesMs = 250 } = {}
+        ) => {
+          const value = String(rawValue ?? "");
+          await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
+          await frame.$eval(selector, el => el.scrollIntoView({ block: "center" }));
+
+          for (let i = 1; i <= tries; i++) {
+            try {
+              await frame.select(selector, value);
+              await pause(100);
+              let current = await frame.$eval(selector, el => el.value ?? "");
+              console.log(`[FIE_2] Verificación select ${selector} intento ${i}:`, current);
+              if (current === value) return true;
+
+              // Fallback directo
+              await frame.evaluate((sel, val) => {
+                const el = document.querySelector(sel);
+                if (!el) return;
+                el.value = val;
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+                el.blur?.();
+              }, selector, value);
+
+              await pause(120);
+              current = await frame.$eval(selector, el => el.value ?? "");
+              console.log(`[FIE_2] Verificación fallback ${selector} intento ${i}:`, current);
+              if (current === value) return true;
+
+            } catch (e) {
+              console.warn(`[FIE_2] selectWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
+            }
+            await pause(betweenTriesMs + i * 150);
+          }
+          console.warn(`[FIE_2] ❌ ${selector} no se pudo seleccionar tras ${tries} intentos`);
+          return false;
+        };
+
+        const findFrameWithSelector = async (selector, timeoutMs = 25000, pollMs = 400) => {
+          const start = Date.now();
+          while (Date.now() - start < timeoutMs) {
+            for (const fr of page.frames()) {
+              try {
+                const el = await fr.$(selector);
+                if (el) return fr;
+              } catch {}
+            }
+            await pause(pollMs);
+          }
+          return null;
+        };
+
+        const toDDMMYYYY = (date) => {
+          const dd = String(date.getUTCDate()).padStart(2, "0");
+          const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+          const yyyy = String(date.getUTCFullYear());
+          return `${dd}/${mm}/${yyyy}`;
+        };
+        const excelSerialToDDMMYYYY = (serial) => toDDMMYYYY(excelSerialToUTCDate(serial));
+        const extraeRegimenYCCC = (cccRaw) => {
+          const digits = String(cccRaw ?? "").replace(/\D/g, "");
+          return { regimen: digits.slice(0,4).padStart(4,"0"), cccResto: digits.slice(4) };
+        };
+        const limpiaDigitos = (n) => String(n ?? "").replace(/\D/g, "");
+        const extraeCodigoContingencia = (campo) => {
+          const s = String(campo ?? ""); const m = s.match(/^(\d+)\s*=/); return m ? m[1] : "";
+        };
+
+        console.log("[FIE_2] Buscando frame con el formulario...");
+        const formFrame = await findFrameWithSelector("#regimen", 25000, 400);
+        if (!formFrame) {
+          console.warn("[FIE_2] No encontré el formulario (#regimen) en ningún frame.");
+        } else {
+          console.log("[FIE_2] Formulario encontrado.");
+          const r = datos[0];
+
+          const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
+          const naf = limpiaDigitos(r?.naf);
+          const contCode = extraeCodigoContingencia(r?.contingencia); // '1'..'5'
+          const fechaBajaStr = r?.fechaBajaIt ? excelSerialToDDMMYYYY(r.fechaBajaIt) : "";
+
+          console.table({
+            "Regimen (4)": regimen,
+            "CCC (resto, 11)": cccResto,
+            "NAF (12)": naf,
+            "Contingencia (1-5)": contCode,
+            "Fecha de baja": fechaBajaStr
+          });
+
+          // Relleno con reintentos + verificación
+          await fillTextWithRetry(formFrame, "#regimen", regimen, { tries: 4, typeDelay: 60 });
+          await pause(200);
+          await fillTextWithRetry(formFrame, "#ccc", cccResto, { tries: 4, typeDelay: 60 });
+          await pause(200);
+          await fillTextWithRetry(formFrame, "#naf", naf, { tries: 4, typeDelay: 60 });
+          await pause(200);
+
+          // Contingencias: soportamos 1..5
+          if (["1","2","3","4","5"].includes(contCode)) {
+            await selectWithRetry(formFrame, "#contingencias", contCode, { tries: 4 });
+          } else {
+            console.warn("[FIE_2] Contingencia no reconocida:", r?.contingencia);
+          }
+          await pause(200);
+
+          if (fechaBajaStr) {
+            await fillTextWithRetry(formFrame, "#fechaBaja", fechaBajaStr, {
+              tries: 3, typeDelay: 60, digitsOnlyCompare: false
+            });
+          } else {
+            console.warn("[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja.");
+          }
+
+          // ENVIAR
+          try {
+            await formFrame.waitForSelector("#ENVIO_7", { visible: true, timeout: 8000 });
+            await formFrame.click("#ENVIO_7", { delay: 60 });
+            console.log("[FIE_2] Click en Aceptar (ENVIO_7).");
+          } catch (e) {
+            console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
+          }
+
+          // === 5.b) Segunda pantalla: "Grabación de partes" ===
+          try {
+            // Espera a que navegue o, como mínimo, a que cambie el DOM
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+              pause(1500),
+            ]);
+          
+            // Localiza el nuevo formulario o algún campo característico
+            const form2 = await findFrameWithSelector("#FORMULARIO_4", 25000, 400)
+                       || await findFrameWithSelector("#puestoTrabajo", 25000, 400);
+            if (!form2) {
+              console.warn("[FIE_2] No encontré el formulario de 'Grabación de partes' (#FORMULARIO_4).");
+            } else {
+              console.log("[FIE_2] Formulario 'Grabación de partes' encontrado.");
+              const r = datos[0];
+            
+              // ====== MAPEOS (ajusta a tus nombres reales de columnas) ======
+              const puestoDeTrabajo = String(r?.puestoDeTrabajo ?? r?.puestoTrabajo ?? ""); // p.ej. 'PEON'
+              const cnoe            = String(r?.cnoe ?? "");                                // p.ej. '9700'
+              const tipoContratoIn  = String(r?.tipoContrato ?? "");                        // p.ej. '100'
+            
+              // Para "Resto"
+              const baseResto       = String(r?.base ?? ""); // '1381,34'
+              const diasResto       = String(r?.dia  ?? ""); // '30'
+            
+              // Para "Fijo discontinuo / tiempo parcial" (si usas mismas columnas, deja igual)
+              const baseFijoParcial = String(r?.base ?? "");
+              const diasFijoParcial = String(r?.dia  ?? "");
+            
+              const detalleCnoe     = String(r?.detalleCnoe ?? ""); // textarea
+            
+              // Fecha AT/EP: si no existe columna específica, uso la fecha de baja
+              const toDDMMYYYY = (d) => {
+                const dd = String(d.getUTCDate()).padStart(2,"0");
+                const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+                const yy = d.getUTCFullYear();
+                return `${dd}/${mm}/${yy}`;
+              };
+              let fechaATEP = "";
+              if (r?.fechaATEP) {
+                try { fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP)); } catch {}
+              }
+              if (!fechaATEP && r?.fechaBajaIt) {
+                try { fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaBajaIt)); } catch {}
+              }
+            
+              // ====== LÓGICA Tipo de contrato (options del select: "1" Fijo/Parcial, "2" Resto) ======
+              const code = tipoContratoIn.trim();
+              const starts = (p) => code.startsWith(p);
+              const inSet  = (arr) => arr.includes(code);
+            
+              let tipoContratoSelect = ""; // "1" ó "2"
+              if (starts("200") || starts("300") || starts("500") || inSet(["300","289","510"])) {
+                tipoContratoSelect = "1"; // Fijo discontinuo / Tiempo parcial
+              } else if (starts("100") || starts("400") || inSet(["189","402","100"])) {
+                tipoContratoSelect = "2"; // Resto
+              } else {
+                tipoContratoSelect = "2"; // por defecto
+              }
+            
+              console.table({
+                puestoDeTrabajo, cnoe, tipoContratoIn, tipoContratoSelect,
+                baseResto, diasResto, baseFijoParcial, diasFijoParcial, fechaATEP
+              });
+            
+              // ====== Relleno de campos ======
+              if (puestoDeTrabajo) {
+                await fillTextWithRetry(form2, "#puestoTrabajo", puestoDeTrabajo, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
+              }
+            
+              if (cnoe) {
+                // <select id="ocupacion"> con values tipo "9700"
+                await selectWithRetry(form2, "#ocupacion", cnoe, { tries: 4 });
+              }
+            
+              // Tipo de contrato (esto puede refrescar etiquetas de los campos inferiores)
+              await selectWithRetry(form2, "#tipoContrato", tipoContratoSelect, { tries: 4 });
+              await pause(400);
+            
+              // Campos económicos según la opción
+              if (tipoContratoSelect === "2") {
+                // Resto → #BaseCot y #DiasCot
+                if (baseResto) await fillTextWithRetry(form2, "#BaseCot", baseResto, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
+                if (diasResto) await fillTextWithRetry(form2, "#DiasCot", diasResto, { tries: 3, typeDelay: 35 });
+              } else {
+                // Fijo discontinuo/tiempo parcial → #sumaBaseCot y #sumaDiasCot
+                if (baseFijoParcial) await fillTextWithRetry(form2, "#sumaBaseCot", baseFijoParcial, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
+                if (diasFijoParcial) await fillTextWithRetry(form2, "#sumaDiasCot", diasFijoParcial, { tries: 3, typeDelay: 35 });
+              }
+            
+              // Fecha AT/EP (obligatoria)
+              if (fechaATEP) {
+                await fillTextWithRetry(form2, "#fechaATEP", fechaATEP, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
+              } else {
+                console.warn("[FIE_2] No tengo fechaATEP; si 'Validar' protesta, añade columna específica en Excel.");
+              }
+            
+              // Descripción de funciones
+              if (detalleCnoe) {
+                await fillTextWithRetry(form2, "#funcDesempe", detalleCnoe, { tries: 3, typeDelay: 15, digitsOnlyCompare: false });
+              }
+            
+              // Validar
+              try {
+                await form2.waitForSelector("#ENVIO_14", { visible: true, timeout: 8000 });
+                await form2.click("#ENVIO_14", { delay: 60 });
+                console.log("[FIE_2] Click en Validar (ENVIO_14).");
+              } catch (e) {
+                console.warn("[FIE_2] No se pudo clicar Validar:", e?.message || e);
+              }
+            }
+          } catch (e) {
+            console.warn("[FIE_2] Error en segunda pantalla:", e?.message || e);
+          }
+
+        }
         }
 
-        // 6) Devolver el array como antes (para mantener compatibilidad)
+        // 6) Devolver el array como antes
         return resolve(datos);
 
       } catch (err) {
@@ -1436,6 +1640,8 @@ class ProcesosFie {
       }
     });
   }
+
+
 } //Fin Procesos Fie
 
 function extraccionExcel(workbook, sheet, opts = null) {
