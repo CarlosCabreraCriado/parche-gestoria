@@ -1233,43 +1233,55 @@ class ProcesosFie {
         if (datos.length > 0) console.log("[FIE_2] Muestra primer registro:", datos[0]);
 
         // 4) Abrir navegador real (tu Chrome) y dejar seleccionar el certificado
+        let browser = null;
+        let page = null;
+
         try {
           const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
-          const browser = await puppeteer.launch({
-            headless: false,           // Necesario para ver el diálogo del certificado
+          browser = await puppeteer.launch({
+            headless: false,
             defaultViewport: null,
-            executablePath: chromeExePath, // Usamos tu Chrome (no Chromium)
+            executablePath: chromeExePath,
             args: [
               "--start-maximized",
               "--no-sandbox",
               "--disable-setuid-sandbox",
-              // En sitios legacy a veces ayuda:
               "--disable-features=IsolateOrigins,site-per-process",
             ],
           });
 
-          const [page] = (await browser.pages()).length
-            ? await browser.pages()
-            : [await browser.newPage()];
+          const opened = await browser.pages();
+          page = opened.length ? opened[0] : await browser.newPage();
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
-          // === tras await page.goto(urlFS, { waitUntil: "domcontentloaded" }); ===
 
-          // Intenta localizar el enlace dentro de cualquiera de los frames y hacer un único click.
+          // === Anti popups en TODOS los frames
+          for (const fr of page.frames()) {
+            try {
+              await fr.evaluate(() => {
+                // 0.1) Forzar que todo abra en la misma pestaña
+                document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
+                // 0.2) Neutralizar window.open
+                window.open = new Proxy(window.open, {
+                  apply(target, thisArg, args) { return null; }
+                });
+              });
+            } catch {}
+          }
+          page.on("popup", async (p) => { try { await p.close(); } catch {} });
+
+          // 1 click al enlace de IT Online
           try {
-            // 1) Primer intento: por href + clase (selector estable del portal)
             let clicked = false;
             for (const fr of page.frames()) {
               const link = await fr.$('a.a2[href*="IWXP0002"]');
               if (link) {
-                await link.click({ delay: 50 });
+                await link.click({ delay: 40 });
                 clicked = true;
-                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (por href).");
+                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (href).");
                 break;
               }
             }
-          
-            // 2) Fallback por texto visible (por si cambian la clase/atributos)
             if (!clicked) {
               for (const fr of page.frames()) {
                 const ok = await fr.evaluate(() => {
@@ -1277,30 +1289,137 @@ class ProcesosFie {
                   const target = "incapacidad temporal online";
                   const a = Array.from(document.querySelectorAll("a"))
                     .find(x => norm(x.textContent).includes(target));
-                  if (a) { a.click(); return true; }
+                  if (a) { a.target = "_self"; a.click(); return true; }
                   return false;
                 });
                 if (ok) {
-                  console.log("[FIE_2] Click en 'Incapacidad temporal Online' (por texto).");
+                  console.log("[FIE_2] Click en 'Incapacidad temporal Online' (texto).");
                   break;
                 }
               }
             }
-            await page.waitForTimeout(1000);
+            await this.esperar(1000);
           } catch (e) {
             console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
           }
 
           await page.bringToFront();
+          console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado si aparece diálogo.");
 
-          console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado en el diálogo de Chrome/Windows.");
-          // No cerramos el navegador. El usuario selecciona y continúa manualmente.
         } catch (navErr) {
           console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
-          // Seguimos devolviendo los datos igualmente
+          // Seguimos, pero sin navegador no podremos rellenar.
         }
 
-        // 5) Devolver el array como antes
+        // 5) Rellenar formulario (primer registro) y enviar
+        if (page && datos.length > 0) {
+          // Helpers inline (usan excelSerialToUTCDate global)
+          const toDDMMYYYY = (date) => {
+            const dd = String(date.getUTCDate()).padStart(2, "0");
+            const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+            const yyyy = String(date.getUTCFullYear());
+            return `${dd}/${mm}/${yyyy}`;
+          };
+          const formateaFechaExcelSerial = (serial) => toDDMMYYYY(excelSerialToUTCDate(serial));
+          const extraeRegimenYCCC = (cccRaw) => {
+            const digits = String(cccRaw ?? "").replace(/\D/g, "");
+            return { regimen: digits.slice(0,4).padStart(4,"0"), cccResto: digits.slice(4) };
+          };
+          const limpiaDigitos = (n) => String(n ?? "").replace(/\D/g, "");
+          const extraeCodigoContingencia = (campo) => {
+            const s = String(campo ?? ""); const m = s.match(/^(\d+)\s*=/); return m ? m[1] : "";
+          };
+          const setInputValueWithEvents = async (frame, selector, value) => {
+            await frame.waitForSelector(selector, { visible: true });
+            await frame.evaluate((sel, val) => {
+              const el = document.querySelector(sel);
+              if (!el) return;
+              el.focus();
+              el.value = "";
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+              el.value = val;
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+              el.blur();
+            }, selector, value);
+          };
+          const setSelectValueWithEvents = async (frame, selector, value) => {
+            await frame.waitForSelector(selector, { visible: true });
+            const ok = await frame.evaluate((sel, val) => {
+              const el = document.querySelector(sel);
+              if (!el) return false;
+              el.value = val;
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+              return true;
+            }, selector, value);
+            return ok;
+          };
+          const findFrameWithSelector = async (selector, timeoutMs = 20000, pollMs = 400) => {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+              for (const fr of page.frames()) {
+                try {
+                  const el = await fr.$(selector);
+                  if (el) return fr;
+                } catch {}
+              }
+              await this.esperar(pollMs);
+            }
+            return null;
+          };
+
+          console.log("[FIE_2] Buscando frame con el formulario...");
+          const formFrame = await findFrameWithSelector("#regimen", 20000, 400);
+          if (!formFrame) {
+            console.warn("[FIE_2] No encontré el formulario (#regimen) en ningún frame.");
+          } else {
+            console.log("[FIE_2] Formulario encontrado.");
+            const r = datos[0];
+
+            // REGIMEN y CCC
+            const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
+            console.log("[FIE_2] Régimen:", regimen, "CCC resto:", cccResto);
+            await setInputValueWithEvents(formFrame, "#regimen", regimen);
+            await setInputValueWithEvents(formFrame, "#ccc", cccResto);
+
+            // NAF
+            const naf = limpiaDigitos(r?.naf);
+            await setInputValueWithEvents(formFrame, "#naf", naf);
+
+            // CONTINGENCIAS -> solo "1" (Enfermedad Común) en este paso
+            const contCode = extraeCodigoContingencia(r?.contingencia);
+            const valueCont = contCode === "1" ? "1" : "";
+            if (valueCont) {
+              const ok = await setSelectValueWithEvents(formFrame, "#contingencias", valueCont);
+              if (!ok) console.warn("[FIE_2] No se pudo seleccionar contingencias=1.");
+            } else {
+              console.warn("[FIE_2] Contingencia no soportada aún:", r?.contingencia);
+            }
+
+            // FECHA DE BAJA
+            let fechaBajaStr = "";
+            if (r?.fechaBajaIt) {
+              try { fechaBajaStr = formateaFechaExcelSerial(r.fechaBajaIt); }
+              catch { console.warn("[FIE_2] Fecha baja no formateable:", r?.fechaBajaIt); }
+            }
+            if (fechaBajaStr) {
+              await setInputValueWithEvents(formFrame, "#fechaBaja", fechaBajaStr);
+            } else {
+              console.warn("[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja.");
+            }
+
+            // ENVIAR
+            try {
+              await formFrame.waitForSelector("#ENVIO_7", { visible: true });
+              await formFrame.click("#ENVIO_7", { delay: 40 });
+              console.log("[FIE_2] Click en Aceptar (ENVIO_7).");
+            } catch (e) {
+              console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
+            }
+          }
+        }
+
+        // 6) Devolver el array como antes (para mantener compatibilidad)
         return resolve(datos);
 
       } catch (err) {
