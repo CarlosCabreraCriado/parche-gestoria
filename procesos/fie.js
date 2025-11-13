@@ -1184,14 +1184,14 @@ class ProcesosFie {
 
   async fIE_2(argumentos) {
     console.log("[FIE_2] Iniciando paso 1: lectura de Excel → array");
-    //await this.esperar(2000);
+  
     return new Promise(async (resolve) => {
       try {
         // 1) Entradas (nuevo orden)
         const chromeExePath   = argumentos?.formularioControl?.[0];
         const pathArchivoFIE_2 = argumentos?.formularioControl?.[1];
         const pathSalidaBase   = argumentos?.formularioControl?.[2];
-
+      
         if (!chromeExePath || !fs.existsSync(chromeExePath)) {
           console.error("[FIE_2] Ruta a chrome.exe no válida.");
           return resolve(false);
@@ -1200,7 +1200,7 @@ class ProcesosFie {
           console.error("[FIE_2] argumentos.formularioControl[1] (Excel) no es una ruta válida.");
           return resolve(false);
         }
-
+      
         // 2) Carpeta de salida
         let pathSalidaPDFConfirmacion = null;
         if (pathSalidaBase && typeof pathSalidaBase === "string") {
@@ -1217,7 +1217,7 @@ class ProcesosFie {
         } else {
           console.log("[FIE_2] No se proporcionó carpeta de salida (arg[2]).");
         }
-
+      
         // 3) Lectura Excel
         const rutaNormalizada = path.normalize(pathArchivoFIE_2);
         console.log(`[FIE_2] Cargando Excel: ${rutaNormalizada}`);
@@ -1230,13 +1230,13 @@ class ProcesosFie {
         }
         console.log(`[FIE_2] Filas leídas: ${datos.length}`);
         if (datos.length > 0) console.log("[FIE_2] Muestra primer registro:", datos[0]);
-
+      
         // 4) Abrir navegador real (tu Chrome)
         let browser = null;
         let page = null;
-
-        try {
         const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
+      
+      try {
         browser = await puppeteer.launch({
           headless: false,
           defaultViewport: null,
@@ -1252,558 +1252,610 @@ class ProcesosFie {
         const opened = await browser.pages();
         page = opened.length ? opened[0] : await browser.newPage();
 
+        //NUEVO: aceptar automáticamente todos los popups (alert, confirm, beforeunload...)
+        page.on("dialog", async (dialog) => {
+          try {
+            console.log(
+              "[FIE_2] Dialog detectado:",
+              dialog.type(),
+              JSON.stringify(dialog.message())
+            );
+            await dialog.accept();
+            console.log("[FIE_2] Dialog aceptado automáticamente.");
+          } catch (e) {
+            console.warn("[FIE_2] Error al aceptar dialog:", e?.message || e);
+          }
+        });
+
         await page.goto(urlFS, { waitUntil: "domcontentloaded" });
 
-
-        // Click al enlace de IT Online
-        try {
-          let clicked = false;
-          for (const fr of page.frames()) {
-            const link = await fr.$('a.a2[href*="IWXP0002"]');
-            if (link) {
-              await link.click({ delay: 40 });
-              clicked = true;
-              console.log("[FIE_2] Click en 'Incapacidad temporal Online' (href).");
-              break;
-            }
-          }
-          if (!clicked) {
-            for (const fr of page.frames()) {
-              const ok = await fr.evaluate(() => {
-                const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-                const target = "incapacidad temporal online";
-                const a = Array.from(document.querySelectorAll("a"))
-                  .find(x => norm(x.textContent).includes(target));
-                if (a) { a.target = "_self"; a.click(); return true; }
-                return false;
-              });
-              if (ok) {
-                console.log("[FIE_2] Click en 'Incapacidad temporal Online' (texto).");
-                break;
-              }
-            }
-          }
-          await this.esperar(1000);
-        } catch (e) {
-          console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
-        }
-
-        await page.bringToFront();
         console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado si aparece diálogo.");
 
         } catch (navErr) {
-        console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
+          console.warn("[FIE_2] Aviso: no se pudo abrir el navegador/URL de FS:", navErr?.message || navErr);
         }
-
-        // 5) Rellenar formulario (primer registro) y enviar
+      
+        // 5) Helpers + bucle sobre todos los registros
         if (page && datos.length > 0) {
-        // ------- Helpers robustos (reintentos + verificación) -------
-        const pause = (ms) => new Promise(r => setTimeout(r, ms));
-
-        // IMPORTANTE: usamos el ElementHandle + page.keyboard (Frame no tiene keyboard)
-        const fillTextWithRetry = async (
-          frame, selector, rawValue,
-          { tries = 4, typeDelay = 60, betweenTriesMs = 250, commitTab = true, digitsOnlyCompare = true } = {}
-        ) => {
-          const value = String(rawValue ?? "");
-          const el = await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
-          await el.evaluate(e => e.scrollIntoView({ block: "center" }));
-
-          const isMac = process.platform === "darwin";
-          const modKey = isMac ? "Meta" : "Control";
-
-          for (let i = 1; i <= tries; i++) {
+          const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+        
+          // Click a "Incapacidad temporal Online"
+          const openITOnline = async () => {
             try {
-              // Foco + seleccionar todo y borrar
-              await el.click({ clickCount: 3, delay: 30 });
-              await page.keyboard.down(modKey);
-              await page.keyboard.press("KeyA");
-              await page.keyboard.up(modKey);
-              await page.keyboard.press("Backspace");
-              await pause(40);
-
-              // Escribir como humano sobre el ELEMENT HANDLE
-              await el.type(value, { delay: typeDelay });
-
-              // Disparar eventos
-              await el.evaluate(e => {
-                e.dispatchEvent(new Event("input", { bubbles: true }));
-                e.dispatchEvent(new Event("change", { bubbles: true }));
-              });
-
-              // Confirmar con Tab (usando page.keyboard)
-              if (commitTab) {
-                await page.keyboard.press("Tab");
-                await pause(120);
-                await page.keyboard.down("Shift");
-                await page.keyboard.press("Tab");
-                await page.keyboard.up("Shift");
+              let clicked = false;
+              for (const fr of page.frames()) {
+                const link = await fr.$('a.a2[href*="IWXP0002"]');
+                if (link) {
+                  await link.click({ delay: 40 });
+                  clicked = true;
+                  console.log("[FIE_2] Click en 'Incapacidad temporal Online' (href).");
+                  break;
+                }
               }
-
-              // Verificar en DOM
-              const current = await el.evaluate(e => e.value ?? "");
-              const norm = s => digitsOnlyCompare ? String(s).replace(/\D/g, "") : String(s);
-              console.log(`[FIE_2] Verificación ${selector} intento ${i}:`, current);
-
-              if (norm(current) === norm(value)) return true;
-
-              // Fallback duro: setear valor por JS y volver a disparar eventos
-              await el.evaluate((_, val) => {
-                _.value = val;
-                _.dispatchEvent(new Event("input", { bubbles: true }));
-                _.dispatchEvent(new Event("change", { bubbles: true }));
-                _.blur?.();
-              }, value);
-
-              const after = await el.evaluate(e => e.value ?? "");
-              if (norm(after) === norm(value)) return true;
-
+              if (!clicked) {
+                for (const fr of page.frames()) {
+                  const ok = await fr.evaluate(() => {
+                    const norm = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+                    const target = "incapacidad temporal online";
+                    const a = Array.from(document.querySelectorAll("a")).find((x) =>
+                      norm(x.textContent).includes(target)
+                    );
+                    if (a) {
+                      a.target = "_self";
+                      a.click();
+                      return true;
+                    }
+                    return false;
+                  });
+                  if (ok) {
+                    console.log("[FIE_2] Click en 'Incapacidad temporal Online' (texto).");
+                    break;
+                  }
+                }
+              }
+              await this.esperar(1000);
             } catch (e) {
-              console.warn(`[FIE_2] fillTextWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
+              console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
             }
-            await pause(betweenTriesMs + i * 150);
-          }
-          console.warn(`[FIE_2] ❌ ${selector} no se pudo fijar tras ${tries} intentos`);
-          return false;
-        };
-
-        // Rellena un input si existe (aunque esté oculto). Si no existe, sigue sin error.
-        const fillIfPresent = async (
-          frame,
-          selector,
-          value,
-          opts = { tries: 3, typeDelay: 35, digitsOnlyCompare: false }
-        ) => {
-          try {
-            const val = String(value ?? "");
-            const elHandle = await frame.$(selector);
+          };
+        
+          const fillTextWithRetry = async (
+            frame,
+            selector,
+            rawValue,
+            { tries = 4, typeDelay = 60, betweenTriesMs = 250, commitTab = true, digitsOnlyCompare = true } = {}
+          ) => {
+            const value = String(rawValue ?? "");
+            const el = await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
+            await el.evaluate((e) => e.scrollIntoView({ block: "center" }));
           
-            if (!elHandle) {
-              console.log(`[FIE_2] Campo opcional NO presente: ${selector}. Continúo.`);
-              return false;
-            }
-            if (!val) {
-              console.log(`[FIE_2] Sin valor para ${selector}. Omite rellenado.`);
-              return false;
-            }
+            const isMac = process.platform === "darwin";
+            const modKey = isMac ? "Meta" : "Control";
           
-            // Intento 1: si es visible, usa el método robusto con tecleo humano
-            const isVisible = await elHandle.evaluate((e) => {
-              const s = getComputedStyle(e);
-              const r = e.getBoundingClientRect();
-              return s.visibility !== "hidden" && s.display !== "none" && r.width > 0 && r.height > 0;
-            }).catch(() => false);
-          
-            if (isVisible) {
+            for (let i = 1; i <= tries; i++) {
               try {
-                await fillTextWithRetry(frame, selector, val, opts);
-                return true;
-              } catch {}
+                await el.click({ clickCount: 3, delay: 30 });
+                await page.keyboard.down(modKey);
+                await page.keyboard.press("KeyA");
+                await page.keyboard.up(modKey);
+                await page.keyboard.press("Backspace");
+                await pause(40);
+              
+                await el.type(value, { delay: typeDelay });
+              
+                await el.evaluate((e) => {
+                  e.dispatchEvent(new Event("input", { bubbles: true }));
+                  e.dispatchEvent(new Event("change", { bubbles: true }));
+                });
+              
+                if (commitTab) {
+                  await page.keyboard.press("Tab");
+                  await pause(120);
+                  await page.keyboard.down("Shift");
+                  await page.keyboard.press("Tab");
+                  await page.keyboard.up("Shift");
+                }
+              
+                const current = await el.evaluate((e) => e.value ?? "");
+                const norm = (s) => (digitsOnlyCompare ? String(s).replace(/\D/g, "") : String(s));
+                console.log(`[FIE_2] Verificación ${selector} intento ${i}:`, current);
+              
+                if (norm(current) === norm(value)) return true;
+              
+                await el.evaluate(
+                  (_, val) => {
+                    _.value = val;
+                    _.dispatchEvent(new Event("input", { bubbles: true }));
+                    _.dispatchEvent(new Event("change", { bubbles: true }));
+                    _.blur?.();
+                  },
+                  value
+                );
+              
+                const after = await el.evaluate((e) => e.value ?? "");
+                if (norm(after) === norm(value)) return true;
+              } catch (e) {
+                console.warn(`[FIE_2] fillTextWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
+              }
+              await pause(betweenTriesMs + i * 150);
             }
-          
-            // Intento 2 (fallback): set directo por JS aunque esté oculto
-            const ok = await frame.evaluate((sel, v) => {
-              const el = document.querySelector(sel);
-              if (!el) return false;
-              el.value = v;
-              el.dispatchEvent(new Event("input", { bubbles: true }));
-              el.dispatchEvent(new Event("change", { bubbles: true }));
-              el.blur && el.blur();
-              return true;
-            }, selector, val);
-          
-            console.log(ok
-              ? `[FIE_2] ${selector} fijado por JS (fallback, posible campo oculto).`
-              : `[FIE_2] No se pudo fijar ${selector} por JS.`);
-            
-            return ok;
-          } catch (e) {
-            console.warn(`[FIE_2] No pude rellenar opcional ${selector}:`, e?.message || e);
+            console.warn(`[FIE_2] ❌ ${selector} no se pudo fijar tras ${tries} intentos`);
             return false;
-          }
-        };
-
-        const selectWithRetry = async (
-          frame, selector, rawValue,
-          { tries = 4, betweenTriesMs = 250 } = {}
-        ) => {
-          const value = String(rawValue ?? "");
-          await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
-          await frame.$eval(selector, el => el.scrollIntoView({ block: "center" }));
-
-          for (let i = 1; i <= tries; i++) {
+          };
+        
+          const fillIfPresent = async (
+            frame,
+            selector,
+            value,
+            opts = { tries: 3, typeDelay: 35, digitsOnlyCompare: false }
+          ) => {
             try {
-              await frame.select(selector, value);
-              await pause(100);
-              let current = await frame.$eval(selector, el => el.value ?? "");
-              console.log(`[FIE_2] Verificación select ${selector} intento ${i}:`, current);
-              if (current === value) return true;
-
-              // Fallback directo
-              await frame.evaluate((sel, val) => {
+              const val = String(value ?? "");
+              const elHandle = await frame.$(selector);
+            
+              if (!elHandle) {
+                console.log(`[FIE_2] Campo opcional NO presente: ${selector}. Continúo.`);
+                return false;
+              }
+              if (!val) {
+                console.log(`[FIE_2] Sin valor para ${selector}. Omite rellenado.`);
+                return false;
+              }
+            
+              const isVisible = await elHandle
+                .evaluate((e) => {
+                  const s = getComputedStyle(e);
+                  const r = e.getBoundingClientRect();
+                  return s.visibility !== "hidden" && s.display !== "none" && r.width > 0 && r.height > 0;
+                })
+                .catch(() => false);
+              
+              if (isVisible) {
+                try {
+                  await fillTextWithRetry(frame, selector, val, opts);
+                  return true;
+                } catch (e) {}
+              }
+            
+              const ok = await frame.evaluate((sel, v) => {
                 const el = document.querySelector(sel);
-                if (!el) return;
-                el.value = val;
+                if (!el) return false;
+                el.value = v;
                 el.dispatchEvent(new Event("input", { bubbles: true }));
                 el.dispatchEvent(new Event("change", { bubbles: true }));
-                el.blur?.();
-              }, selector, value);
-
-              await pause(120);
-              current = await frame.$eval(selector, el => el.value ?? "");
-              console.log(`[FIE_2] Verificación fallback ${selector} intento ${i}:`, current);
-              if (current === value) return true;
-
-            } catch (e) {
-              console.warn(`[FIE_2] selectWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
-            }
-            await pause(betweenTriesMs + i * 150);
-          }
-          console.warn(`[FIE_2] ❌ ${selector} no se pudo seleccionar tras ${tries} intentos`);
-          return false;
-        };
-
-        const findFrameWithSelector = async (selector, timeoutMs = 25000, pollMs = 400) => {
-          const start = Date.now();
-          while (Date.now() - start < timeoutMs) {
-            for (const fr of page.frames()) {
-              try {
-                const el = await fr.$(selector);
-                if (el) return fr;
-              } catch {}
-            }
-            await pause(pollMs);
-          }
-          return null;
-        };
-
-        const toDDMMYYYY = (date) => {
-          const dd = String(date.getUTCDate()).padStart(2, "0");
-          const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-          const yyyy = String(date.getUTCFullYear());
-          return `${dd}/${mm}/${yyyy}`;
-        };
-        const excelSerialToDDMMYYYY = (serial) => toDDMMYYYY(excelSerialToUTCDate(serial));
-        const extraeRegimenYCCC = (cccRaw) => {
-          const digits = String(cccRaw ?? "").replace(/\D/g, "");
-          return { regimen: digits.slice(0,4).padStart(4,"0"), cccResto: digits.slice(4) };
-        };
-        const limpiaDigitos = (n) => String(n ?? "").replace(/\D/g, "");
-        const extraeCodigoContingencia = (campo) => {
-          const s = String(campo ?? ""); const m = s.match(/^(\d+)\s*=/); return m ? m[1] : "";
-        };
-
-        console.log("[FIE_2] Buscando frame con el formulario...");
-        const formFrame = await findFrameWithSelector("#regimen", 25000, 400);
-        if (!formFrame) {
-          console.warn("[FIE_2] No encontré el formulario (#regimen) en ningún frame.");
-        } else {
-          console.log("[FIE_2] Formulario encontrado.");
-          const r = datos[0];
-
-          const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
-          const naf = limpiaDigitos(r?.naf);
-          const contCode = extraeCodigoContingencia(r?.contingencia); // '1'..'5'
-          const fechaBajaStr = r?.fechaBajaIt ? excelSerialToDDMMYYYY(r.fechaBajaIt) : "";
-
-          console.table({
-            "Regimen (4)": regimen,
-            "CCC (resto, 11)": cccResto,
-            "NAF (12)": naf,
-            "Contingencia (1-5)": contCode,
-            "Fecha de baja": fechaBajaStr
-          });
-
-          // Relleno con reintentos + verificación
-          await fillTextWithRetry(formFrame, "#regimen", regimen, { tries: 4, typeDelay: 60 });
-          await pause(200);
-          await fillTextWithRetry(formFrame, "#ccc", cccResto, { tries: 4, typeDelay: 60 });
-          await pause(200);
-          await fillTextWithRetry(formFrame, "#naf", naf, { tries: 4, typeDelay: 60 });
-          await pause(200);
-
-          // Contingencias: soportamos 1..5
-          if (["1","2","3","4","5"].includes(contCode)) {
-            await selectWithRetry(formFrame, "#contingencias", contCode, { tries: 4 });
-          } else {
-            console.warn("[FIE_2] Contingencia no reconocida:", r?.contingencia);
-          }
-          await pause(200);
-
-          if (fechaBajaStr) {
-            await fillTextWithRetry(formFrame, "#fechaBaja", fechaBajaStr, {
-              tries: 3, typeDelay: 60, digitsOnlyCompare: false
-            });
-          } else {
-            console.warn("[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja.");
-          }
-
-          // ENVIAR
-          try {
-            await formFrame.waitForSelector("#ENVIO_7", { visible: true, timeout: 8000 });
-            await formFrame.click("#ENVIO_7", { delay: 60 });
-            console.log("[FIE_2] Click en Aceptar (ENVIO_7).");
-          } catch (e) {
-            console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
-          }
-
-          await this.esperar(1000);
-
-          // === 5.b) Segunda pantalla: "Grabación de partes" ===
-          try {
-            // Espera a que navegue o, como mínimo, a que cambie el DOM
-            await Promise.race([
-              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
-              pause(1500),
-            ]);
-          
-            // Localiza el nuevo formulario o algún campo característico
-            const form2 = await findFrameWithSelector("#FORMULARIO_4", 25000, 400)
-                       || await findFrameWithSelector("#puestoTrabajo", 25000, 400);
-            if (!form2) {
-              console.warn("[FIE_2] No encontré el formulario de 'Grabación de partes' (#FORMULARIO_4).");
-            } else {
-              console.log("[FIE_2] Formulario 'Grabación de partes' encontrado.");
-              const r = datos[0];
+                el.blur && el.blur();
+                return true;
+              }, selector, val);
             
-              // ====== MAPEOS (ajusta a tus nombres reales de columnas) ======
-              const puestoDeTrabajo = String(r?.puestoDeTrabajo ?? r?.puestoTrabajo ?? ""); // p.ej. 'PEON'
-              const cnoe            = String(r?.cnoe ?? "");                                // p.ej. '9700'
-              const tipoContratoIn  = String(r?.tipoContrato ?? "");                        // p.ej. '100'
-            
-              // Para "Resto"
-              const baseResto       = String(r?.base ?? ""); // '1381,34'
-              const diasResto       = String(r?.dia  ?? ""); // '30'
-            
-              // Para "Fijo discontinuo / tiempo parcial" (si usas mismas columnas, deja igual)
-              const baseFijoParcial = String(r?.base ?? "");
-              const diasFijoParcial = String(r?.dia  ?? "");
-            
-              const detalleCnoe     = String(r?.detalleCnoe ?? ""); // textarea
-            
-              // Fecha AT/EP: si no existe columna específica, uso la fecha de baja
-              const toDDMMYYYY = (d) => {
-                const dd = String(d.getUTCDate()).padStart(2,"0");
-                const mm = String(d.getUTCMonth()+1).padStart(2,"0");
-                const yy = d.getUTCFullYear();
-                return `${dd}/${mm}/${yy}`;
-              };
-              let fechaATEP = "";
-              if (r?.fechaATEP) {
-                try { fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP)); } catch {}
-              }
-              if (!fechaATEP && r?.fechaBajaIt) {
-                try { fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaBajaIt)); } catch {}
-              }
-            
-              // ====== LÓGICA Tipo de contrato (options del select: "1" Fijo/Parcial, "2" Resto) ======
-              const code = tipoContratoIn.trim();
-              const starts = (p) => code.startsWith(p);
-              const inSet  = (arr) => arr.includes(code);
-            
-              let tipoContratoSelect = ""; // "1" ó "2"
-              if (starts("2") || starts("3") || starts("5")) {
-                tipoContratoSelect = "1"; // Fijo discontinuo / Tiempo parcial
-              } else if (starts("1") || starts("4")) {
-                tipoContratoSelect = "2"; // Resto
-              }
-            
-              console.table({
-                puestoDeTrabajo, cnoe, tipoContratoIn, tipoContratoSelect,
-                baseResto, diasResto, baseFijoParcial, diasFijoParcial, fechaATEP
-              });
-            
-              // ====== Relleno de campos ======
-              if (puestoDeTrabajo) {
-                await fillTextWithRetry(form2, "#puestoTrabajo", puestoDeTrabajo, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
-              }
-            
-              if (cnoe) {
-                // <select id="ocupacion"> con values tipo "9700"
-                await selectWithRetry(form2, "#ocupacion", cnoe, { tries: 4 });
-              }
-            
-              // Tipo de contrato (esto puede refrescar etiquetas de los campos inferiores)
-              await selectWithRetry(form2, "#tipoContrato", tipoContratoSelect, { tries: 4 });
-              await pause(400);
-            
-              // Campos económicos según la opción
-              if (tipoContratoSelect === "2") {
-                // Resto → #BaseCot y #DiasCot
-                if (baseResto) await fillTextWithRetry(form2, "#BaseCot", baseResto, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
-                if (diasResto) await fillTextWithRetry(form2, "#DiasCot", diasResto, { tries: 3, typeDelay: 35 });
-              } else {
-                // Fijo discontinuo/tiempo parcial → #sumaBaseCot y #sumaDiasCot
-                if (baseFijoParcial) await fillTextWithRetry(form2, "#sumaBaseCot", baseFijoParcial, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
-                if (diasFijoParcial) await fillTextWithRetry(form2, "#sumaDiasCot", diasFijoParcial, { tries: 3, typeDelay: 35 });
-              }
-            
-              // Fecha AT/EP: el campo puede NO aparecer según la contingencia.
-              // Si existe el input, lo rellenamos; si no, seguimos.
-              if (!(await fillIfPresent(form2, "#fechaATEP", fechaATEP, {
-                tries: 3, typeDelay: 35, digitsOnlyCompare: false
-              }))) {
-                console.log("[FIE_2] #fechaATEP ausente o sin valor. Continuo sin error.");
-              }
-
-              // Descripción de funciones
-              if (detalleCnoe) {
-                await fillTextWithRetry(form2, "#funcDesempe", detalleCnoe, { tries: 3, typeDelay: 15, digitsOnlyCompare: false });
-              }
-            
-              // Validar
-              try {
-                await form2.waitForSelector("#ENVIO_14", { visible: true, timeout: 8000 });
-                await form2.click("#ENVIO_14", { delay: 60 });
-                console.log("[FIE_2] Click en Validar (ENVIO_14).");
-              } catch (e) {
-                console.warn("[FIE_2] No se pudo clicar Validar:", e?.message || e);
-              }
-            }
-          } catch (e) {
-            console.warn("[FIE_2] Error en segunda pantalla:", e?.message || e);
-          }
-
-          await this.esperar(1000);
-          // === 5.c) Pantalla de confirmación (Paso 2/3): click en Confirmar (ENVIO_12) ===
-          try {
-            // Espera a que cargue la pantalla de confirmación
-            await Promise.race([
-              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
-              pause(1500),
-            ]);
-          
-            // Buscamos un frame que tenga el botón #ENVIO_12
-            const confirmFrame =
-              (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
-              (await findFrameWithSelector('button[name="SPM.ACC.CONFIRMAR_DATOS_ECONOMICOS"]', 20000, 400));
-          
-            if (!confirmFrame) {
-              console.warn("[FIE_2] No encontré la pantalla de Confirmación (botón #ENVIO_12).");
-            } else {
-              console.log("[FIE_2] Pantalla de Confirmación encontrada. Intentando click en Confirmar (ENVIO_12)...");
-              try {
-                await confirmFrame.waitForSelector("#ENVIO_12", { visible: true, timeout: 8000 });
-                await confirmFrame.click("#ENVIO_12", { delay: 60 });
-                console.log("[FIE_2] Click en Confirmar (ENVIO_12).");
-              } catch (e) {
-                console.warn("[FIE_2] No se pudo clicar Confirmar (ENVIO_12):", e?.message || e);
-              }
-            }
-          } catch (e) {
-            console.warn("[FIE_2] Error en pantalla de confirmación (Paso 2/3):", e?.message || e);
-          }
-
-          await this.esperar(1000);
-          
-          // === 5.d) Pantalla de confirmación (Paso 2/3): click en Confirmar (ENVIO_12) ===
-          try {
-            // Espera a que cargue la pantalla de confirmación
-            await Promise.race([
-              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
-              pause(1500),
-            ]);
-          
-            // Buscamos un frame que tenga el botón #ENVIO_8
-            const confirmFrame =
-              (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
-              (await findFrameWithSelector('button[name="SPM.ACC.INFORME_DATOS_ECONOMICOS"]', 20000, 400));
-          
-            if (!confirmFrame) {
-              console.warn("[FIE_2] No encontré la pantalla de Generación (botón #ENVIO_8).");
-            } else {
-              console.log("[FIE_2] Pantalla de Generación encontrada. Intentando click en Generar (ENVIO_8)...");
-              try {
-                await confirmFrame.waitForSelector("#ENVIO_8", { visible: true, timeout: 8000 });
-                await confirmFrame.click("#ENVIO_8", { delay: 60 });
-                console.log("[FIE_2] Click en Generar (ENVIO_8).");
-              } catch (e) {
-                console.warn("[FIE_2] No se pudo clicar Generar (ENVIO_8):", e?.message || e);
-              }
-            }
-          } catch (e) {
-            console.warn("[FIE_2] Error en pantalla de Generación (Paso 2/3):", e?.message || e);
-          }
-
-          await this.esperar(1000);
-          // === 5.e) Buscar enlace "Visualizar informe..." y descargar PDF ===
-          try {
-            // La página se refresca y aparece la sección "Documentación > Informes"
-            await Promise.race([
-              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
-              pause(1500),
-            ]);
-
-            // Buscamos en los frames el enlace del informe
-            const docFrame = await findFrameWithSelector(
-              'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
-              20000,
-              400
-            );
-
-            if (!docFrame) {
-              console.warn("[FIE_2] No encontré el enlace de informe (a.pr_enlaceDocInforme).");
-            } else {
-              console.log("[FIE_2] Enlace de informe localizado. Obteniendo URL...");
-
-              // 1) Sacamos el href relativo
-              const href = await docFrame.$eval(
-                'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
-                (el) => el.getAttribute("href") || ""
+              console.log(
+                ok
+                  ? `[FIE_2] ${selector} fijado por JS (fallback, posible campo oculto).`
+                  : `[FIE_2] No se pudo fijar ${selector} por JS.`
               );
-
-              if (!href) {
-                console.warn("[FIE_2] El enlace de informe no tiene href usable.");
-              } else if (!pathSalidaPDFConfirmacion) {
-                console.warn("[FIE_2] No hay carpeta de salida configurada; no descargo PDF.");
-              } else {
-                // 2) Construimos la URL absoluta del PDF
-                const baseUrl = page.url();
-                const pdfUrl = new URL(href, baseUrl).toString();
-                console.log("[FIE_2] URL PDF:", pdfUrl);
-
-                // 3) Descargamos el PDF desde el propio navegador (mismo contexto / misma sesión)
-                const pdfBase64 = await docFrame.evaluate(async (url) => {
-                  const res = await fetch(url, { credentials: "include" });
-                  if (!res.ok) {
-                    throw new Error("Respuesta HTTP no OK al descargar PDF: " + res.status);
-                  }
-                  const buf = await res.arrayBuffer();
-                  const bytes = new Uint8Array(buf);
-                  let binary = "";
-                  for (let i = 0; i < bytes.length; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                  }
-                  // Devolvemos el PDF como base64
-                  return btoa(binary);
-                }, pdfUrl);
-
-                // 4) Convertimos base64 -> Buffer en Node y guardamos el archivo
-                const buffer = Buffer.from(pdfBase64, "base64");
-
-                // Extraemos el SECUENCIAL para el nombre del archivo
-                const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
-                const seq = (seqMatch && seqMatch[1]) || "1";
-
-                // NAF “limpio” para el nombre
-                const nafSafe = (datos[0]?.naf ? String(datos[0].naf) : "sinNAF").replace(/\D/g, "");
-
-                const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
-                const fullPath = path.join(pathSalidaPDFConfirmacion, fileName);
-
-                fs.writeFileSync(fullPath, buffer);
-                console.log("[FIE_2] Informe PDF guardado en:", fullPath);
-              }
+            
+              return ok;
+            } catch (e) {
+              console.warn(`[FIE_2] No pude rellenar opcional ${selector}:`, e?.message || e);
+              return false;
             }
+          };
+        
+          const selectWithRetry = async (
+            frame,
+            selector,
+            rawValue,
+            { tries = 4, betweenTriesMs = 250 } = {}
+          ) => {
+            const value = String(rawValue ?? "");
+            await frame.waitForSelector(selector, { visible: true, timeout: 15000 });
+            await frame.$eval(selector, (el) => el.scrollIntoView({ block: "center" }));
+          
+            for (let i = 1; i <= tries; i++) {
+              try {
+                await frame.select(selector, value);
+                await pause(100);
+                let current = await frame.$eval(selector, (el) => el.value ?? "");
+                console.log(`[FIE_2] Verificación select ${selector} intento ${i}:`, current);
+                if (current === value) return true;
+              
+                await frame.evaluate((sel, val) => {
+                  const el = document.querySelector(sel);
+                  if (!el) return;
+                  el.value = val;
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                  el.dispatchEvent(new Event("change", { bubbles: true }));
+                  el.blur?.();
+                }, selector, value);
+              
+                await pause(120);
+                current = await frame.$eval(selector, (el) => el.value ?? "");
+                console.log(`[FIE_2] Verificación fallback ${selector} intento ${i}:`, current);
+                if (current === value) return true;
+              } catch (e) {
+                console.warn(`[FIE_2] selectWithRetry fallo intento ${i} en ${selector}:`, e?.message || e);
+              }
+              await pause(betweenTriesMs + i * 150);
+            }
+            console.warn(`[FIE_2] ❌ ${selector} no se pudo seleccionar tras ${tries} intentos`);
+            return false;
+          };
+        
+          const findFrameWithSelector = async (selector, timeoutMs = 25000, pollMs = 400) => {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+              for (const fr of page.frames()) {
+                try {
+                  const el = await fr.$(selector);
+                  if (el) return fr;
+                } catch (e) {}
+              }
+              await pause(pollMs);
+            }
+            return null;
+          };
+        
+          const toDDMMYYYY = (date) => {
+            const dd = String(date.getUTCDate()).padStart(2, "0");
+            const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+            const yyyy = String(date.getUTCFullYear());
+            return `${dd}/${mm}/${yyyy}`;
+          };
+          const excelSerialToDDMMYYYY = (serial) => toDDMMYYYY(excelSerialToUTCDate(serial));
+          const extraeRegimenYCCC = (cccRaw) => {
+            const digits = String(cccRaw ?? "").replace(/\D/g, "");
+            return { regimen: digits.slice(0, 4).padStart(4, "0"), cccResto: digits.slice(4) };
+          };
+          const limpiaDigitos = (n) => String(n ?? "").replace(/\D/g, "");
+          const extraeCodigoContingencia = (campo) => {
+            const s = String(campo ?? "");
+            const m = s.match(/^(\d+)\s*=/);
+            return m ? m[1] : "";
+          };
+        
+        const procesarRegistro = async (r, indice) => {
+          console.log(
+            `[FIE_2] ==== Procesando registro ${indice + 1}/${datos.length} (NAF: ${
+              r?.naf ?? "sin NAF"
+            }) ====`
+          );
+
+          // Volvemos siempre a la URL base y entramos de nuevo en IT Online
+          try {
+            await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           } catch (e) {
-            console.warn("[FIE_2] Error al localizar/descargar el informe PDF:", e?.message || e);
+            console.warn(
+              `[FIE_2] Error haciendo goto a urlFS en registro ${indice + 1}:`,
+              e?.message || e
+            );
+            // si falla la navegación, no intentamos nada más con este registro
+            return;
+          }
+
+          await openITOnline();
+          
+            console.log("[FIE_2] Buscando frame con el formulario...");
+            const formFrame = await findFrameWithSelector("#regimen", 25000, 400);
+            if (!formFrame) {
+              console.warn("[FIE_2] No encontré el formulario (#regimen) en ningún frame.");
+              return;
+            }
+          
+            console.log("[FIE_2] Formulario encontrado.");
+          
+            const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
+            const naf = limpiaDigitos(r?.naf);
+            const contCode = extraeCodigoContingencia(r?.contingencia);
+            const fechaBajaStr = r?.fechaBajaIt ? excelSerialToDDMMYYYY(r.fechaBajaIt) : "";
+          
+            console.table({
+              "Regimen (4)": regimen,
+              "CCC (resto, 11)": cccResto,
+              "NAF (12)": naf,
+              "Contingencia (1-5)": contCode,
+              "Fecha de baja": fechaBajaStr,
+            });
+          
+            await fillTextWithRetry(formFrame, "#regimen", regimen, { tries: 4, typeDelay: 60 });
+            await pause(200);
+            await fillTextWithRetry(formFrame, "#ccc", cccResto, { tries: 4, typeDelay: 60 });
+            await pause(200);
+            await fillTextWithRetry(formFrame, "#naf", naf, { tries: 4, typeDelay: 60 });
+            await pause(200);
+          
+            if (["1", "2", "3", "4", "5"].includes(contCode)) {
+              await selectWithRetry(formFrame, "#contingencias", contCode, { tries: 4 });
+            } else {
+              console.warn("[FIE_2] Contingencia no reconocida:", r?.contingencia);
+            }
+            await pause(200);
+          
+            if (fechaBajaStr) {
+              await fillTextWithRetry(formFrame, "#fechaBaja", fechaBajaStr, {
+                tries: 3,
+                typeDelay: 60,
+                digitsOnlyCompare: false,
+              });
+            } else {
+              console.warn("[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja.");
+            }
+          
+            // ENVIAR
+            try {
+              await formFrame.waitForSelector("#ENVIO_7", { visible: true, timeout: 8000 });
+              await formFrame.click("#ENVIO_7", { delay: 60 });
+              console.log("[FIE_2] Click en Aceptar (ENVIO_7).");
+            } catch (e) {
+              console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
+            }
+          
+            await this.esperar(1000);
+          
+            // === Segunda pantalla: "Grabación de partes" ===
+            try {
+              await Promise.race([
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+                pause(1500),
+              ]);
+            
+              const form2 =
+                (await findFrameWithSelector("#FORMULARIO_4", 25000, 400)) ||
+                (await findFrameWithSelector("#puestoTrabajo", 25000, 400));
+              if (!form2) {
+                console.warn("[FIE_2] No encontré el formulario de 'Grabación de partes' (#FORMULARIO_4).");
+              } else {
+                console.log("[FIE_2] Formulario 'Grabación de partes' encontrado.");
+              
+                const puestoDeTrabajo = String(r?.puestoDeTrabajo ?? r?.puestoTrabajo ?? "");
+                const cnoe = String(r?.cnoe ?? "");
+                const tipoContratoIn = String(r?.tipoContrato ?? "");
+              
+                const baseResto = String(r?.base ?? "");
+                const diasResto = String(r?.dia ?? "");
+              
+                const baseFijoParcial = String(r?.base ?? "");
+                const diasFijoParcial = String(r?.dia ?? "");
+              
+                const detalleCnoe = String(r?.detalleCnoe ?? "");
+              
+                let fechaATEP = "";
+                if (r?.fechaATEP) {
+                  try {
+                    fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP));
+                  } catch (e) {}
+                }
+                if (!fechaATEP && r?.fechaBajaIt) {
+                  try {
+                    fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaBajaIt));
+                  } catch (e) {}
+                }
+              
+                const code = tipoContratoIn.trim();
+                const starts = (p) => code.startsWith(p);
+              
+                let tipoContratoSelect = "";
+                if (starts("2") || starts("3") || starts("5")) {
+                  tipoContratoSelect = "1"; // Fijo discontinuo / Tiempo parcial
+                } else if (starts("1") || starts("4")) {
+                  tipoContratoSelect = "2"; // Resto
+                }
+              
+                console.table({
+                  puestoDeTrabajo,
+                  cnoe,
+                  tipoContratoIn,
+                  tipoContratoSelect,
+                  baseResto,
+                  diasResto,
+                  baseFijoParcial,
+                  diasFijoParcial,
+                  fechaATEP,
+                });
+              
+                if (puestoDeTrabajo) {
+                  await fillTextWithRetry(form2, "#puestoTrabajo", puestoDeTrabajo, {
+                    tries: 3,
+                    typeDelay: 35,
+                    digitsOnlyCompare: false,
+                  });
+                }
+              
+                if (cnoe) {
+                  await selectWithRetry(form2, "#ocupacion", cnoe, { tries: 4 });
+                }
+              
+                await selectWithRetry(form2, "#tipoContrato", tipoContratoSelect, { tries: 4 });
+                await pause(400);
+              
+                if (tipoContratoSelect === "2") {
+                  if (baseResto)
+                    await fillTextWithRetry(form2, "#BaseCot", baseResto, {
+                      tries: 3,
+                      typeDelay: 35,
+                      digitsOnlyCompare: false,
+                    });
+                  if (diasResto)
+                    await fillTextWithRetry(form2, "#DiasCot", diasResto, { tries: 3, typeDelay: 35 });
+                } else {
+                  if (baseFijoParcial)
+                    await fillTextWithRetry(form2, "#sumaBaseCot", baseFijoParcial, {
+                      tries: 3,
+                      typeDelay: 35,
+                      digitsOnlyCompare: false,
+                    });
+                  if (diasFijoParcial)
+                    await fillTextWithRetry(form2, "#sumaDiasCot", diasFijoParcial, { tries: 3, typeDelay: 35 });
+                }
+              
+                if (
+                  !(await fillIfPresent(form2, "#fechaATEP", fechaATEP, {
+                    tries: 3,
+                    typeDelay: 35,
+                    digitsOnlyCompare: false,
+                  }))
+                ) {
+                  console.log("[FIE_2] #fechaATEP ausente o sin valor. Continuo sin error.");
+                }
+              
+                if (detalleCnoe) {
+                  await fillTextWithRetry(form2, "#funcDesempe", detalleCnoe, {
+                    tries: 3,
+                    typeDelay: 15,
+                    digitsOnlyCompare: false,
+                  });
+                }
+              
+                try {
+                  await form2.waitForSelector("#ENVIO_14", { visible: true, timeout: 8000 });
+                  await form2.click("#ENVIO_14", { delay: 60 });
+                  console.log("[FIE_2] Click en Validar (ENVIO_14).");
+                } catch (e) {
+                  console.warn("[FIE_2] No se pudo clicar Validar:", e?.message || e);
+                }
+              }
+            } catch (e) {
+              console.warn("[FIE_2] Error en segunda pantalla:", e?.message || e);
+            }
+          
+            await this.esperar(1000);
+          
+            // Pantalla de confirmación (Confirmar)
+            try {
+              await Promise.race([
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+                pause(1500),
+              ]);
+            
+              const confirmFrame1 =
+                (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
+                (await findFrameWithSelector('button[name="SPM.ACC.CONFIRMAR_DATOS_ECONOMICOS"]', 20000, 400));
+            
+              if (!confirmFrame1) {
+                console.warn("[FIE_2] No encontré la pantalla de Confirmación (botón #ENVIO_12).");
+              } else {
+                console.log("[FIE_2] Pantalla de Confirmación encontrada. Intentando click en Confirmar (ENVIO_12)...");
+                try {
+                  await confirmFrame1.waitForSelector("#ENVIO_12", { visible: true, timeout: 8000 });
+                  await confirmFrame1.click("#ENVIO_12", { delay: 60 });
+                  console.log("[FIE_2] Click en Confirmar (ENVIO_12).");
+                } catch (e) {
+                  console.warn("[FIE_2] No se pudo clicar Confirmar (ENVIO_12):", e?.message || e);
+                }
+              }
+            } catch (e) {
+              console.warn("[FIE_2] Error en pantalla de confirmación (Paso 2/3):", e?.message || e);
+            }
+          
+            await this.esperar(1000);
+          
+            // Pantalla de generación (Generar informe)
+            try {
+              await Promise.race([
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+                pause(1500),
+              ]);
+            
+              const confirmFrame2 =
+                (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
+                (await findFrameWithSelector('button[name="SPM.ACC.INFORME_DATOS_ECONOMICOS"]', 20000, 400));
+            
+              if (!confirmFrame2) {
+                console.warn("[FIE_2] No encontré la pantalla de Generación (botón #ENVIO_8).");
+              } else {
+                console.log("[FIE_2] Pantalla de Generación encontrada. Intentando click en Generar (ENVIO_8)...");
+                try {
+                  await confirmFrame2.waitForSelector("#ENVIO_8", { visible: true, timeout: 8000 });
+                  await confirmFrame2.click("#ENVIO_8", { delay: 60 });
+                  console.log("[FIE_2] Click en Generar (ENVIO_8).");
+                } catch (e) {
+                  console.warn("[FIE_2] No se pudo clicar Generar (ENVIO_8):", e?.message || e);
+                }
+              }
+            } catch (e) {
+              console.warn("[FIE_2] Error en pantalla de Generación (Paso 2/3):", e?.message || e);
+            }
+          
+            await this.esperar(1000);
+          
+            // Buscar enlace "Visualizar informe..." y descargar PDF
+            try {
+              await Promise.race([
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+                pause(1500),
+              ]);
+            
+              const docFrame = await findFrameWithSelector(
+                'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+                20000,
+                400
+              );
+            
+              if (!docFrame) {
+                console.warn("[FIE_2] No encontré el enlace de informe (a.pr_enlaceDocInforme).");
+              } else {
+                console.log("[FIE_2] Enlace de informe localizado. Obteniendo URL...");
+              
+                const href = await docFrame.$eval(
+                  'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+                  (el) => el.getAttribute("href") || ""
+                );
+              
+                if (!href) {
+                  console.warn("[FIE_2] El enlace de informe no tiene href usable.");
+                } else if (!pathSalidaPDFConfirmacion) {
+                  console.warn("[FIE_2] No hay carpeta de salida configurada; no descargo PDF.");
+                } else {
+                  const baseUrl = page.url();
+                  const pdfUrl = new URL(href, baseUrl).toString();
+                  console.log("[FIE_2] URL PDF:", pdfUrl);
+                
+                  const pdfBase64 = await docFrame.evaluate(async (url) => {
+                    const res = await fetch(url, { credentials: "include" });
+                    if (!res.ok) {
+                      throw new Error("Respuesta HTTP no OK al descargar PDF: " + res.status);
+                    }
+                    const buf = await res.arrayBuffer();
+                    const bytes = new Uint8Array(buf);
+                    let binary = "";
+                    for (let i = 0; i < bytes.length; i++) {
+                      binary += String.fromCharCode(bytes[i]);
+                    }
+                    return btoa(binary);
+                  }, pdfUrl);
+                
+                  const buffer = Buffer.from(pdfBase64, "base64");
+                
+                  const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
+                  const seq = (seqMatch && seqMatch[1]) || "1";
+                
+                  const nafSafe = (r?.naf ? String(r.naf) : "sinNAF").replace(/\D/g, "");
+                
+                  const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
+                  const fullPath = path.join(pathSalidaPDFConfirmacion, fileName);
+                
+                  fs.writeFileSync(fullPath, buffer);
+                  console.log("[FIE_2] Informe PDF guardado en:", fullPath);
+                }
+              }
+            } catch (e) {
+              console.warn("[FIE_2] Error al localizar/descargar el informe PDF:", e?.message || e);
+            }
+          }; // fin procesarRegistro
+        
+          // === Bucle sobre todos los registros del Excel ===
+          for (let i = 0; i < datos.length; i++) {
+            try {
+              await procesarRegistro(datos[i], i);
+            } catch (e) {
+              console.warn(
+                `[FIE_2] Error inesperado procesando el registro ${i + 1}/${datos.length}:`,
+                e?.message || e
+              );
+            }
           }
         }
-        }
-
+      
         // 6) Devolver el array como antes
         return resolve(datos);
-
       } catch (err) {
         console.error("[FIE_2] Error leyendo el Excel:", err);
         try {
@@ -1818,7 +1870,6 @@ class ProcesosFie {
       }
     });
   }
-
 
 } //Fin Procesos Fie
 
