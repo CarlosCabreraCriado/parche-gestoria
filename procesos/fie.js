@@ -1184,7 +1184,7 @@ class ProcesosFie {
 
   async fIE_2(argumentos) {
     console.log("[FIE_2] Iniciando paso 1: lectura de Excel → array");
-
+    //await this.esperar(2000);
     return new Promise(async (resolve) => {
       try {
         // 1) Entradas (nuevo orden)
@@ -1206,8 +1206,7 @@ class ProcesosFie {
         if (pathSalidaBase && typeof pathSalidaBase === "string") {
           pathSalidaPDFConfirmacion = path.join(
             path.normalize(pathSalidaBase),
-            `FIE_2-Procesado (${this.getCurrentDateString()})`,
-            "PDFs-Generados"
+            `TA2 B (${this.getCurrentDateString()})`
           );
           if (!fs.existsSync(pathSalidaPDFConfirmacion)) {
             fs.mkdirSync(pathSalidaPDFConfirmacion, { recursive: true });
@@ -1255,18 +1254,6 @@ class ProcesosFie {
 
         await page.goto(urlFS, { waitUntil: "domcontentloaded" });
 
-        // Anti popups en TODOS los frames
-        for (const fr of page.frames()) {
-          try {
-            await fr.evaluate(() => {
-              document.querySelectorAll('a[target="_blank"]').forEach(a => a.target = '_self');
-              window.open = new Proxy(window.open, {
-                apply(target, thisArg, args) { return null; }
-              });
-            });
-          } catch {}
-        }
-        page.on("popup", async (p) => { try { await p.close(); } catch {} });
 
         // Click al enlace de IT Online
         try {
@@ -1378,6 +1365,62 @@ class ProcesosFie {
           }
           console.warn(`[FIE_2] ❌ ${selector} no se pudo fijar tras ${tries} intentos`);
           return false;
+        };
+
+        // Rellena un input si existe (aunque esté oculto). Si no existe, sigue sin error.
+        const fillIfPresent = async (
+          frame,
+          selector,
+          value,
+          opts = { tries: 3, typeDelay: 35, digitsOnlyCompare: false }
+        ) => {
+          try {
+            const val = String(value ?? "");
+            const elHandle = await frame.$(selector);
+          
+            if (!elHandle) {
+              console.log(`[FIE_2] Campo opcional NO presente: ${selector}. Continúo.`);
+              return false;
+            }
+            if (!val) {
+              console.log(`[FIE_2] Sin valor para ${selector}. Omite rellenado.`);
+              return false;
+            }
+          
+            // Intento 1: si es visible, usa el método robusto con tecleo humano
+            const isVisible = await elHandle.evaluate((e) => {
+              const s = getComputedStyle(e);
+              const r = e.getBoundingClientRect();
+              return s.visibility !== "hidden" && s.display !== "none" && r.width > 0 && r.height > 0;
+            }).catch(() => false);
+          
+            if (isVisible) {
+              try {
+                await fillTextWithRetry(frame, selector, val, opts);
+                return true;
+              } catch {}
+            }
+          
+            // Intento 2 (fallback): set directo por JS aunque esté oculto
+            const ok = await frame.evaluate((sel, v) => {
+              const el = document.querySelector(sel);
+              if (!el) return false;
+              el.value = v;
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+              el.dispatchEvent(new Event("change", { bubbles: true }));
+              el.blur && el.blur();
+              return true;
+            }, selector, val);
+          
+            console.log(ok
+              ? `[FIE_2] ${selector} fijado por JS (fallback, posible campo oculto).`
+              : `[FIE_2] No se pudo fijar ${selector} por JS.`);
+            
+            return ok;
+          } catch (e) {
+            console.warn(`[FIE_2] No pude rellenar opcional ${selector}:`, e?.message || e);
+            return false;
+          }
         };
 
         const selectWithRetry = async (
@@ -1504,6 +1547,8 @@ class ProcesosFie {
             console.warn("[FIE_2] No se pudo clicar Aceptar:", e?.message || e);
           }
 
+          await this.esperar(1000);
+
           // === 5.b) Segunda pantalla: "Grabación de partes" ===
           try {
             // Espera a que navegue o, como mínimo, a que cambie el DOM
@@ -1557,12 +1602,10 @@ class ProcesosFie {
               const inSet  = (arr) => arr.includes(code);
             
               let tipoContratoSelect = ""; // "1" ó "2"
-              if (starts("200") || starts("300") || starts("500") || inSet(["300","289","510"])) {
+              if (starts("2") || starts("3") || starts("5")) {
                 tipoContratoSelect = "1"; // Fijo discontinuo / Tiempo parcial
-              } else if (starts("100") || starts("400") || inSet(["189","402","100"])) {
+              } else if (starts("1") || starts("4")) {
                 tipoContratoSelect = "2"; // Resto
-              } else {
-                tipoContratoSelect = "2"; // por defecto
               }
             
               console.table({
@@ -1595,13 +1638,14 @@ class ProcesosFie {
                 if (diasFijoParcial) await fillTextWithRetry(form2, "#sumaDiasCot", diasFijoParcial, { tries: 3, typeDelay: 35 });
               }
             
-              // Fecha AT/EP (obligatoria)
-              if (fechaATEP) {
-                await fillTextWithRetry(form2, "#fechaATEP", fechaATEP, { tries: 3, typeDelay: 35, digitsOnlyCompare: false });
-              } else {
-                console.warn("[FIE_2] No tengo fechaATEP; si 'Validar' protesta, añade columna específica en Excel.");
+              // Fecha AT/EP: el campo puede NO aparecer según la contingencia.
+              // Si existe el input, lo rellenamos; si no, seguimos.
+              if (!(await fillIfPresent(form2, "#fechaATEP", fechaATEP, {
+                tries: 3, typeDelay: 35, digitsOnlyCompare: false
+              }))) {
+                console.log("[FIE_2] #fechaATEP ausente o sin valor. Continuo sin error.");
               }
-            
+
               // Descripción de funciones
               if (detalleCnoe) {
                 await fillTextWithRetry(form2, "#funcDesempe", detalleCnoe, { tries: 3, typeDelay: 15, digitsOnlyCompare: false });
@@ -1620,6 +1664,140 @@ class ProcesosFie {
             console.warn("[FIE_2] Error en segunda pantalla:", e?.message || e);
           }
 
+          await this.esperar(1000);
+          // === 5.c) Pantalla de confirmación (Paso 2/3): click en Confirmar (ENVIO_12) ===
+          try {
+            // Espera a que cargue la pantalla de confirmación
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+              pause(1500),
+            ]);
+          
+            // Buscamos un frame que tenga el botón #ENVIO_12
+            const confirmFrame =
+              (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
+              (await findFrameWithSelector('button[name="SPM.ACC.CONFIRMAR_DATOS_ECONOMICOS"]', 20000, 400));
+          
+            if (!confirmFrame) {
+              console.warn("[FIE_2] No encontré la pantalla de Confirmación (botón #ENVIO_12).");
+            } else {
+              console.log("[FIE_2] Pantalla de Confirmación encontrada. Intentando click en Confirmar (ENVIO_12)...");
+              try {
+                await confirmFrame.waitForSelector("#ENVIO_12", { visible: true, timeout: 8000 });
+                await confirmFrame.click("#ENVIO_12", { delay: 60 });
+                console.log("[FIE_2] Click en Confirmar (ENVIO_12).");
+              } catch (e) {
+                console.warn("[FIE_2] No se pudo clicar Confirmar (ENVIO_12):", e?.message || e);
+              }
+            }
+          } catch (e) {
+            console.warn("[FIE_2] Error en pantalla de confirmación (Paso 2/3):", e?.message || e);
+          }
+
+          await this.esperar(1000);
+          
+          // === 5.d) Pantalla de confirmación (Paso 2/3): click en Confirmar (ENVIO_12) ===
+          try {
+            // Espera a que cargue la pantalla de confirmación
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+              pause(1500),
+            ]);
+          
+            // Buscamos un frame que tenga el botón #ENVIO_8
+            const confirmFrame =
+              (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
+              (await findFrameWithSelector('button[name="SPM.ACC.INFORME_DATOS_ECONOMICOS"]', 20000, 400));
+          
+            if (!confirmFrame) {
+              console.warn("[FIE_2] No encontré la pantalla de Generación (botón #ENVIO_8).");
+            } else {
+              console.log("[FIE_2] Pantalla de Generación encontrada. Intentando click en Generar (ENVIO_8)...");
+              try {
+                await confirmFrame.waitForSelector("#ENVIO_8", { visible: true, timeout: 8000 });
+                await confirmFrame.click("#ENVIO_8", { delay: 60 });
+                console.log("[FIE_2] Click en Generar (ENVIO_8).");
+              } catch (e) {
+                console.warn("[FIE_2] No se pudo clicar Generar (ENVIO_8):", e?.message || e);
+              }
+            }
+          } catch (e) {
+            console.warn("[FIE_2] Error en pantalla de Generación (Paso 2/3):", e?.message || e);
+          }
+
+          await this.esperar(1000);
+          // === 5.e) Buscar enlace "Visualizar informe..." y descargar PDF ===
+          try {
+            // La página se refresca y aparece la sección "Documentación > Informes"
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {}),
+              pause(1500),
+            ]);
+
+            // Buscamos en los frames el enlace del informe
+            const docFrame = await findFrameWithSelector(
+              'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+              20000,
+              400
+            );
+
+            if (!docFrame) {
+              console.warn("[FIE_2] No encontré el enlace de informe (a.pr_enlaceDocInforme).");
+            } else {
+              console.log("[FIE_2] Enlace de informe localizado. Obteniendo URL...");
+
+              // 1) Sacamos el href relativo
+              const href = await docFrame.$eval(
+                'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+                (el) => el.getAttribute("href") || ""
+              );
+
+              if (!href) {
+                console.warn("[FIE_2] El enlace de informe no tiene href usable.");
+              } else if (!pathSalidaPDFConfirmacion) {
+                console.warn("[FIE_2] No hay carpeta de salida configurada; no descargo PDF.");
+              } else {
+                // 2) Construimos la URL absoluta del PDF
+                const baseUrl = page.url();
+                const pdfUrl = new URL(href, baseUrl).toString();
+                console.log("[FIE_2] URL PDF:", pdfUrl);
+
+                // 3) Descargamos el PDF desde el propio navegador (mismo contexto / misma sesión)
+                const pdfBase64 = await docFrame.evaluate(async (url) => {
+                  const res = await fetch(url, { credentials: "include" });
+                  if (!res.ok) {
+                    throw new Error("Respuesta HTTP no OK al descargar PDF: " + res.status);
+                  }
+                  const buf = await res.arrayBuffer();
+                  const bytes = new Uint8Array(buf);
+                  let binary = "";
+                  for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                  }
+                  // Devolvemos el PDF como base64
+                  return btoa(binary);
+                }, pdfUrl);
+
+                // 4) Convertimos base64 -> Buffer en Node y guardamos el archivo
+                const buffer = Buffer.from(pdfBase64, "base64");
+
+                // Extraemos el SECUENCIAL para el nombre del archivo
+                const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
+                const seq = (seqMatch && seqMatch[1]) || "1";
+
+                // NAF “limpio” para el nombre
+                const nafSafe = (datos[0]?.naf ? String(datos[0].naf) : "sinNAF").replace(/\D/g, "");
+
+                const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
+                const fullPath = path.join(pathSalidaPDFConfirmacion, fileName);
+
+                fs.writeFileSync(fullPath, buffer);
+                console.log("[FIE_2] Informe PDF guardado en:", fullPath);
+              }
+            }
+          } catch (e) {
+            console.warn("[FIE_2] Error al localizar/descargar el informe PDF:", e?.message || e);
+          }
         }
         }
 
