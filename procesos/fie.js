@@ -1782,17 +1782,19 @@ class ProcesosFie {
                     try {
                       fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP));
                     } catch (e) {
-                      const msg = `[ERROR] Error convirtiendo fechaATEP del registro ${indice + 1}: ${e?.message || e}`;
+                      const msg = `[AVISO] No se pudo convertir la Fecha AT/EP del registro ${indice + 1}: ${e?.message || e}`;
                       console.warn("[FIE_2]", msg);
-                      appendLog(indice, msg);
+                      // Aviso pero NO lo consideramos error de registro ni lo llevamos al log de Excel
                     }
                   }
+
                   if (!fechaATEP) {
-                    const msg = `[ERROR] El registro ${indice + 1} (NAF: ${r?.naf}) no tiene Fecha AT/EP en la hoja 2.`;
-                    console.error("[FIE_2]", msg);
-                    appendLog(indice, msg);
-                    console.error(
-                      "[FIE_2] Este campo es obligatorio para la web, se omite el relleno del #fechaATEP pero el proceso continúa."
+                    // Caso normal: muchos registros no tienen Fecha AT/EP.
+                    // Sólo lo dejamos como debug para quien quiera activarlo.
+                    logDebug(
+                      `[FIE_2] Registro ${indice + 1} (NAF: ${
+                        r?.naf ?? "sin NAF"
+                      }) sin Fecha AT/EP en la hoja 2; se continúa sin rellenar #fechaATEP.`
                     );
                   }
                   
@@ -1879,7 +1881,7 @@ class ProcesosFie {
                     }))
                   ) {
                     logDebug(
-                      "[FIE_2] #fechaATEP ausente o sin valor. Continuo sin error."
+                      "[FIE_2] #fechaATEP ausente o sin valor. Continúo sin error."
                     );
                   }
                 
@@ -2233,7 +2235,6 @@ class ProcesosFie {
       }
     });
   }
-
 
 } //Fin Procesos Fie
 
