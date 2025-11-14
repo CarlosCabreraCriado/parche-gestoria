@@ -1187,18 +1187,18 @@ class ProcesosFie {
     const logDebug = (...args) => {
       if (DEBUG) console.log(...args);
     };
-
+  
     console.log("[FIE_2] Iniciando proceso FIE_2 (lectura Excel + automatización web)");
-
+  
     return new Promise(async (resolve) => {
       let browser = null;
-
+    
       try {
         // 1) Entradas (nuevo orden)
         const chromeExePath    = argumentos?.formularioControl?.[0];
         const pathArchivoFIE_2 = argumentos?.formularioControl?.[1];
         const pathSalidaBase   = argumentos?.formularioControl?.[2];
-
+      
         if (!chromeExePath || !fs.existsSync(chromeExePath)) {
           console.error("[FIE_2] Ruta a chrome.exe no válida.");
           return resolve(false);
@@ -1207,7 +1207,7 @@ class ProcesosFie {
           console.error("[FIE_2] argumentos.formularioControl[1] (Excel) no es una ruta válida.");
           return resolve(false);
         }
-
+      
         // 2) Carpeta de salida
         let pathSalidaPDFConfirmacion = null;
         if (pathSalidaBase && typeof pathSalidaBase === "string") {
@@ -1224,14 +1224,14 @@ class ProcesosFie {
         } else {
           console.warn("[FIE_2] No se proporcionó carpeta de salida (arg[2]). No se guardarán PDFs.");
         }
-
+      
         // 3) Lectura Excel
         const rutaNormalizada = path.normalize(pathArchivoFIE_2);
         console.log(`[FIE_2] Cargando Excel: ${rutaNormalizada}`);
         const workbook = await XlsxPopulate.fromFileAsync(rutaNormalizada);
         logDebug("[FIE_2] Archivo Excel cargado correctamente.");
-
-        // --- NUEVO: lectura de las dos hojas ---
+      
+        // --- Lectura de las dos hojas ---
         const datosHoja1 = extraccionExcel(workbook, 0); // hoja principal
         const datosHoja2 = extraccionExcel(workbook, 1); // hoja con Fecha AT/EP
               
@@ -1321,7 +1321,7 @@ class ProcesosFie {
           return resolve(datos);
         }
         
-
+      
         // 4) Abrir navegador real (Chrome)
         const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
         try {
@@ -1336,10 +1336,10 @@ class ProcesosFie {
               "--disable-features=IsolateOrigins,site-per-process",
             ],
           });
-
+        
           const opened = await browser.pages();
           var page = opened.length ? opened[0] : await browser.newPage();
-
+        
           // Aceptar automáticamente los popups (alert, confirm, beforeunload...)
           page.on("dialog", async (dialog) => {
             try {
@@ -1354,14 +1354,14 @@ class ProcesosFie {
               console.warn("[FIE_2] Error al aceptar dialog:", e?.message || e);
             }
           });
-
+        
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           console.log("[FIE_2] Chrome abierto en FS. Selecciona el certificado si aparece diálogo.");
-
+        
           // 5) Helpers + procesamiento secuencial de registros
           if (page && datos.length > 0) {
             const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-
+          
             const openITOnline = async () => {
               try {
                 let clicked = false;
@@ -1401,7 +1401,7 @@ class ProcesosFie {
                 console.warn("[FIE_2] No se pudo clicar el enlace de IT Online:", e?.message || e);
               }
             };
-
+          
             const fillTextWithRetry = async (
               frame,
               selector,
@@ -1420,10 +1420,10 @@ class ProcesosFie {
                 timeout: 15000,
               });
               await el.evaluate((e) => e.scrollIntoView({ block: "center" }));
-
+            
               const isMac = process.platform === "darwin";
               const modKey = isMac ? "Meta" : "Control";
-
+            
               for (let i = 1; i <= tries; i++) {
                 try {
                   await el.click({ clickCount: 3, delay: 30 });
@@ -1432,14 +1432,14 @@ class ProcesosFie {
                   await page.keyboard.up(modKey);
                   await page.keyboard.press("Backspace");
                   await pause(40);
-
+                
                   await el.type(value, { delay: typeDelay });
-
+                
                   await el.evaluate((e) => {
                     e.dispatchEvent(new Event("input", { bubbles: true }));
                     e.dispatchEvent(new Event("change", { bubbles: true }));
                   });
-
+                
                   if (commitTab) {
                     await page.keyboard.press("Tab");
                     await pause(120);
@@ -1447,14 +1447,14 @@ class ProcesosFie {
                     await page.keyboard.press("Tab");
                     await page.keyboard.up("Shift");
                   }
-
+                
                   const current = await el.evaluate((e) => e.value ?? "");
                   const norm = (s) =>
                     digitsOnlyCompare ? String(s).replace(/\D/g, "") : String(s);
                   logDebug(`[FIE_2] Verificación ${selector} intento ${i}:`, current);
-
+  
                   if (norm(current) === norm(value)) return true;
-
+  
                   await el.evaluate(
                     (_, val) => {
                       _.value = val;
@@ -1464,7 +1464,7 @@ class ProcesosFie {
                     },
                     value
                   );
-
+                
                   const after = await el.evaluate((e) => e.value ?? "");
                   if (norm(after) === norm(value)) return true;
                 } catch (e) {
@@ -1478,7 +1478,7 @@ class ProcesosFie {
               console.warn(`[FIE_2] ${selector} no se pudo fijar tras ${tries} intentos`);
               return false;
             };
-
+          
             const fillIfPresent = async (
               frame,
               selector,
@@ -1488,7 +1488,7 @@ class ProcesosFie {
               try {
                 const val = String(value ?? "");
                 const elHandle = await frame.$(selector);
-
+              
                 if (!elHandle) {
                   logDebug(`[FIE_2] Campo opcional NO presente: ${selector}. Continúo.`);
                   return false;
@@ -1497,7 +1497,7 @@ class ProcesosFie {
                   logDebug(`[FIE_2] Sin valor para ${selector}. Omite rellenado.`);
                   return false;
                 }
-
+              
                 const isVisible = await elHandle
                   .evaluate((e) => {
                     const s = getComputedStyle(e);
@@ -1510,14 +1510,14 @@ class ProcesosFie {
                     );
                   })
                   .catch(() => false);
-
+                
                 if (isVisible) {
                   try {
                     await fillTextWithRetry(frame, selector, val, opts);
                     return true;
                   } catch (e) {}
                 }
-
+              
                 const ok = await frame.evaluate((sel, v) => {
                   const el = document.querySelector(sel);
                   if (!el) return false;
@@ -1527,13 +1527,13 @@ class ProcesosFie {
                   el.blur && el.blur();
                   return true;
                 }, selector, val);
-
+              
                 logDebug(
                   ok
                     ? `[FIE_2] ${selector} fijado por JS (fallback, posible campo oculto).`
                     : `[FIE_2] No se pudo fijar ${selector} por JS.`
                 );
-
+              
                 return ok;
               } catch (e) {
                 console.warn(
@@ -1543,7 +1543,7 @@ class ProcesosFie {
                 return false;
               }
             };
-
+          
             const selectWithRetry = async (
               frame,
               selector,
@@ -1555,7 +1555,7 @@ class ProcesosFie {
               await frame.$eval(selector, (el) =>
                 el.scrollIntoView({ block: "center" })
               );
-
+            
               for (let i = 1; i <= tries; i++) {
                 try {
                   await frame.select(selector, value);
@@ -1569,7 +1569,7 @@ class ProcesosFie {
                     current
                   );
                   if (current === value) return true;
-
+                
                   await frame.evaluate((sel, val) => {
                     const el = document.querySelector(sel);
                     if (!el) return;
@@ -1578,7 +1578,7 @@ class ProcesosFie {
                     el.dispatchEvent(new Event("change", { bubbles: true }));
                     el.blur?.();
                   }, selector, value);
-
+                
                   await pause(120);
                   current = await frame.$eval(selector, (el) => el.value ?? "");
                   logDebug(
@@ -1599,7 +1599,7 @@ class ProcesosFie {
               );
               return false;
             };
-
+          
             const findFrameWithSelector = async (
               selector,
               timeoutMs = 25000,
@@ -1617,7 +1617,7 @@ class ProcesosFie {
               }
               return null;
             };
-
+          
             const toDDMMYYYY = (date) => {
               const dd = String(date.getUTCDate()).padStart(2, "0");
               const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -1639,51 +1639,59 @@ class ProcesosFie {
               const m = s.match(/^(\d+)\s*=/);
               return m ? m[1] : "";
             };
-
+          
             let registrosOk = 0;
             let registrosError = 0;
-
+          
+            // Array de logs por registro y helper para añadir mensajes
+            const logsRegistros = new Array(datos.length).fill("");
+            const appendLog = (indice, msg) => {
+              logsRegistros[indice] = logsRegistros[indice]
+                ? `${logsRegistros[indice]} | ${msg}`
+                : msg;
+            };
+          
             const procesarRegistro = async (r, indice) => {
+              // Inicializamos el log de este registro
+              logsRegistros[indice] = "";
+            
               console.log(
                 `[FIE_2] Procesando registro ${indice + 1}/${datos.length} (NAF: ${
                   r?.naf ?? "sin NAF"
                 })`
               );
-
+            
               // Volvemos siempre a la URL base y entramos de nuevo en IT Online
               try {
                 await page.goto(urlFS, { waitUntil: "domcontentloaded" });
               } catch (e) {
-                console.warn(
-                  `[FIE_2] Error haciendo goto a urlFS en registro ${
-                    indice + 1
-                  }:`,
-                  e?.message || e
-                );
+                const msg = `[ERROR] No se pudo acceder a FS en el registro ${indice + 1}: ${e?.message || e}`;
+                console.warn("[FIE_2]", msg);
+                appendLog(indice, msg);
                 registrosError++;
                 return;
               }
-
+            
               await openITOnline();
-
+            
               // === Pantalla 1: formulario principal ===
               logDebug("[FIE_2] Buscando frame con el formulario inicial...");
               const formFrame = await findFrameWithSelector("#regimen", 25000, 400);
               if (!formFrame) {
-                console.warn(
-                  "[FIE_2] No encontré el formulario (#regimen) en ningún frame."
-                );
+                const msg = "[ERROR] No se encontró el formulario inicial (#regimen) en ningún frame.";
+                console.warn("[FIE_2]", msg);
+                appendLog(indice, msg);
                 registrosError++;
                 return;
               }
-
+            
               const { regimen, cccResto } = extraeRegimenYCCC(r?.ccc);
               const naf = limpiaDigitos(r?.naf);
               const contCode = extraeCodigoContingencia(r?.contingencia);
               const fechaBajaStr = r?.fechaBajaIt
                 ? excelSerialToDDMMYYYY(r.fechaBajaIt)
                 : "";
-
+            
               if (DEBUG) {
                 console.table({
                   "Regimen (4)": regimen,
@@ -1693,21 +1701,21 @@ class ProcesosFie {
                   "Fecha de baja": fechaBajaStr,
                 });
               }
-
+            
               await fillTextWithRetry(formFrame, "#regimen", regimen);
               await pause(200);
               await fillTextWithRetry(formFrame, "#ccc", cccResto);
               await pause(200);
               await fillTextWithRetry(formFrame, "#naf", naf);
               await pause(200);
-
+            
               if (["1", "2", "3", "4", "5"].includes(contCode)) {
                 await selectWithRetry(formFrame, "#contingencias", contCode);
               } else {
                 console.warn("[FIE_2] Contingencia no reconocida:", r?.contingencia);
               }
               await pause(200);
-
+            
               if (fechaBajaStr) {
                 await fillTextWithRetry(formFrame, "#fechaBaja", fechaBajaStr, {
                   digitsOnlyCompare: false,
@@ -1717,7 +1725,7 @@ class ProcesosFie {
                   "[FIE_2] Sin fecha de baja válida; no se rellena #fechaBaja."
                 );
               }
-
+            
               try {
                 await formFrame.waitForSelector("#ENVIO_7", {
                   visible: true,
@@ -1731,9 +1739,9 @@ class ProcesosFie {
                   e?.message || e
                 );
               }
-
+            
               await this.esperar(1000);
-
+            
               // === Pantalla 2: Grabación de partes ===
               try {
                 await Promise.race([
@@ -1745,58 +1753,59 @@ class ProcesosFie {
                     .catch(() => {}),
                   pause(1500),
                 ]);
-
+              
                 const form2 =
                   (await findFrameWithSelector("#FORMULARIO_4", 25000, 400)) ||
                   (await findFrameWithSelector("#puestoTrabajo", 25000, 400));
                 if (!form2) {
-                  console.warn(
-                    "[FIE_2] No encontré el formulario de 'Grabación de partes'."
-                  );
+                  const msg = "[ERROR] No se encontró el formulario de 'Grabación de partes'.";
+                  console.warn("[FIE_2]", msg);
+                  appendLog(indice, msg);
+                  registrosError++;
+                  return;
                 } else {
                   const puestoDeTrabajo = String(
                     r?.puestoDeTrabajo ?? r?.puestoTrabajo ?? ""
                   );
                   const cnoe = String(r?.cnoe ?? "");
                   const tipoContratoIn = String(r?.tipoContrato ?? "");
-
+                
                   const baseResto = String(r?.base ?? "");
                   const diasResto = String(r?.dia ?? "");
                   const baseFijoParcial = String(r?.base ?? "");
                   const diasFijoParcial = String(r?.dia ?? "");
-
+                
                   const detalleCnoe = String(r?.detalleCnoe ?? "");
-
+                
                   let fechaATEP = "";
                   if (r?.fechaATEP) {
                     try {
                       fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP));
                     } catch (e) {
-                      console.warn(
-                        `[FIE_2] Error convirtiendo fechaATEP del registro ${indice + 1}:`,
-                        e?.message || e
-                      );
+                      const msg = `[ERROR] Error convirtiendo fechaATEP del registro ${indice + 1}: ${e?.message || e}`;
+                      console.warn("[FIE_2]", msg);
+                      appendLog(indice, msg);
                     }
                   }
                   if (!fechaATEP) {
+                    const msg = `[ERROR] El registro ${indice + 1} (NAF: ${r?.naf}) no tiene Fecha AT/EP en la hoja 2.`;
+                    console.error("[FIE_2]", msg);
+                    appendLog(indice, msg);
                     console.error(
-                      `[FIE_2] ERROR: El registro ${indice + 1} (NAF: ${r?.naf}) no tiene Fecha AT/EP en la hoja 2.`
-                    );
-                    console.error(
-                      `[FIE_2] Este campo es obligatorio para la web, se omite el relleno del #fechaATEP pero el proceso continúa.`
+                      "[FIE_2] Este campo es obligatorio para la web, se omite el relleno del #fechaATEP pero el proceso continúa."
                     );
                   }
                   
                   const code = tipoContratoIn.trim();
                   const starts = (p) => code.startsWith(p);
-
+                
                   let tipoContratoSelect = "";
                   if (starts("2") || starts("3") || starts("5")) {
                     tipoContratoSelect = "1"; // Fijo discontinuo / Tiempo parcial
                   } else if (starts("1") || starts("4")) {
                     tipoContratoSelect = "2"; // Resto
                   }
-
+                
                   if (DEBUG) {
                     console.table({
                       puestoDeTrabajo,
@@ -1810,7 +1819,7 @@ class ProcesosFie {
                       fechaATEP,
                     });
                   }
-
+                
                   if (puestoDeTrabajo) {
                     await fillTextWithRetry(form2, "#puestoTrabajo", puestoDeTrabajo, {
                       tries: 3,
@@ -1818,14 +1827,14 @@ class ProcesosFie {
                       digitsOnlyCompare: false,
                     });
                   }
-
+                
                   if (cnoe) {
                     await selectWithRetry(form2, "#ocupacion", cnoe);
                   }
-
+                
                   await selectWithRetry(form2, "#tipoContrato", tipoContratoSelect);
                   await pause(400);
-
+                
                   if (tipoContratoSelect === "2") {
                     if (baseResto)
                       await fillTextWithRetry(form2, "#BaseCot", baseResto, {
@@ -1861,7 +1870,7 @@ class ProcesosFie {
                         }
                       );
                   }
-
+                
                   if (
                     !(await fillIfPresent(form2, "#fechaATEP", fechaATEP, {
                       tries: 3,
@@ -1873,7 +1882,7 @@ class ProcesosFie {
                       "[FIE_2] #fechaATEP ausente o sin valor. Continuo sin error."
                     );
                   }
-
+                
                   if (detalleCnoe) {
                     await fillTextWithRetry(form2, "#funcDesempe", detalleCnoe, {
                       tries: 3,
@@ -1881,7 +1890,7 @@ class ProcesosFie {
                       digitsOnlyCompare: false,
                     });
                   }
-
+                
                   try {
                     await form2.waitForSelector("#ENVIO_14", {
                       visible: true,
@@ -1902,9 +1911,9 @@ class ProcesosFie {
                   e?.message || e
                 );
               }
-
+            
               await this.esperar(1000);
-
+            
               // === Pantalla de confirmación (Confirmar) ===
               try {
                 await Promise.race([
@@ -1916,7 +1925,7 @@ class ProcesosFie {
                     .catch(() => {}),
                   pause(1500),
                 ]);
-
+              
                 const confirmFrame1 =
                   (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
                   (await findFrameWithSelector(
@@ -1924,11 +1933,13 @@ class ProcesosFie {
                     20000,
                     400
                   ));
-
+                
                 if (!confirmFrame1) {
-                  console.warn(
-                    "[FIE_2] No encontré la pantalla de Confirmación (botón #ENVIO_12)."
-                  );
+                  const msg = "[ERROR] No se encontró la pantalla de Confirmación (botón #ENVIO_12).";
+                  console.warn("[FIE_2]", msg);
+                  appendLog(indice, msg);
+                  registrosError++;
+                  return;
                 } else {
                   try {
                     await confirmFrame1.waitForSelector("#ENVIO_12", {
@@ -1950,9 +1961,9 @@ class ProcesosFie {
                   e?.message || e
                 );
               }
-
+            
               await this.esperar(1000);
-
+            
               // === Pantalla de generación (Generar informe) ===
               try {
                 await Promise.race([
@@ -1964,7 +1975,7 @@ class ProcesosFie {
                     .catch(() => {}),
                   pause(1500),
                 ]);
-
+              
                 const confirmFrame2 =
                   (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
                   (await findFrameWithSelector(
@@ -1972,11 +1983,13 @@ class ProcesosFie {
                     20000,
                     400
                   ));
-
+                
                 if (!confirmFrame2) {
-                  console.warn(
-                    "[FIE_2] No encontré la pantalla de Generación (botón #ENVIO_8)."
-                  );
+                  const msg = "[ERROR] No se encontró la pantalla de Generación (botón #ENVIO_8).";
+                  console.warn("[FIE_2]", msg);
+                  appendLog(indice, msg);
+                  registrosError++;
+                  return;
                 } else {
                   try {
                     await confirmFrame2.waitForSelector("#ENVIO_8", {
@@ -1998,9 +2011,9 @@ class ProcesosFie {
                   e?.message || e
                 );
               }
-
+            
               await this.esperar(1000);
-
+            
               // === Enlace "Visualizar informe..." y descargar PDF ===
               try {
                 await Promise.race([
@@ -2012,17 +2025,17 @@ class ProcesosFie {
                     .catch(() => {}),
                   pause(1500),
                 ]);
-
+              
                 const docFrame = await findFrameWithSelector(
                   'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
                   20000,
                   400
                 );
-
+              
                 if (!docFrame) {
-                  console.warn(
-                    "[FIE_2] No encontré el enlace de informe (a.pr_enlaceDocInforme)."
-                  );
+                  const msg = "[ERROR] No se encontró el enlace de informe (a.pr_enlaceDocInforme).";
+                  console.warn("[FIE_2]", msg);
+                  appendLog(indice, msg);
                 } else if (!pathSalidaPDFConfirmacion) {
                   console.warn(
                     "[FIE_2] No hay carpeta de salida configurada; no descargo PDF."
@@ -2032,16 +2045,16 @@ class ProcesosFie {
                     'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
                     (el) => el.getAttribute("href") || ""
                   );
-
+                
                   if (!href) {
-                    console.warn(
-                      "[FIE_2] El enlace de informe no tiene href usable."
-                    );
+                    const msg = "[ERROR] El enlace de informe no tiene href usable.";
+                    console.warn("[FIE_2]", msg);
+                    appendLog(indice, msg);
                   } else {
                     const baseUrl = page.url();
                     const pdfUrl = new URL(href, baseUrl).toString();
                     logDebug("[FIE_2] URL PDF:", pdfUrl);
-
+                  
                     const pdfBase64 = await docFrame.evaluate(async (url) => {
                       const res = await fetch(url, { credentials: "include" });
                       if (!res.ok) {
@@ -2058,55 +2071,138 @@ class ProcesosFie {
                       }
                       return btoa(binary);
                     }, pdfUrl);
-
+                  
                     const buffer = Buffer.from(pdfBase64, "base64");
-
+                  
                     const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
                     const seq = (seqMatch && seqMatch[1]) || "1";
-
+                  
                     const nafSafe = (r?.naf ? String(r.naf) : "sinNAF").replace(
                       /\D/g,
                       ""
                     );
-
+                  
                     const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
                     const fullPath = path.join(
                       pathSalidaPDFConfirmacion,
                       fileName
                     );
-
+                  
                     fs.writeFileSync(fullPath, buffer);
                     console.log("[FIE_2] Informe PDF guardado en:", fullPath);
                   }
                 }
               } catch (e) {
-                console.warn(
-                  "[FIE_2] Error al localizar/descargar el informe PDF:",
-                  e?.message || e
-                );
+                const msg = `[ERROR] Error al localizar/descargar el informe PDF: ${e?.message || e}`;
+                console.warn("[FIE_2]", msg);
+                appendLog(indice, msg);
               }
-
+            
+              // Si no se ha registrado ningún mensaje de error, marcamos como OK
+              if (!logsRegistros[indice]) {
+                logsRegistros[indice] = "OK";
+              }
+            
               registrosOk++;
             }; // fin procesarRegistro
-
+          
             // === Bucle sobre todos los registros del Excel ===
             for (let i = 0; i < datos.length; i++) {
               try {
                 await procesarRegistro(datos[i], i);
               } catch (e) {
                 registrosError++;
-                console.warn(
-                  `[FIE_2] Error inesperado procesando el registro ${
-                    i + 1
-                  }/${datos.length}:`,
-                  e?.message || e
-                );
+                const msg = `[ERROR] Error inesperado procesando el registro ${i + 1}/${datos.length}: ${e?.message || e}`;
+                console.warn("[FIE_2]", msg);
+                appendLog(i, msg);
               }
             }
-
+          
             console.log(
               `[FIE_2] Proceso completado. Registros OK: ${registrosOk}, con errores: ${registrosError}.`
             );
+          
+            // === Generar copia del Excel de entrada con columna de LOG al principio ===
+            try {
+              // Carpeta donde dejar el Excel con log
+              const carpetaExcelSalida =
+                pathSalidaPDFConfirmacion ||
+                (pathSalidaBase && path.normalize(pathSalidaBase)) ||
+                path.dirname(rutaNormalizada);
+            
+              const nombreOriginal = path.basename(pathArchivoFIE_2);
+              const nombreSinExt = nombreOriginal.replace(/\.xlsx?$/i, "");
+              const nombreCopia = `${nombreSinExt} - LOG.xlsx`;
+              const pathCopia = path.join(carpetaExcelSalida, nombreCopia);
+            
+              console.log("[FIE_2] Generando copia con LOG en:", pathCopia);
+            
+              // Cargamos de nuevo el Excel original para no tocar el archivo de entrada
+              const workbookCopia = await XlsxPopulate.fromFileAsync(rutaNormalizada);
+              const sheet = workbookCopia.sheet(0);
+            
+              // --- 1) Detectar dinámicamente la FILA de cabecera (la que tiene "EXPTE") ---
+              let filaCabecera = 1;
+              let encontradaCabecera = false;
+            
+              // Buscamos en las primeras 20 filas y 20 columnas por si hay títulos encima
+              for (let r = 1; r <= 20 && !encontradaCabecera; r++) {
+                for (let c = 1; c <= 20 && !encontradaCabecera; c++) {
+                  const val = sheet.cell(r, c).value();
+                  if (typeof val === "string" && val.toLowerCase().includes("expte")) {
+                    filaCabecera = r;
+                    encontradaCabecera = true;
+                  }
+                }
+              }
+            
+              console.log("[FIE_2] Fila de cabecera detectada en:", filaCabecera);
+            
+              // --- 2) Calcular cuántas columnas tiene la cabecera (contiguas con datos) ---
+              let numColumnas = 0;
+              for (let col = 1; col <= 200; col++) {
+                const val = sheet.cell(filaCabecera, col).value();
+                if (val === null || val === undefined || val === "") break;
+                numColumnas = col;
+              }
+            
+              if (numColumnas === 0) {
+                console.warn(
+                  "[FIE_2] No se detectaron columnas en la fila de cabecera al generar el LOG. Se omitirá la inserción de la columna de LOG."
+                );
+              } else {
+                // --- 3) Desplazar columnas una posición a la derecha
+                //      desde la fila 1 hasta la última fila de datos (cabecera + registros)
+                const ultimaFilaDatos = filaCabecera + datos.length; // cabecera + registros
+              
+                for (let fila = 1; fila <= ultimaFilaDatos; fila++) {
+                  for (let col = numColumnas; col >= 1; col--) {
+                    const valor = sheet.cell(fila, col).value();
+                    sheet.cell(fila, col + 1).value(valor);
+                  }
+                }
+              
+                // --- 4) Escribir cabecera de LOG en la columna A de la fila de cabecera ---
+                sheet.cell(filaCabecera, 1).value("LOG FIE_2");
+              
+                // --- 5) Volcar los logs por registro, alineados con cada fila de datos ---
+                // datos[0] está en la fila filaCabecera + 1
+                for (let i = 0; i < datos.length; i++) {
+                  const filaExcel = filaCabecera + 1 + i;
+                  const log = logsRegistros[i] || "";
+                  sheet.cell(filaExcel, 1).value(log);
+                }
+              }
+            
+              // Guardamos la copia
+              await workbookCopia.toFileAsync(path.normalize(pathCopia));
+              console.log("[FIE_2] Copia del Excel con LOG generada correctamente.");
+            } catch (e) {
+              console.warn(
+                "[FIE_2] No se pudo generar la copia del Excel con LOG:",
+                e?.message || e
+              );
+            }
           }
         } catch (navErr) {
           console.warn(
@@ -2121,7 +2217,7 @@ class ProcesosFie {
             } catch (_) {}
           }
         }
-
+      
         return resolve(datos);
       } catch (err) {
         console.error("[FIE_2] Error general en el proceso:", err);
@@ -2137,6 +2233,7 @@ class ProcesosFie {
       }
     });
   }
+
 
 } //Fin Procesos Fie
 
