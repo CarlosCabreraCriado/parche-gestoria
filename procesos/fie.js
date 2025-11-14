@@ -1231,17 +1231,96 @@ class ProcesosFie {
         const workbook = await XlsxPopulate.fromFileAsync(rutaNormalizada);
         logDebug("[FIE_2] Archivo Excel cargado correctamente.");
 
-        const datos = extraccionExcel(workbook, 0);
-        if (!Array.isArray(datos)) {
-          console.error("[FIE_2] extraccionExcel no devolvió un array (null/undefined).");
+        // --- NUEVO: lectura de las dos hojas ---
+        const datosHoja1 = extraccionExcel(workbook, 0); // hoja principal
+        const datosHoja2 = extraccionExcel(workbook, 1); // hoja con Fecha AT/EP
+              
+        if (!Array.isArray(datosHoja1)) {
+          console.error("[FIE_2] extraccionExcel (hoja 0) no devolvió un array válido.");
           return resolve(false);
         }
-        console.log(`[FIE_2] Filas leídas en Excel: ${datos.length}`);
-        if (DEBUG && datos.length > 0) logDebug("[FIE_2] Muestra primer registro:", datos[0]);
+        if (!Array.isArray(datosHoja2)) {
+          console.warn("[FIE_2] extraccionExcel (hoja 1) no devolvió un array. Continúo sin Fecha AT/EP.");
+        }
+        
+        // Helpers para NIF y clave Fecha AT/EP
+        const obtenerNifRegistro = (reg) => {
+          if (!reg || typeof reg !== "object") return "";
+          const keys = Object.keys(reg);
+          // buscamos un campo cuyo nombre contenga "nif"
+          const nifKey = keys.find((k) => k.toLowerCase().includes("nif"));
+          return nifKey ? String(reg[nifKey] ?? "").trim() : "";
+        };
+        
+        const normalizaNif = (nif) =>
+          String(nif ?? "").toUpperCase().replace(/\s+/g, "");
+        
+        // Detectamos dinámicamente la clave de "Fecha AT/EP" en la hoja 2
+        let fechaATEPKey = null;
+        if (Array.isArray(datosHoja2) && datosHoja2.length > 0) {
+          const sampleKeys = Object.keys(datosHoja2[0]);
+          fechaATEPKey = sampleKeys.find((k) => {
+            const norm = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+            // algo tipo "fechaat/ep", "fechaatep", etc.
+            return norm.includes("fecha") && norm.includes("atep");
+          });
+        
+          console.log("[FIE_2] Clave detectada para Fecha AT/EP en hoja 2:", fechaATEPKey);
+          if (!fechaATEPKey) {
+            console.warn(
+              "[FIE_2] No se pudo detectar automáticamente la columna de Fecha AT/EP en la hoja 2."
+            );
+          }
+        }
+        
+        // Construimos un mapa NIF -> Fecha AT/EP a partir de la hoja 2
+        const mapaFechaATEP = new Map();
+        
+        if (Array.isArray(datosHoja2) && fechaATEPKey) {
+          for (const reg2 of datosHoja2) {
+            const nifRaw = obtenerNifRegistro(reg2);
+            const nifNorm = normalizaNif(nifRaw);
+            if (!nifNorm) continue;
+          
+            const valorFecha = reg2[fechaATEPKey];
+            if (valorFecha != null && valorFecha !== "") {
+              mapaFechaATEP.set(nifNorm, valorFecha);
+            }
+          }
+          console.log(
+            `[FIE_2] Mapa Fecha AT/EP construido con ${mapaFechaATEP.size} NIF distintos.`
+          );
+        } else {
+          console.warn(
+            "[FIE_2] No hay datos válidos en hoja 2 o no se encontró clave de Fecha AT/EP; no se fusionarán fechas."
+          );
+        }
+        
+        // Mezclamos datos de la hoja 1 con la Fecha AT/EP de la hoja 2 (por NIF)
+        const datos = datosHoja1.map((reg1) => {
+          const nifRaw = obtenerNifRegistro(reg1);
+          const nifNorm = normalizaNif(nifRaw);
+          const fechaDesdeHoja2 = nifNorm ? mapaFechaATEP.get(nifNorm) : null;
+        
+          if (fechaDesdeHoja2 != null && fechaDesdeHoja2 !== "") {
+            return {
+              ...reg1,
+              fechaATEP: fechaDesdeHoja2, // esta es la que luego usas en procesarRegistro
+            };
+          }
+        
+          return reg1;
+        });
+        
+        console.log(`[FIE_2] Filas leídas en Excel (hoja 0): ${datos.length}`);
+        if (DEBUG && datos.length > 0) {
+          logDebug("[FIE_2] Muestra primer registro fusionado:", datos[0]);
+        }
         if (!datos.length) {
           console.warn("[FIE_2] No hay registros en el Excel. Nada que procesar.");
           return resolve(datos);
         }
+        
 
         // 4) Abrir navegador real (Chrome)
         const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
@@ -1692,14 +1771,22 @@ class ProcesosFie {
                   if (r?.fechaATEP) {
                     try {
                       fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaATEP));
-                    } catch (e) {}
+                    } catch (e) {
+                      console.warn(
+                        `[FIE_2] Error convirtiendo fechaATEP del registro ${indice + 1}:`,
+                        e?.message || e
+                      );
+                    }
                   }
-                  if (!fechaATEP && r?.fechaBajaIt) {
-                    try {
-                      fechaATEP = toDDMMYYYY(excelSerialToUTCDate(r.fechaBajaIt));
-                    } catch (e) {}
+                  if (!fechaATEP) {
+                    console.error(
+                      `[FIE_2] ERROR: El registro ${indice + 1} (NAF: ${r?.naf}) no tiene Fecha AT/EP en la hoja 2.`
+                    );
+                    console.error(
+                      `[FIE_2] Este campo es obligatorio para la web, se omite el relleno del #fechaATEP pero el proceso continúa.`
+                    );
                   }
-
+                  
                   const code = tipoContratoIn.trim();
                   const starts = (p) => code.startsWith(p);
 
