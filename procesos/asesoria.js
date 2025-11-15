@@ -1,5 +1,8 @@
 const path = require("path");
 const fs = require("fs");
+const fsExtra = require("fs-extra");
+const pdf = require("pdf-parse");
+const pdfLib = require("pdf-lib");
 const readline = require("readline");
 const axios = require("axios");
 const moment = require("moment");
@@ -21,6 +24,343 @@ class ProcesosAsesoria {
   async esperar(tiempo) {
     return new Promise((resolve) => {
       setTimeout(resolve, tiempo);
+    });
+  }
+
+  async extractInfoFromPdf(filePath) {
+    /*
+    const dataBuffer = await fsExtra.readFile(filePath);
+    const data = await pdf(dataBuffer);
+
+    const cccMatch = data.text.match(
+      /Código de Cuenta de Cotización:\s*([\d\s]+)/,
+    );
+
+    console.log(cccMatch);
+    if (!cccMatch) return null;
+    const raw = cccMatch[1].replace(/\s+/g, "");
+    const ccc = raw.slice(-11); // Últimos 11 dígitos
+
+    console.log("CCC: ", ccc);
+    const hasVacaciones = /Calificador de Liquidación:\s*L13/i.test(data.text);
+        */
+
+    const dataBuffer = await fsExtra.readFile(filePath);
+    const data = await pdf(dataBuffer);
+    const lines = data.text.split("\n").map((line) => line.trim());
+
+    let ccc = null;
+    let hasVacaciones = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("Código de Cuenta de Cotización:")) {
+        const nextLine = lines[i + 4]?.replace(/\s+/g, "") || "";
+        const lineaVacaciones = lines[i + 5] || "";
+
+        if (lineaVacaciones.includes("L13")) {
+          hasVacaciones = true;
+        }
+
+        if (/^\d{4}\d{11}$/.test(nextLine)) {
+          ccc = nextLine.slice(-11); // Tomamos los últimos 11 dígitos
+        }
+        break;
+      }
+    }
+
+    console.log("CCC: ", ccc);
+    console.log("Vacaciones: ", hasVacaciones);
+    if (!ccc) return null;
+
+    return { filePath, ccc, hasVacaciones };
+  }
+
+  async formatearRecibosDeLiquidacion(argumentos) {
+    return new Promise((resolve) => {
+      console.log("Excel de datos de clientes...");
+      console.log(argumentos.formularioControl[0]);
+
+      var archivoLiquidacion = {};
+      var empresas = [];
+      var autonomos = [];
+
+      var pathArchivoLiquidacion = argumentos.formularioControl[0];
+      var pathSalidaExcel = path.join(
+        path.normalize(argumentos.formularioControl[1]),
+        "Liquidacion-Procesado",
+      );
+
+      var pathPDFs = path.normalize(argumentos.formularioControl[1]);
+      var pathGuardarPDFs = path.join(
+        path.normalize(argumentos.formularioControl[1]),
+        "Liquidacion-Procesado",
+        "Resultados",
+      );
+
+      // Verificar si la carpeta "Resultados" existe y crearla si no
+      if (!fs.existsSync(pathGuardarPDFs)) {
+        fs.mkdirSync(pathGuardarPDFs, { recursive: true });
+        console.log(`Carpeta creada: ${pathGuardarPDFs}`);
+      } else {
+        console.log(`La carpeta ya existe: ${pathGuardarPDFs}`);
+      }
+
+      try {
+        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoLiquidacion))
+          .then(async (workbook) => {
+            console.log("Archivo Cargado: Liquidacion");
+            archivoLiquidacion = workbook;
+
+            //Procesamiento de HOJA DATOS:
+            const columnasEmpresas = archivoLiquidacion
+              .sheet("DATOS")
+              .usedRange()._numColumns;
+            const filasEmpresas = archivoLiquidacion
+              .sheet("DATOS")
+              .usedRange()._numRows;
+
+            var objetoEmpresa = {};
+            var cabecerasEmpresas = [];
+            for (var i = 1; i <= columnasEmpresas; i++) {
+              cabecerasEmpresas.push(
+                archivoLiquidacion.sheet("DATOS").cell(1, i).value(),
+              );
+            }
+
+            console.log("Cabeceras EMPRESAS: " + cabecerasEmpresas);
+            for (var i = 2; i <= filasEmpresas; i++) {
+              objetoEmpresa = {};
+              for (var j = 1; j <= columnasEmpresas; j++) {
+                if (
+                  archivoLiquidacion.sheet("DATOS").cell(i, j).value() !==
+                  undefined
+                ) {
+                  switch (cabecerasEmpresas[j - 1]) {
+                    case "CÓDIGO":
+                      objetoEmpresa["codigo"] = archivoLiquidacion
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "EMPRESA":
+                      objetoEmpresa["empresa"] = archivoLiquidacion
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "CCC":
+                      objetoEmpresa["ccc"] = archivoLiquidacion
+                        .sheet("DATOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+              objetoEmpresa["errores"] = [];
+              empresas.push(Object.assign({}, objetoEmpresa));
+            }
+
+            //Procesamiento de HOJA AUTONOMOS:
+            const columnasAutonomos = archivoLiquidacion
+              .sheet("AUTONOMOS")
+              .usedRange()._numColumns;
+            const filasAutonomos = archivoLiquidacion
+              .sheet("DATOS")
+              .usedRange()._numRows;
+
+            var objetoAutonomos = {};
+            var cabecerasAutonomos = [];
+            for (var i = 1; i <= columnasAutonomos; i++) {
+              cabecerasAutonomos.push(
+                archivoLiquidacion.sheet("AUTONOMOS").cell(1, i).value(),
+              );
+            }
+
+            console.log("Cabeceras AUTONOMOS: " + cabecerasAutonomos);
+            for (var i = 2; i <= filasAutonomos; i++) {
+              objetoAutonomos = {};
+              for (var j = 1; j <= columnasAutonomos; j++) {
+                if (
+                  archivoLiquidacion.sheet("AUTONOMOS").cell(i, j).value() !==
+                  undefined
+                ) {
+                  switch (cabecerasAutonomos[j - 1]) {
+                    case "CÓDIGO":
+                      objetoAutonomos["codigo"] = archivoLiquidacion
+                        .sheet("AUTONOMOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "AUTONOMOS":
+                      objetoAutonomos["autonomo"] = archivoLiquidacion
+                        .sheet("AUTONOMOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "DNI":
+                      objetoAutonomos["dni"] = archivoLiquidacion
+                        .sheet("AUTONOMOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                    case "CCC":
+                      objetoAutonomos["ccc"] = archivoLiquidacion
+                        .sheet("AUTONOMOS")
+                        .cell(i, j)
+                        .value();
+                      break;
+                  }
+                }
+              }
+              objetoAutonomos["errores"] = [];
+              autonomos.push(Object.assign({}, objetoAutonomos));
+            }
+
+            console.log("Empresas: ", empresas);
+            console.log("Autonomos: ", autonomos);
+
+            //PROCESAMIENTO DE PDFs:
+
+            console.log("PROCESANDO PDFs: ", pathPDFs);
+
+            const files = await fsExtra.readdir(pathPDFs);
+
+            console.log("PDFs: ", files);
+            const pdfFiles = files.filter((file) =>
+              file.toLowerCase().endsWith(".pdf"),
+            );
+
+            console.log("PDFs encontrados: ", pdfFiles);
+
+            const groupedByCCC = {};
+
+            for (const file of pdfFiles) {
+              const fullPath = path.join(pathPDFs, file);
+              const info = await this.extractInfoFromPdf(fullPath);
+
+              if (!info) continue;
+
+              const codigoEmpresa = obtenerCodigoEmpresaPorCCC(
+                info.ccc,
+                empresas,
+                autonomos,
+              );
+              info["codigo"] = codigoEmpresa;
+
+              if (!groupedByCCC[info["codigo"]])
+                groupedByCCC[info["codigo"]] = [];
+              groupedByCCC[info["codigo"]].push(info);
+            }
+
+            console.log("Agrupados: ", groupedByCCC);
+
+            for (const codigo in groupedByCCC) {
+              const files = groupedByCCC[codigo];
+              const outputPdf = await pdfLib.PDFDocument.create();
+
+              let hasVacaciones = false;
+
+              // Separar primero los archivos
+              const sinVacaciones = files.filter((f) => !f.hasVacaciones);
+              const conVacaciones = files.filter((f) => f.hasVacaciones);
+
+              // Primero añadimos los que NO tienen vacaciones
+              for (const { filePath } of sinVacaciones) {
+                const pdfBytes = await fsExtra.readFile(filePath);
+                const pdfDoc = await pdfLib.PDFDocument.load(pdfBytes);
+                const copiedPages = await outputPdf.copyPages(
+                  pdfDoc,
+                  pdfDoc.getPageIndices(),
+                );
+                copiedPages.forEach((page) => outputPdf.addPage(page));
+              }
+
+              // Luego añadimos los que SÍ tienen vacaciones
+              for (const { filePath } of conVacaciones) {
+                const pdfBytes = await fsExtra.readFile(filePath);
+                const pdfDoc = await pdfLib.PDFDocument.load(pdfBytes);
+                const copiedPages = await outputPdf.copyPages(
+                  pdfDoc,
+                  pdfDoc.getPageIndices(),
+                );
+                copiedPages.forEach((page) => outputPdf.addPage(page));
+                hasVacaciones = true;
+              }
+
+              //Buscar codigo de empresa o autonomo:
+              let año = new Date().getFullYear();
+              const nombreMesAnterior = obtenerNombreMesAnterior();
+
+              const pageCount = outputPdf.getPageCount();
+              if (pageCount > 1) {
+                hasVacaciones = false;
+              }
+
+              const fileName = `${codigo} TC1 ${nombreMesAnterior} ${año}${hasVacaciones ? " Vacaciones" : ""}.pdf`;
+              const outputPath = path.join(pathGuardarPDFs, fileName);
+              const finalPdfBytes = await outputPdf.save();
+              await fsExtra.writeFile(outputPath, finalPdfBytes);
+              console.log(`Archivo generado: ${outputPath}`);
+            }
+
+            function obtenerNombreMesAnterior() {
+              const meses = [
+                "enero",
+                "febrero",
+                "marzo",
+                "abril",
+                "mayo",
+                "junio",
+                "julio",
+                "agosto",
+                "septiembre",
+                "octubre",
+                "noviembre",
+                "diciembre",
+              ];
+
+              const ahora = new Date();
+              const mesAnterior =
+                ahora.getMonth() === 0 ? 11 : ahora.getMonth() - 1;
+
+              return meses[mesAnterior];
+            }
+
+            function obtenerCodigoEmpresaPorCCC(ccc, empresas, autonomos) {
+              const empresa = empresas.find((e) => e.ccc === Number(ccc));
+              if (empresa) return empresa.codigo;
+
+              const autonomo = autonomos.find((a) => a.ccc === Number(ccc));
+              if (autonomo) return autonomo.codigo;
+
+              return null;
+            }
+
+            resolve(true);
+          })
+          .then(() => {})
+          .catch((err) => {
+            console.log("ERROR");
+
+            throw err;
+          });
+      } catch (err) {
+        var tituloError = "No se ha podido cargar el archivo";
+        var mensajeError =
+          "Se ha producido un error interno cargando los archivos.";
+        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+          resolve(false);
+        });
+      }
+    }).catch((err) => {
+      console.log("Se ha producido un error interno: ");
+      console.log(err);
+      var tituloError = "No se ha podido cargar el archivo";
+      var mensajeError =
+        "Se ha producido un error interno cargando los archivos.";
+      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
+        resolve(false);
+      });
     });
   }
 
