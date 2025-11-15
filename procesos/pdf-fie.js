@@ -290,11 +290,6 @@ async function generatePDF(record, tipo, OUTPUT_DIR) {
 
     // Sección proceso IT
     sectionTitle(doc, "Datos del proceso");
-    if (record.nif == "0000042267852Q") {
-      console.log("ANALISIS: ");
-      console.log(record);
-    }
-
     const map = FIELD_MAPS;
     map.forEach(([label, keyOrFn]) => {
       const value =
@@ -309,12 +304,72 @@ async function generatePDF(record, tipo, OUTPUT_DIR) {
       }
     });
 
+    //Añade pagina si hay parte o datos adicionales:
+    if (
+      record.datosAdicionales ||
+      (tipo === "CONFIRMACIONES" &&
+        Array.isArray(record.partesConfirmacion) &&
+        record.partesConfirmacion.length > 0)
+    ) {
+      doc.addPage();
+    }
+
+    // Sección datos adicionales
+    if (record.datosAdicionales) {
+      sectionTitle(doc, "Datos Adicionales");
+      const datosAdicionalesMap = [
+        ["Fecha AT/EP", (p) => formatDateFromExcel(p["fechaAt/Ep"])],
+        ["Tipo Accidente", "tipoAccidente"],
+        ["Tipo de asistencia", "tipoDeAsistencia"],
+        [
+          "Fecha siguiente revisión médica Parte de Baja",
+          (p) => formatDateFromExcel(p.fechaSiguienteRevisionMedicaParteDeBaja),
+        ],
+        [
+          "Fecha Agotamiento 545 días de IT	",
+          (p) => formatDateFromExcel(p.fechaAgotamiento545DiasDeIt),
+        ],
+        [
+          "Fecha de envío PB, PC o PA al INSS",
+          (p) => formatDateFromExcel(p["fechaDeEnvioPb,PcOPaAlInss"]),
+        ],
+
+        ["Base reguladora INSS", "baseReguladoraInss"],
+        [
+          "Código de resolución IT emitida por el INSS",
+          "codigoDeResolucionItEmitidaPorElInss",
+        ],
+        [
+          "Fecha de resolución IT emitida por el INSS",
+          (p) => formatDateFromExcel(p.fechaDeResolucionItEmitidaPorElInss),
+        ],
+        [
+          "Fecha notificación denegación IP al trabajador",
+          (p) =>
+            formatDateFromExcel(p.fechaNotificacionDenegacionIpAlTrabajador),
+        ],
+      ];
+
+      datosAdicionalesMap.forEach(([label, keyOrFn]) => {
+        const value =
+          typeof keyOrFn === "function"
+            ? keyOrFn(record.datosAdicionales)
+            : safeStr(record.datosAdicionales[keyOrFn]);
+        drawRow(doc, label, safeStr(value));
+        // Si se acerca al final de página, crear una nueva
+        if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+          //addFooterWithPageNumbers(doc);
+          //doc.addPage();
+        }
+      });
+      doc.moveDown(1.2);
+    }
+
     if (
       tipo === "CONFIRMACIONES" &&
       Array.isArray(record.partesConfirmacion) &&
       record.partesConfirmacion.length > 0
     ) {
-      doc.addPage();
       record.partesConfirmacion.forEach((parte, index) => {
         sectionTitle(
           doc,
