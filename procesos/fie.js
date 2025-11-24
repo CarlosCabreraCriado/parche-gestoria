@@ -8,6 +8,7 @@ const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
 
+const { registrarEjecucion } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
@@ -38,6 +39,9 @@ class ProcesosFie {
   async fIE(argumentos) {
     return new Promise((resolve) => {
       console.log("Procesamiento de FIE...");
+
+      const nombreProceso = "FIE_1";
+      let registrosProcesados = 0;
 
       var pathArchivoFIE = argumentos.formularioControl[0];
       var pathArchivoEmpresas = argumentos.formularioControl[1];
@@ -165,6 +169,7 @@ class ProcesosFie {
 
                 // -- EXTRACCION DNI
                 for (var i = 0; i < datosIncapacidad.length; i++) {
+                  registrosProcesados += 1;
                   if (
                     datosIncapacidad[i].nif &&
                     datosIncapacidad[i].nif.trim() != "" &&
@@ -205,6 +210,7 @@ class ProcesosFie {
                 for (var i = 0; i < datosIncapacidad.length; i++) {
                   if (datosIncapacidad[i].fechaFinIt) {
                     altas.push(datosIncapacidad[i]);
+                    continue;
                   }
 
                   //Buscamos parte de confirmacion:
@@ -218,8 +224,10 @@ class ProcesosFie {
                     confirmacion.push(datosIncapacidad[i]);
                     confirmacion[confirmacion.length - 1].partesConfirmacion =
                       Object.assign([], partesDetectados);
+                    continue;
                   } else {
                     bajas.push(datosIncapacidad[i]);
+                    continue;
                   }
                 }
 
@@ -1140,8 +1148,12 @@ class ProcesosFie {
                           ),
                         )
                         .then(() => {
-                          console.log("Fin del procesamiento");
                           //console.log(archivoFIE)
+                          registrarEjecucion({
+                            nombreProceso,
+                            registrosProcesados: registrosProcesados,
+                          });
+                          console.log("Fin del procesamiento");
 
                           resolve(true);
                         })
@@ -1193,6 +1205,9 @@ class ProcesosFie {
     console.log(
       "[FIE_2] Iniciando proceso FIE_2 (lectura Excel + automatización web)",
     );
+
+    const nombreProceso = "FIE_1";
+    let registrosProcesados = 0;
 
     return new Promise(async (resolve) => {
       let browser = null;
@@ -2185,6 +2200,7 @@ class ProcesosFie {
 
             // === Bucle sobre todos los registros del Excel ===
             for (let i = 0; i < datos.length; i++) {
+              registrosProcesados += 1;
               try {
                 await procesarRegistro(datos[i], i);
               } catch (e) {
@@ -2303,6 +2319,11 @@ class ProcesosFie {
             } catch (_) {}
           }
         }
+
+        registrarEjecucion({
+          nombreProceso,
+          registrosProcesados: registrosProcesados,
+        });
 
         return resolve(datos);
       } catch (err) {

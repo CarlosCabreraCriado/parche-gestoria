@@ -11,6 +11,7 @@ const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
 
+const { registrarEjecucion } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 
@@ -83,6 +84,8 @@ class ProcesosAsesoria {
       var empresas = [];
       var autonomos = [];
 
+      const nombreProceso = "Formatear Recibos de Liquidacion";
+      let registrosProcesados = 0;
       var pathArchivoLiquidacion = argumentos.formularioControl[0];
       var pathSalidaExcel = path.join(
         path.normalize(argumentos.formularioControl[1]),
@@ -235,6 +238,7 @@ class ProcesosAsesoria {
             const groupedByCCC = {};
 
             for (const file of pdfFiles) {
+              registrosProcesados += 1;
               const fullPath = path.join(pathPDFs, file);
               const info = await this.extractInfoFromPdf(fullPath);
 
@@ -335,7 +339,11 @@ class ProcesosAsesoria {
 
               return null;
             }
-
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -371,6 +379,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "IRPF 2024";
+      let registrosProcesados = 0;
       var archivoIRPF = {};
       var clientes = [];
       var pathArchivoIRPF = argumentos.formularioControl[1];
@@ -596,6 +606,7 @@ class ProcesosAsesoria {
 
             var hoy = new Date();
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -1046,6 +1057,10 @@ class ProcesosAsesoria {
                 ),
               )
               .then(() => {
+                registrarEjecucion({
+                  nombreProceso,
+                  registrosProcesados: registrosProcesados,
+                });
                 console.log("Fin del procesamiento");
                 //console.log(archivoIRPF)
 
@@ -1095,6 +1110,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "IRPF 2025";
+      let registrosProcesados = 0;
       var archivoIRPF = {};
       var clientes = [];
       var pathArchivoIRPF = argumentos.formularioControl[1];
@@ -1320,6 +1337,7 @@ class ProcesosAsesoria {
 
             var hoy = new Date();
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -1771,6 +1789,11 @@ class ProcesosAsesoria {
                 ),
               )
               .then(() => {
+                registrarEjecucion({
+                  nombreProceso,
+                  registrosProcesados: registrosProcesados,
+                });
+
                 console.log("Fin del procesamiento");
                 //console.log(archivoIRPF)
 
@@ -1820,6 +1843,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Cambio de base de cotizacion";
+      let registrosProcesados = 0;
       var archivoCambioBase = {};
       var clientes = [];
       var pathArchivoCambioBase = argumentos.formularioControl[1];
@@ -1949,6 +1974,7 @@ class ProcesosAsesoria {
 
             var hoy = new Date();
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
 
@@ -2150,6 +2176,11 @@ class ProcesosAsesoria {
                 ),
               )
               .then(() => {
+                registrarEjecucion({
+                  nombreProceso,
+                  registrosProcesados: registrosProcesados,
+                });
+
                 console.log("Fin del procesamiento");
                 //console.log(archivoIRPF)
 
@@ -2199,6 +2230,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Cartas de pago en hacienda";
+      let registrosProcesados = 0;
       var archivoCartas = {};
       var clientes = [];
       var pathArchivoCartas = argumentos.formularioControl[1];
@@ -2341,6 +2374,7 @@ class ProcesosAsesoria {
             await page.setViewport({ width: 1080, height: 1024 });
 
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -2497,6 +2531,12 @@ class ProcesosAsesoria {
             //Cerrar navedador
             await browser.close();
 
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
+
             resolve(true);
           })
           .then(() => {})
@@ -2532,6 +2572,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Etiquetas AEAT";
+      let registrosProcesados = 0;
       var archivoEtiquetas = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -2667,6 +2709,7 @@ class ProcesosAsesoria {
             await page.setViewport({ width: 1080, height: 1024 });
 
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -2753,7 +2796,11 @@ class ProcesosAsesoria {
             } //Fin iteracion de clientes
             //Cerrar navedador
             await browser.close();
-
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -2789,6 +2836,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Actualizacion CNAE25";
+      let registrosProcesados = 0;
       var archivoCNAE = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -2908,6 +2957,7 @@ class ProcesosAsesoria {
             await page.setViewport({ width: 1080, height: 1024 });
 
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -3208,6 +3258,11 @@ class ProcesosAsesoria {
             }
 
             await browser.close();
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -3243,6 +3298,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "CNAE25 Autonomos";
+      let registrosProcesados = 0;
       var archivoCNAEAutonomos = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -3417,6 +3474,7 @@ class ProcesosAsesoria {
             await page.setViewport({ width: 1080, height: 1024 });
 
             for (var i = 0; i < clientesAgrupados.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -3646,8 +3704,8 @@ class ProcesosAsesoria {
                   await page.locator('button[title="Cerrar"]').click();
 
                   await this.esperar(1000);
-                  await page.locator('a[data-pc_tipo="documento"]').wait(),
-                    console.log("Descargando Resguardo");
+                  (await page.locator('a[data-pc_tipo="documento"]').wait(),
+                    console.log("Descargando Resguardo"));
                   //*************
                   // DESCARGANDO RESGUARDO
                   //*************
@@ -3753,6 +3811,11 @@ class ProcesosAsesoria {
               });
 
             await browser.close();
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .catch((err) => {
@@ -3787,6 +3850,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Informes ITA";
+      let registrosProcesados = 0;
       var archivoITA = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -3896,6 +3961,7 @@ class ProcesosAsesoria {
 
             //Iniciando descarga de informes:
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -4050,6 +4116,11 @@ class ProcesosAsesoria {
                 resolve(false);
               });
 
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -4085,6 +4156,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Certificado Seguridad Social";
+      let registrosProcesados = 0;
       var archivoSS = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -4221,6 +4294,7 @@ class ProcesosAsesoria {
 
             //Iniciando descarga de informes:
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               //Recargar cada 10 clientes:
               if (i % 10 == 0 && i > 0) {
                 //await browser.close();
@@ -4420,6 +4494,12 @@ class ProcesosAsesoria {
                 resolve(false);
               });
 
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
+
             resolve(true);
           })
           .then(() => {})
@@ -4455,6 +4535,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Certificado Tributario";
+      let registrosProcesados = 0;
       var archivoTributario = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -4621,6 +4703,7 @@ class ProcesosAsesoria {
 
             //Iniciando descarga de informes:
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               if (clientes[i].flagEvitarDuplicado) {
                 archivoTributario
                   .sheet("DATOS")
@@ -4852,6 +4935,11 @@ class ProcesosAsesoria {
                 resolve(false);
               });
 
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -4887,6 +4975,8 @@ class ProcesosAsesoria {
       console.log("Ruta Google...");
       console.log(argumentos.formularioControl[0]);
 
+      const nombreProceso = "Certificado Subvenciones ATC";
+      let registrosProcesados = 0;
       var archivoSubvencionesATC = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
@@ -5055,6 +5145,7 @@ class ProcesosAsesoria {
 
             //Iniciando descarga de informes:
             for (var i = 0; i < clientes.length; i++) {
+              registrosProcesados += 1;
               if (clientes[i].flagEvitarDuplicado) {
                 archivoSubvencionesATC
                   .sheet("DATOS")
@@ -5306,6 +5397,11 @@ class ProcesosAsesoria {
                 resolve(false);
               });
 
+            registrarEjecucion({
+              nombreProceso,
+              registrosProcesados: registrosProcesados,
+            });
+            console.log("Fin del procesamiento");
             resolve(true);
           })
           .then(() => {})
@@ -5400,7 +5496,6 @@ class ProcesosAsesoria {
 
         // Done reading the input, call end() on the write stream
         rl.on("close", () => {
-          console.log("FIN DEL PROCESAMIENTO");
           outputFile.end();
           resolve(true);
         });
@@ -7220,7 +7315,6 @@ class ProcesosAsesoria {
                 ),
               )
               .then(() => {
-                console.log("Fin del procesamiento");
                 resolve(true);
               })
               .catch((err) => {
