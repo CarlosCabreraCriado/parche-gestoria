@@ -399,7 +399,7 @@ async procesoPosts(argumentos) {
         // Contenido principal
         strapi_id,
         titulo,
-        url_slug: [],
+        url_slug,
         contenido: contenidoHtml,   // HTML limpio (WYSIWYG)
         // Fechas
         fecha,
