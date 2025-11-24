@@ -1360,6 +1360,8 @@ class ProcesosFie {
           const opened = await browser.pages();
           var page = opened.length ? opened[0] : await browser.newPage();
 
+          await this.esperar(3000);
+
           // Aceptar automáticamente los popups (alert, confirm, beforeunload...)
           page.on("dialog", async (dialog) => {
             try {
@@ -1374,6 +1376,8 @@ class ProcesosFie {
               console.warn("[FIE_2] Error al aceptar dialog:", e?.message || e);
             }
           });
+
+          await this.esperar(3000);
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           console.log(
@@ -1422,7 +1426,7 @@ class ProcesosFie {
                     }
                   }
                 }
-                await this.esperar(1000);
+                await this.esperar(3000);
               } catch (e) {
                 console.warn(
                   "[FIE_2] No se pudo clicar el enlace de IT Online:",
@@ -1720,6 +1724,8 @@ class ProcesosFie {
                 return;
               }
 
+              await this.esperar(3000);
+
               await openITOnline();
 
               // === Pantalla 1: formulario principal ===
@@ -1796,7 +1802,7 @@ class ProcesosFie {
                 );
               }
 
-              await this.esperar(1000);
+              await this.esperar(3000);
 
               // === Pantalla 2: Grabación de partes ===
               try {
@@ -1985,203 +1991,203 @@ class ProcesosFie {
                 );
               }
 
-              await this.esperar(1000);
+              await this.esperar(3000);
 
-              // === Pantalla de confirmación (Confirmar) ===
-              try {
-                await Promise.race([
-                  page
-                    .waitForNavigation({
-                      waitUntil: "domcontentloaded",
-                      timeout: 15000,
-                    })
-                    .catch(() => {}),
-                  pause(1500),
-                ]);
+            //   // === Pantalla de confirmación (Confirmar) ===
+            //   try {
+            //     await Promise.race([
+            //       page
+            //         .waitForNavigation({
+            //           waitUntil: "domcontentloaded",
+            //           timeout: 15000,
+            //         })
+            //         .catch(() => {}),
+            //       pause(1500),
+            //     ]);
 
-                const confirmFrame1 =
-                  (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
-                  (await findFrameWithSelector(
-                    'button[name="SPM.ACC.CONFIRMAR_DATOS_ECONOMICOS"]',
-                    20000,
-                    400,
-                  ));
+            //     const confirmFrame1 =
+            //       (await findFrameWithSelector("#ENVIO_12", 20000, 400)) ||
+            //       (await findFrameWithSelector(
+            //         'button[name="SPM.ACC.CONFIRMAR_DATOS_ECONOMICOS"]',
+            //         20000,
+            //         400,
+            //       ));
 
-                if (!confirmFrame1) {
-                  const msg =
-                    "[ERROR] No se encontró la pantalla de Confirmación (botón #ENVIO_12).";
-                  console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
-                  registrosError++;
-                  return;
-                } else {
-                  try {
-                    await confirmFrame1.waitForSelector("#ENVIO_12", {
-                      visible: true,
-                      timeout: 8000,
-                    });
-                    await confirmFrame1.click("#ENVIO_12", { delay: 60 });
-                    logDebug("[FIE_2] Click en Confirmar (ENVIO_12).");
-                  } catch (e) {
-                    console.warn(
-                      "[FIE_2] No se pudo clicar Confirmar (ENVIO_12):",
-                      e?.message || e,
-                    );
-                  }
-                }
-              } catch (e) {
-                console.warn(
-                  "[FIE_2] Error en pantalla de confirmación:",
-                  e?.message || e,
-                );
-              }
+            //     if (!confirmFrame1) {
+            //       const msg =
+            //         "[ERROR] No se encontró la pantalla de Confirmación (botón #ENVIO_12).";
+            //       console.warn("[FIE_2]", msg);
+            //       appendLog(indice, msg);
+            //       registrosError++;
+            //       return;
+            //     } else {
+            //       try {
+            //         await confirmFrame1.waitForSelector("#ENVIO_12", {
+            //           visible: true,
+            //           timeout: 8000,
+            //         });
+            //         await confirmFrame1.click("#ENVIO_12", { delay: 60 });
+            //         logDebug("[FIE_2] Click en Confirmar (ENVIO_12).");
+            //       } catch (e) {
+            //         console.warn(
+            //           "[FIE_2] No se pudo clicar Confirmar (ENVIO_12):",
+            //           e?.message || e,
+            //         );
+            //       }
+            //     }
+            //   } catch (e) {
+            //     console.warn(
+            //       "[FIE_2] Error en pantalla de confirmación:",
+            //       e?.message || e,
+            //     );
+            //   }
 
-              await this.esperar(1000);
+            //   await this.esperar(1000);
 
-              // === Pantalla de generación (Generar informe) ===
-              try {
-                await Promise.race([
-                  page
-                    .waitForNavigation({
-                      waitUntil: "domcontentloaded",
-                      timeout: 15000,
-                    })
-                    .catch(() => {}),
-                  pause(1500),
-                ]);
+            //   // === Pantalla de generación (Generar informe) ===
+            //   try {
+            //     await Promise.race([
+            //       page
+            //         .waitForNavigation({
+            //           waitUntil: "domcontentloaded",
+            //           timeout: 15000,
+            //         })
+            //         .catch(() => {}),
+            //       pause(1500),
+            //     ]);
 
-                const confirmFrame2 =
-                  (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
-                  (await findFrameWithSelector(
-                    'button[name="SPM.ACC.INFORME_DATOS_ECONOMICOS"]',
-                    20000,
-                    400,
-                  ));
+            //     const confirmFrame2 =
+            //       (await findFrameWithSelector("#ENVIO_8", 20000, 400)) ||
+            //       (await findFrameWithSelector(
+            //         'button[name="SPM.ACC.INFORME_DATOS_ECONOMICOS"]',
+            //         20000,
+            //         400,
+            //       ));
 
-                if (!confirmFrame2) {
-                  const msg =
-                    "[ERROR] No se encontró la pantalla de Generación (botón #ENVIO_8).";
-                  console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
-                  registrosError++;
-                  return;
-                } else {
-                  try {
-                    await confirmFrame2.waitForSelector("#ENVIO_8", {
-                      visible: true,
-                      timeout: 8000,
-                    });
-                    await confirmFrame2.click("#ENVIO_8", { delay: 60 });
-                    logDebug("[FIE_2] Click en Generar (ENVIO_8).");
-                  } catch (e) {
-                    console.warn(
-                      "[FIE_2] No se pudo clicar Generar (ENVIO_8):",
-                      e?.message || e,
-                    );
-                  }
-                }
-              } catch (e) {
-                console.warn(
-                  "[FIE_2] Error en pantalla de Generación:",
-                  e?.message || e,
-                );
-              }
+            //     if (!confirmFrame2) {
+            //       const msg =
+            //         "[ERROR] No se encontró la pantalla de Generación (botón #ENVIO_8).";
+            //       console.warn("[FIE_2]", msg);
+            //       appendLog(indice, msg);
+            //       registrosError++;
+            //       return;
+            //     } else {
+            //       try {
+            //         await confirmFrame2.waitForSelector("#ENVIO_8", {
+            //           visible: true,
+            //           timeout: 8000,
+            //         });
+            //         await confirmFrame2.click("#ENVIO_8", { delay: 60 });
+            //         logDebug("[FIE_2] Click en Generar (ENVIO_8).");
+            //       } catch (e) {
+            //         console.warn(
+            //           "[FIE_2] No se pudo clicar Generar (ENVIO_8):",
+            //           e?.message || e,
+            //         );
+            //       }
+            //     }
+            //   } catch (e) {
+            //     console.warn(
+            //       "[FIE_2] Error en pantalla de Generación:",
+            //       e?.message || e,
+            //     );
+            //   }
 
-              await this.esperar(1000);
+            //   await this.esperar(1000);
 
-              // === Enlace "Visualizar informe..." y descargar PDF ===
-              try {
-                await Promise.race([
-                  page
-                    .waitForNavigation({
-                      waitUntil: "domcontentloaded",
-                      timeout: 15000,
-                    })
-                    .catch(() => {}),
-                  pause(1500),
-                ]);
+            //   // === Enlace "Visualizar informe..." y descargar PDF ===
+            //   try {
+            //     await Promise.race([
+            //       page
+            //         .waitForNavigation({
+            //           waitUntil: "domcontentloaded",
+            //           timeout: 15000,
+            //         })
+            //         .catch(() => {}),
+            //       pause(1500),
+            //     ]);
 
-                const docFrame = await findFrameWithSelector(
-                  'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
-                  20000,
-                  400,
-                );
+            //     const docFrame = await findFrameWithSelector(
+            //       'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+            //       20000,
+            //       400,
+            //     );
 
-                if (!docFrame) {
-                  const msg =
-                    "[ERROR] No se encontró el enlace de informe (a.pr_enlaceDocInforme).";
-                  console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
-                } else if (!pathSalidaPDFConfirmacion) {
-                  console.warn(
-                    "[FIE_2] No hay carpeta de salida configurada; no descargo PDF.",
-                  );
-                } else {
-                  const href = await docFrame.$eval(
-                    'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
-                    (el) => el.getAttribute("href") || "",
-                  );
+            //     if (!docFrame) {
+            //       const msg =
+            //         "[ERROR] No se encontró el enlace de informe (a.pr_enlaceDocInforme).";
+            //       console.warn("[FIE_2]", msg);
+            //       appendLog(indice, msg);
+            //     } else if (!pathSalidaPDFConfirmacion) {
+            //       console.warn(
+            //         "[FIE_2] No hay carpeta de salida configurada; no descargo PDF.",
+            //       );
+            //     } else {
+            //       const href = await docFrame.$eval(
+            //         'a.pr_enlaceDocInforme[href*="ViewDocUtf8"]',
+            //         (el) => el.getAttribute("href") || "",
+            //       );
 
-                  if (!href) {
-                    const msg =
-                      "[ERROR] El enlace de informe no tiene href usable.";
-                    console.warn("[FIE_2]", msg);
-                    appendLog(indice, msg);
-                  } else {
-                    const baseUrl = page.url();
-                    const pdfUrl = new URL(href, baseUrl).toString();
-                    logDebug("[FIE_2] URL PDF:", pdfUrl);
+            //       if (!href) {
+            //         const msg =
+            //           "[ERROR] El enlace de informe no tiene href usable.";
+            //         console.warn("[FIE_2]", msg);
+            //         appendLog(indice, msg);
+            //       } else {
+            //         const baseUrl = page.url();
+            //         const pdfUrl = new URL(href, baseUrl).toString();
+            //         logDebug("[FIE_2] URL PDF:", pdfUrl);
 
-                    const pdfBase64 = await docFrame.evaluate(async (url) => {
-                      const res = await fetch(url, { credentials: "include" });
-                      if (!res.ok) {
-                        throw new Error(
-                          "Respuesta HTTP no OK al descargar PDF: " +
-                            res.status,
-                        );
-                      }
-                      const buf = await res.arrayBuffer();
-                      const bytes = new Uint8Array(buf);
-                      let binary = "";
-                      for (let i = 0; i < bytes.length; i++) {
-                        binary += String.fromCharCode(bytes[i]);
-                      }
-                      return btoa(binary);
-                    }, pdfUrl);
+            //         const pdfBase64 = await docFrame.evaluate(async (url) => {
+            //           const res = await fetch(url, { credentials: "include" });
+            //           if (!res.ok) {
+            //             throw new Error(
+            //               "Respuesta HTTP no OK al descargar PDF: " +
+            //                 res.status,
+            //             );
+            //           }
+            //           const buf = await res.arrayBuffer();
+            //           const bytes = new Uint8Array(buf);
+            //           let binary = "";
+            //           for (let i = 0; i < bytes.length; i++) {
+            //             binary += String.fromCharCode(bytes[i]);
+            //           }
+            //           return btoa(binary);
+            //         }, pdfUrl);
 
-                    const buffer = Buffer.from(pdfBase64, "base64");
+            //         const buffer = Buffer.from(pdfBase64, "base64");
 
-                    const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
-                    const seq = (seqMatch && seqMatch[1]) || "1";
+            //         const seqMatch = pdfUrl.match(/[?&]SECUENCIAL=(\d+)/);
+            //         const seq = (seqMatch && seqMatch[1]) || "1";
 
-                    const nafSafe = (r?.naf ? String(r.naf) : "sinNAF").replace(
-                      /\D/g,
-                      "",
-                    );
+            //         const nafSafe = (r?.naf ? String(r.naf) : "sinNAF").replace(
+            //           /\D/g,
+            //           "",
+            //         );
 
-                    const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
-                    const fullPath = path.join(
-                      pathSalidaPDFConfirmacion,
-                      fileName,
-                    );
+            //         const fileName = `Informe_Datos_Economicos_${nafSafe}_S${seq}.pdf`;
+            //         const fullPath = path.join(
+            //           pathSalidaPDFConfirmacion,
+            //           fileName,
+            //         );
 
-                    fs.writeFileSync(fullPath, buffer);
-                    console.log("[FIE_2] Informe PDF guardado en:", fullPath);
-                  }
-                }
-              } catch (e) {
-                const msg = `[ERROR] Error al localizar/descargar el informe PDF: ${e?.message || e}`;
-                console.warn("[FIE_2]", msg);
-                appendLog(indice, msg);
-              }
+            //         fs.writeFileSync(fullPath, buffer);
+            //         console.log("[FIE_2] Informe PDF guardado en:", fullPath);
+            //       }
+            //     }
+            //   } catch (e) {
+            //     const msg = `[ERROR] Error al localizar/descargar el informe PDF: ${e?.message || e}`;
+            //     console.warn("[FIE_2]", msg);
+            //     appendLog(indice, msg);
+            //   }
 
-              // Si no se ha registrado ningún mensaje de error, marcamos como OK
-              if (!logsRegistros[indice]) {
-                logsRegistros[indice] = "OK";
-              }
+            //   // Si no se ha registrado ningún mensaje de error, marcamos como OK
+            //   if (!logsRegistros[indice]) {
+            //     logsRegistros[indice] = "OK";
+            //   }
 
-              registrosOk++;
-            }; // fin procesarRegistro
+            //   registrosOk++;
+             }; // fin procesarRegistro
 
             // === Bucle sobre todos los registros del Excel ===
             for (let i = 0; i < datos.length; i++) {
