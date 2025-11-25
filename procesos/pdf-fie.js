@@ -230,7 +230,7 @@ async function generatePDF(record, tipo, OUTPUT_DIR) {
     margin: 50,
     info: {
       Title: `Parte de ${tipo} - ${safeStr(record.dni)}`,
-      Author: "Gestoría Castillo",
+      Author: "Gestoría",
     },
   });
 

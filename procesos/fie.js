@@ -1360,7 +1360,7 @@ class ProcesosFie {
           const opened = await browser.pages();
           var page = opened.length ? opened[0] : await browser.newPage();
 
-          await this.esperar(3000);
+          await this.esperar(1000);
 
           // Aceptar automáticamente los popups (alert, confirm, beforeunload...)
           page.on("dialog", async (dialog) => {
@@ -1377,7 +1377,7 @@ class ProcesosFie {
             }
           });
 
-          await this.esperar(3000);
+          await this.esperar(1000);
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           console.log(
@@ -1426,7 +1426,7 @@ class ProcesosFie {
                     }
                   }
                 }
-                await this.esperar(3000);
+                await this.esperar(5000);
               } catch (e) {
                 console.warn(
                   "[FIE_2] No se pudo clicar el enlace de IT Online:",
@@ -1793,6 +1793,9 @@ class ProcesosFie {
                   visible: true,
                   timeout: 8000,
                 });
+
+                await this.esperar(3000);
+                
                 await formFrame.click("#ENVIO_7", { delay: 60 });
                 logDebug("[FIE_2] Click en Aceptar (ENVIO_7).");
               } catch (e) {
@@ -1802,7 +1805,7 @@ class ProcesosFie {
                 );
               }
 
-              await this.esperar(3000);
+              
 
               // === Pantalla 2: Grabación de partes ===
               try {
@@ -2303,11 +2306,11 @@ class ProcesosFie {
           );
           return resolve(false);
         } finally {
-          if (browser) {
-            try {
-              await browser.close();
-            } catch (_) {}
-          }
+          // if (browser) {
+          //   try {
+          //     await browser.close();
+          //   } catch (_) {}
+          // }
         }
 
         return resolve(datos);
