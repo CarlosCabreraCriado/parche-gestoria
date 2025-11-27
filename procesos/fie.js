@@ -1272,6 +1272,34 @@ class ProcesosFie {
           );
         }
 
+        // Helper sencillo para comprobar si un campo está relleno (versión JS)
+        const campoRelleno = (reg, nombreCampo) => {
+          const valor = reg && reg[nombreCampo];
+          return valor !== null && valor !== undefined && String(valor).trim() !== "";
+        };
+
+        // Filtrar registros de la hoja 1
+        const datosHoja1Filtrados = datosHoja1.filter((reg) =>
+        campoRelleno(reg, "tipoContrato") &&
+        campoRelleno(reg, "base") &&
+        campoRelleno(reg, "dia") &&
+        campoRelleno(reg, "puestoDeTrabajo") &&
+        campoRelleno(reg, "cnoe") &&
+        campoRelleno(reg, "detalleCnoe") &&
+        campoRelleno(reg, "bajaYAlta")
+        );
+
+        console.log(
+          `[FIE_2] Registros hoja 0 totales: ${datosHoja1.length}. Registros válidos tras filtro: ${datosHoja1Filtrados.length}.`,
+        );
+
+        if (!datosHoja1Filtrados.length) {
+          console.warn(
+            "[FIE_2] No hay registros en la hoja 0 que cumplan todos los campos obligatorios.",
+          );
+          return resolve([]);
+        }
+
         // Helpers para NIF y clave Fecha AT/EP
         const obtenerNifRegistro = (reg) => {
           if (!reg || typeof reg !== "object") return "";
@@ -1331,7 +1359,7 @@ class ProcesosFie {
         }
 
         // Mezclamos datos de la hoja 1 con la Fecha AT/EP de la hoja 2 (por NIF)
-        const datos = datosHoja1.map((reg1) => {
+        const datos = datosHoja1Filtrados.map((reg1) => {
           const nifRaw = obtenerNifRegistro(reg1);
           const nifNorm = normalizaNif(nifRaw);
           const fechaDesdeHoja2 = nifNorm ? mapaFechaATEP.get(nifNorm) : null;
@@ -1706,31 +1734,34 @@ class ProcesosFie {
             let registrosOk = 0;
             let registrosError = 0;
 
-            // Array de logs por registro y helper para añadir mensajes
-            const logsRegistros = new Array(datos.length).fill("");
-            const appendLog = (indice, msg) => {
-              logsRegistros[indice] = logsRegistros[indice]
-                ? `${logsRegistros[indice]} | ${msg}`
-                : msg;
+            // Mapa NIF -> LOG y helper para añadir mensajes
+            const logsPorNif = new Map();
+
+            const appendLog = (nifNorm, msg) => {
+              if (!nifNorm) return;
+              const prev = logsPorNif.get(nifNorm);
+              logsPorNif.set(nifNorm, prev ? `${prev} | ${msg}` : msg);
             };
 
             const procesarRegistro = async (r, indice) => {
-              // Inicializamos el log de este registro
-              logsRegistros[indice] = "";
-
+              // NIF normalizado del registro actual (para mapear LOG en el Excel)
+              const nifNormRegistro = normalizaNif(obtenerNifRegistro(r));
+            
               console.log(
                 `[FIE_2] Procesando registro ${indice + 1}/${datos.length} (NAF: ${
                   r?.naf ?? "sin NAF"
                 })`,
               );
-
+            
               // Volvemos siempre a la URL base y entramos de nuevo en IT Online
               try {
                 await page.goto(urlFS, { waitUntil: "domcontentloaded" });
               } catch (e) {
-                const msg = `[ERROR] No se pudo acceder a FS en el registro ${indice + 1}: ${e?.message || e}`;
+                const msg = `[ERROR] No se pudo acceder a FS en el registro ${
+                  indice + 1
+                }: ${e?.message || e}`;
                 console.warn("[FIE_2]", msg);
-                appendLog(indice, msg);
+                appendLog(nifNormRegistro, msg);
                 registrosError++;
                 return;
               }
@@ -1748,7 +1779,7 @@ class ProcesosFie {
                 const msg =
                   "[ERROR] No se encontró el formulario inicial (#regimen) en ningún frame.";
                 console.warn("[FIE_2]", msg);
-                appendLog(indice, msg);
+                appendLog(nifNormRegistro, msg);;
                 registrosError++;
                 return;
               }
@@ -1832,7 +1863,7 @@ class ProcesosFie {
                   const msg =
                     "[ERROR] No se encontró el formulario de 'Grabación de partes'.";
                   console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
+                  appendLog(nifNormRegistro, msg);;
                   registrosError++;
                   return;
                 } else {
@@ -2026,7 +2057,7 @@ class ProcesosFie {
                   const msg =
                     "[ERROR] No se encontró la pantalla de Confirmación (botón #ENVIO_12).";
                   console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
+                  appendLog(nifNormRegistro, msg);;
                   registrosError++;
                   return;
                 } else {
@@ -2077,7 +2108,7 @@ class ProcesosFie {
                   const msg =
                     "[ERROR] No se encontró la pantalla de Generación (botón #ENVIO_8).";
                   console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
+                  appendLog(nifNormRegistro, msg);;
                   registrosError++;
                   return;
                 } else {
@@ -2126,7 +2157,7 @@ class ProcesosFie {
                   const msg =
                     "[ERROR] No se encontró el enlace de informe (a.pr_enlaceDocInforme).";
                   console.warn("[FIE_2]", msg);
-                  appendLog(indice, msg);
+                  appendLog(nifNormRegistro, msg);;
                 } else if (!pathSalidaPDFConfirmacion) {
                   console.warn(
                     "[FIE_2] No hay carpeta de salida configurada; no descargo PDF.",
@@ -2141,7 +2172,7 @@ class ProcesosFie {
                     const msg =
                       "[ERROR] El enlace de informe no tiene href usable.";
                     console.warn("[FIE_2]", msg);
-                    appendLog(indice, msg);
+                    appendLog(nifNormRegistro, msg);;
                   } else {
                     const baseUrl = page.url();
                     const pdfUrl = new URL(href, baseUrl).toString();
@@ -2187,15 +2218,15 @@ class ProcesosFie {
               } catch (e) {
                 const msg = `[ERROR] Error al localizar/descargar el informe PDF: ${e?.message || e}`;
                 console.warn("[FIE_2]", msg);
-                appendLog(indice, msg);
+                appendLog(nifNormRegistro, msg);;
               }
 
-              // Si no se ha registrado ningún mensaje de error, marcamos como OK
-              if (!logsRegistros[indice]) {
-                logsRegistros[indice] = "OK";
+              // Si no se ha registrado ningún mensaje de error, marcamos como OK por NIF
+              if (nifNormRegistro && !logsPorNif.has(nifNormRegistro)) {
+                logsPorNif.set(nifNormRegistro, "OK");
               }
-
               registrosOk++;
+
             }; // fin procesarRegistro
 
             // === Bucle sobre todos los registros del Excel ===
@@ -2205,9 +2236,13 @@ class ProcesosFie {
                 await procesarRegistro(datos[i], i);
               } catch (e) {
                 registrosError++;
-                const msg = `[ERROR] Error inesperado procesando el registro ${i + 1}/${datos.length}: ${e?.message || e}`;
+                const msg = `[ERROR] Error inesperado procesando el registro ${
+                  i + 1
+                }/${datos.length}: ${e?.message || e}`;
                 console.warn("[FIE_2]", msg);
-                appendLog(i, msg);
+              
+                const nifNorm = normalizaNif(obtenerNifRegistro(datos[i]));
+                appendLog(nifNorm, msg);
               }
             }
 
@@ -2222,89 +2257,112 @@ class ProcesosFie {
                 pathSalidaPDFConfirmacion ||
                 (pathSalidaBase && path.normalize(pathSalidaBase)) ||
                 path.dirname(rutaNormalizada);
-
+            
               const nombreOriginal = path.basename(pathArchivoFIE_2);
               const nombreSinExt = nombreOriginal.replace(/\.xlsx?$/i, "");
               const nombreCopia = `${nombreSinExt} - LOG.xlsx`;
               const pathCopia = path.join(carpetaExcelSalida, nombreCopia);
-
+            
               console.log("[FIE_2] Generando copia con LOG en:", pathCopia);
-
+            
               // Cargamos de nuevo el Excel original para no tocar el archivo de entrada
-              const workbookCopia =
-                await XlsxPopulate.fromFileAsync(rutaNormalizada);
+              const workbookCopia = await XlsxPopulate.fromFileAsync(rutaNormalizada);
               const sheet = workbookCopia.sheet(0);
-
+            
               // --- 1) Detectar dinámicamente la FILA de cabecera (la que tiene "EXPTE") ---
               let filaCabecera = 1;
               let encontradaCabecera = false;
-
-              // Buscamos en las primeras 20 filas y 20 columnas por si hay títulos encima
+            
               for (let r = 1; r <= 20 && !encontradaCabecera; r++) {
-                for (let c = 1; c <= 20 && !encontradaCabecera; c++) {
+                for (let c = 1; c <= 40 && !encontradaCabecera; c++) {
                   const val = sheet.cell(r, c).value();
-                  if (
-                    typeof val === "string" &&
-                    val.toLowerCase().includes("expte")
-                  ) {
+                  if (typeof val === "string" && val.toLowerCase().includes("expte")) {
                     filaCabecera = r;
                     encontradaCabecera = true;
                   }
                 }
               }
-
-              console.log(
-                "[FIE_2] Fila de cabecera detectada en:",
-                filaCabecera,
-              );
-
-              // --- 2) Calcular cuántas columnas tiene la cabecera (contiguas con datos) ---
+            
+              console.log("[FIE_2] Fila de cabecera detectada en:", filaCabecera);
+            
+              // --- 2) Calcular cuántas columnas contiguas tiene la cabecera ---
               let numColumnas = 0;
               for (let col = 1; col <= 200; col++) {
                 const val = sheet.cell(filaCabecera, col).value();
                 if (val === null || val === undefined || val === "") break;
                 numColumnas = col;
               }
-
+            
               if (numColumnas === 0) {
                 console.warn(
-                  "[FIE_2] No se detectaron columnas en la fila de cabecera al generar el LOG. Se omitirá la inserción de la columna de LOG.",
+                  "[FIE_2] No se detectaron columnas en la fila de cabecera al generar el LOG. Se omite inserción.",
                 );
               } else {
-                // --- 3) Desplazar columnas una posición a la derecha
-                //      desde la fila 1 hasta la última fila de datos (cabecera + registros)
-                const ultimaFilaDatos = filaCabecera + datos.length; // cabecera + registros
-
-                for (let fila = 1; fila <= ultimaFilaDatos; fila++) {
-                  for (let col = numColumnas; col >= 1; col--) {
-                    const valor = sheet.cell(fila, col).value();
-                    sheet.cell(fila, col + 1).value(valor);
+                // --- 3) Localizar columnas de EXPTE y NIF en la cabecera ---
+                let colExpte = null;
+                let colNif = null;
+              
+                for (let col = 1; col <= numColumnas; col++) {
+                  const val = sheet.cell(filaCabecera, col).value();
+                  if (typeof val === "string") {
+                    const low = val.toLowerCase();
+                    if (low.includes("expte") && colExpte === null) colExpte = col;
+                    if (low.includes("nif") && colNif === null) colNif = col;
                   }
                 }
-
-                // --- 4) Escribir cabecera de LOG en la columna A de la fila de cabecera ---
-                sheet.cell(filaCabecera, 1).value("LOG FIE_2");
-
-                // --- 5) Volcar los logs por registro, alineados con cada fila de datos ---
-                // datos[0] está en la fila filaCabecera + 1
-                for (let i = 0; i < datos.length; i++) {
-                  const filaExcel = filaCabecera + 1 + i;
-                  const log = logsRegistros[i] || "";
-                  sheet.cell(filaExcel, 1).value(log);
+              
+                if (colExpte == null || colNif == null) {
+                  console.warn(
+                    "[FIE_2] No se pudieron localizar las columnas de EXPTE o NIF al generar el LOG.",
+                  );
+                } else {
+                  // --- 4) Determinar la última fila de datos usando el nº de registros del Excel ---
+                  // datosHoja1.length = nº de registros originales de la hoja 0
+                  const totalRegistrosExcel = datosHoja1.length;
+                  const ultimaFilaDatos = filaCabecera + totalRegistrosExcel;
+                
+                  console.log(
+                    "[FIE_2] Última fila de datos calculada en:",
+                    ultimaFilaDatos,
+                  );
+                
+                  // --- 5) Simular "Insertar columna A": desplazar todas las columnas a la derecha
+                  //      desde la fila 1 hasta la última fila de datos
+                  const filas = sheet.usedRange()._numRows;
+                  const columnas = sheet.usedRange()._numColumns;
+                  for (let fila = 1; fila <= filas; fila++) {
+                    for (let col = columnas; col >= 1; col--) {
+                      const valor = sheet.cell(fila, col).value();
+                      sheet.cell(fila, col + 1).value(valor);
+                    }
+                  }
+                
+                  // Después de desplazar, la columna NIF pasa a ser colNif + 1
+                  const colNifInsertada = colNif + 1;
+                
+                  // --- 6) Escribir cabecera de LOG en la columna A de la fila de cabecera ---
+                  sheet.cell(filaCabecera, 1).value("LOG FIE_2");
+                
+                  // --- 7) Volcar los logs según el NIF de cada fila ---
+                  for (let fila = filaCabecera + 1; fila <= ultimaFilaDatos; fila++) {
+                    const nifValor = sheet.cell(fila, colNifInsertada).value();
+                    const nifNorm = normalizaNif(nifValor);
+                    const log = nifNorm ? logsPorNif.get(nifNorm) || "" : "";
+                    sheet.cell(fila, 1).value(log);
+                  }
                 }
               }
-
+            
               // Guardamos la copia
               await workbookCopia.toFileAsync(path.normalize(pathCopia));
-              console.log(
-                "[FIE_2] Copia del Excel con LOG generada correctamente.",
-              );
+              console.log("[FIE_2] Copia del Excel con LOG generada correctamente.");
             } catch (e) {
               console.warn(
                 "[FIE_2] No se pudo generar la copia del Excel con LOG:",
                 e?.message || e,
               );
             }
+
           }
         } catch (navErr) {
           console.warn(
