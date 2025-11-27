@@ -2312,8 +2312,10 @@ class ProcesosFie {
                 
                   // --- 5) Simular "Insertar columna A": desplazar todas las columnas a la derecha
                   //      desde la fila 1 hasta la última fila de datos
-                  for (let fila = 1; fila <= ultimaFilaDatos; fila++) {
-                    for (let col = numColumnas; col >= 1; col--) {
+                  const filas = sheet.usedRange()._numRows;
+                  const columnas = sheet.usedRange()._numColumns;
+                  for (let fila = 1; fila <= filas; fila++) {
+                    for (let col = columnas; col >= 1; col--) {
                       const valor = sheet.cell(fila, col).value();
                       sheet.cell(fila, col + 1).value(valor);
                     }
