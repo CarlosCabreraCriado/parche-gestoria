@@ -282,7 +282,10 @@ async function generarEmailFieDesdePlantilla(
 
   //Tipo de proceso:
   var tipoProceso = "";
-  switch (Number(record.tipoDeProceso[0])) {
+  const tipoProcStr = safe(record.tipoDeProceso, ""); // safe ya existe arriba
+  const primeraLetra = (tipoProcStr && tipoProcStr[0]) || null;
+  
+  switch (Number(primeraLetra)) {
     case 1:
       tipoProceso = "PROCESO MUY CORTO";
       break;
@@ -290,12 +293,16 @@ async function generarEmailFieDesdePlantilla(
       tipoProceso = "PROCESO CORTO";
       break;
     case 3:
-      tipoProceso = "PROCESO MEDIO";
+      tipoProceso = "PROCESO INTERMEDIO";
       break;
     case 4:
       tipoProceso = "PROCESO LARGO";
       break;
+    default:
+      tipoProceso = ""; // o algún texto por defecto si quieres
+      break;
   }
+
 
   //Procesar observaciones:
   switch (tipoDoc) {

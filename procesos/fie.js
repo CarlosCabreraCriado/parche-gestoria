@@ -2465,6 +2465,15 @@ function extraccionExcel(workbook, sheet, opts = null) {
       }
     }
 
+    // ⬇⬇⬇ NUEVO: saltar filas completamente vacías ⬇⬇⬇
+    const hayDatos = Object.values(objetoRegistro).some(
+      (v) => v !== undefined && v !== null && v !== ""
+    );
+    if (!hayDatos) {
+      continue; // no añadimos este registro
+    }
+    // ⬆⬆⬆ FIN NUEVO ⬆⬆⬆
+
     registros.push(Object.assign({}, objetoRegistro));
   }
   return registros;
