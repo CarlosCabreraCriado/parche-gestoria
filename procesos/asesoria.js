@@ -1365,7 +1365,7 @@ class ProcesosAsesoria {
               }
 
               await page.goto(
-                "https://prewww2.aeat.es/wlpl/PRET-R200/R250/index.zul",
+                "https://www2.agenciatributaria.gob.es/wlpl/PRET-R200/R251/index.zul",
                 { waitUntil: "networkidle0" },
               );
 
