@@ -1004,6 +1004,128 @@ async imagenPost(argumentos) {
   }
 }
 
+  // ======================================
+  // PROCESO: Generar QR desde JSON
+  // Lee un JSON con objetos:
+  //  { "titulo_interno", "slug", "prefijo_url" }
+  // y genera códigos QR en /QR_Generados
+  // ======================================
+async generarQRTourislapp(argumentos) {
+  // Usamos path y fs ya cargados arriba en el fichero.
+  const QRCode = require("qrcode"); // Librería externa para generar códigos QR
+  try {
+    console.log("Inicio del proceso: Generar QR Tourislapp desde JSON");
+    // Entradas desde la UI (orden en argumentos.formularioControl):
+    // [0] -> rutaJson (archivo JSON con array de objetos)
+    // [1] -> rutaSalida (carpeta base donde se creará /QR_Generados)
+    const rutaJson   = argumentos?.formularioControl?.[0];
+    const carpetaOut = argumentos?.formularioControl?.[1];
+    // Validaciones básicas
+    if (typeof rutaJson !== "string" || !rutaJson.trim()) {
+      console.error("No se ha proporcionado una ruta de archivo válida para el JSON.");
+      return false;
+    }
+    if (typeof carpetaOut !== "string" || !carpetaOut.trim()) {
+      console.error("No se ha proporcionado una carpeta de salida válida.");
+      return false;
+    }
+    // Normalizamos rutas
+    const rutaInput = path.isAbsolute(rutaJson) ? rutaJson : path.resolve(rutaJson);
+    const salidaDir = path.isAbsolute(carpetaOut) ? carpetaOut : path.resolve(carpetaOut);
+    // Comprobamos que el JSON existe y preparamos carpeta de salida
+    if (!fs.existsSync(rutaInput)) {
+      console.error("El archivo JSON indicado no existe:", rutaInput);
+      return false;
+    }
+    if (!fs.existsSync(salidaDir)) {
+      fs.mkdirSync(salidaDir, { recursive: true });
+    }
+    // Carpeta específica para los QR
+    const carpetaQr = path.join(salidaDir, "QR_Generados");
+    if (!fs.existsSync(carpetaQr)) {
+      fs.mkdirSync(carpetaQr, { recursive: true });
+    }
+    // Leemos el JSON (esperamos un ARRAY)
+    const raw = fs.readFileSync(rutaInput, "utf8");
+    let items;
+    try {
+      items = JSON.parse(raw);
+    } catch (e) {
+      console.error("El JSON de entrada no es válido. Detalle:", e.message);
+      return false;
+    }
+    if (!Array.isArray(items)) {
+      console.error("ERROR: Se esperaba un ARRAY de objetos en el JSON.");
+      return false;
+    }
+    // Helper para normalizar los nombres de archivo
+    const normalizarNombreArchivo = (texto, fallback) => {
+      let s = String(texto ?? "").trim();
+      if (!s) s = String(fallback ?? "").trim();
+      if (!s) s = "qr";
+      // Quitamos acentos
+      s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      // Sustituimos caracteres problemáticos para el sistema de archivos
+      s = s.replace(/[\/\\?%*:|"<>]/g, "-");
+      // Espacios por guiones bajos
+      s = s.replace(/\s+/g, "_");
+      // Quitamos dobles guiones bajos al final
+      s = s.replace(/_+/g, "_");
+      return s || "qr";
+    };
+    let ok = 0;
+    let ko = 0;
+    // Recorremos cada elemento del array y generamos su QR
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] || {};
+      const tituloInterno = String(item.titulo_interno ?? "").trim();
+      const slug          = String(item.slug ?? "").trim();
+      let prefijoUrl      = String(item.prefijo_url ?? "").trim();
+      // Validación de campos mínimos
+      if (!tituloInterno || !slug || !prefijoUrl) {
+        console.warn(
+          `Registro ${i + 1}: faltan datos (titulo_interno, slug o prefijo_url). Se omite.`
+        );
+        ko++;
+        continue;
+      }
+      // Nos aseguramos de que el prefijo termina en "/"
+      if (!prefijoUrl.endsWith("/")) {
+        prefijoUrl += "/";
+      }
+      // URL final que irá codificada en el QR
+      const urlFinal = prefijoUrl + slug;
+      // Nombre de archivo: basado en titulo_interno normalizado
+      const nombreBase = normalizarNombreArchivo(tituloInterno, slug);
+      const rutaPng    = path.join(carpetaQr, `${nombreBase}.png`);
+      try {
+        // Generamos el código QR en un archivo PNG
+        await QRCode.toFile(rutaPng, urlFinal, {
+          width: 500, // tamaño razonable
+          margin: 1,  // margen pequeño alrededor
+        });
+        console.log(
+          `✔ QR generado para "${tituloInterno}" -> ${urlFinal} (archivo: ${rutaPng})`
+        );
+        ok++;
+      } catch (e) {
+        console.warn(
+          `✖ Error generando QR para "${tituloInterno}" (slug: ${slug}):`,
+          e.message
+        );
+        ko++;
+      }
+    }
+    console.log(
+      `Proceso Generar QR Tourislapp finalizado. Correctos: ${ok}, Fallidos: ${ko}, Total: ${items.length}`
+    );
+    // Devolvemos true si al menos se generó un QR correctamente
+    return ok > 0;
+  } catch (error) {
+    console.error("Incidencia en Generar QR Tourislapp:", error);
+    return false;
+  }
+}
 
 
 

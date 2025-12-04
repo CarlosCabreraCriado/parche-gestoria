@@ -728,7 +728,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
       
         salida: [{ tipo: "boolean", valor: false }]
       },
-            {
+      {
         nombre: "Imagen Post",
         categoria: "Prueba",
         tipo: "proceso",
@@ -764,8 +764,47 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
+      {
+        nombre: "Generar QR Tourislapp",
+        categoria: "Prueba",
+        tipo: "directorio",
+        descripcion:
+          "Genera códigos QR a partir de un JSON con titulo_interno, slug y prefijo_url, guardando los PNG en la carpeta QR_Generados.",
+        autor: "Gonzalo",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "json_qr",
+            formulario: {
+              titulo: "JSON de puntos Tourislapp",
+              tipo: "archivo",
+              accept: ".json",
+              placeholder:
+                "Selecciona el JSON con titulo_interno, slug y prefijo_url.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida",
+              tipo: "ruta",
+              placeholder:
+                "Selecciona la carpeta base donde se creará la carpeta QR_Generados.",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
     ],
   },
+  
+
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
