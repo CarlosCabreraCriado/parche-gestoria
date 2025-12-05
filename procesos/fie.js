@@ -1206,7 +1206,7 @@ class ProcesosFie {
       "[FIE_2] Iniciando proceso FIE_2 (lectura Excel + automatización web)",
     );
 
-    const nombreProceso = "FIE_1";
+    const nombreProceso = "FIE_2";
     let registrosProcesados = 0;
 
     return new Promise(async (resolve) => {
@@ -2467,7 +2467,7 @@ function extraccionExcel(workbook, sheet, opts = null) {
 
     // ⬇⬇⬇ NUEVO: saltar filas completamente vacías ⬇⬇⬇
     const hayDatos = Object.values(objetoRegistro).some(
-      (v) => v !== undefined && v !== null && v !== ""
+      (v) => v !== undefined && v !== null && v !== "",
     );
     if (!hayDatos) {
       continue; // no añadimos este registro
