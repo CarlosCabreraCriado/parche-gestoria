@@ -180,7 +180,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         categoria: "Asesoria",
         tipo: "proceso",
         descripcion:
-          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria 2024",
+          "Obtiene los datos de los clientes mediante excel y genera las cartas de pago correspondientes",
         autor: "Carlos Cabrera",
         argumentos: [
           {
