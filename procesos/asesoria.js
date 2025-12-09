@@ -1717,7 +1717,57 @@ class ProcesosAsesoria {
               console.log("RESULTADO IRPF", resultados, clientes[i]);
 
               await this.esperar(2000);
-              //await page.reload();
+
+              // Comprobamos que tenemos datos básicos
+              if (!clientes[i].cod_empresa || !clientes[i].dni_trabajador) {
+                clientes[i].errores.push(
+                  "WARN: No se pudo renombrar el PDF (falta cod_empresa o dni_trabajador).",
+                );
+              } else {
+                // 1) Listar los PDFs de la carpeta de salida
+                const archivos = fs
+                  .readdirSync(pathSalida)
+                  .filter((f) => f.toLowerCase().endsWith(".pdf"))
+                  .map((f) => ({
+                    nombre: f,
+                    tiempo: fs.statSync(path.join(pathSalida, f)).mtime.getTime(),
+                  }));
+                
+                if (archivos.length > 0) {
+                  // 2) Nos quedamos con el PDF más reciente (el último descargado)
+                  const ultimoPdf = archivos.sort((a, b) => b.tiempo - a.tiempo)[0];
+                
+                  // 3) Construimos el nombre con el formato: cod_empresa - dni_trabajador.pdf
+                  const codEmpresa = String(clientes[i].cod_empresa);
+                  const dniTrabajador = String(clientes[i].dni_trabajador);
+                
+                  // Opcional: saneamos caracteres raros por si acaso
+                  const codLimpio = codEmpresa.replace(/[\\\/:*?"<>|]/g, "_");
+                  const dniLimpio = dniTrabajador.replace(/[\\\/:*?"<>|]/g, "_");
+                
+                  const nuevoNombre = `${codLimpio}-${dniLimpio}.pdf`;
+                
+                  const rutaAntigua = path.join(pathSalida, ultimoPdf.nombre);
+                  const rutaNueva = path.join(pathSalida, nuevoNombre);
+                
+                  try {
+                    // Si ya existe un archivo con ese nombre, podrías decidir sobreescribirlo
+                    // o añadir un sufijo; ahora mismo simplemente lo sobreescribe:
+                    fs.renameSync(rutaAntigua, rutaNueva);
+                    console.log(
+                      `Renombrado PDF: ${ultimoPdf.nombre} -> ${nuevoNombre} para cliente ${i}`,
+                    );
+                  } catch (err) {
+                    console.log("Error renombrando el PDF:", err);
+                    clientes[i].errores.push("WARN: No se pudo renombrar el PDF.");
+                  }
+                } else {
+                  clientes[i].errores.push(
+                    "WARN: No se encontró ningún PDF para renombrar.",
+                  );
+                }
+              }
+              await this.esperar(2000);
             } // FIN FOR CLIENTES
 
             //Cerrar navedador
