@@ -252,6 +252,17 @@ class ProcesosFie {
                   }
                   altas[i].expedienteEmpresa = empresa?.codigo || "";
                   altas[i].emailsEmpresa = empresa?.email || "";
+
+                  // 🔍 Depuración: detectar emails no string
+                  if (empresa && typeof empresa.email !== "string") {
+                    console.log(
+                      "EMAIL NO STRING EN ALTAS:",
+                      empresa.codigo,
+                      empresa.empresa,
+                      empresa.email,
+                      typeof empresa.email,
+                    );
+                  }
                 }
                 for (var i = 0; i < bajas.length; i++) {
                   empresa = {};
@@ -273,6 +284,15 @@ class ProcesosFie {
                   }
                   bajas[i].expedienteEmpresa = empresa?.codigo || "";
                   bajas[i].emailsEmpresa = empresa?.email || "";
+                  if (empresa && typeof empresa.email !== "string") {
+                    console.log(
+                      "EMAIL NO STRING EN BAJAS:",
+                      empresa.codigo,
+                      empresa.empresa,
+                      empresa.email,
+                      typeof empresa.email,
+                    );
+                  }
                 }
                 for (var i = 0; i < confirmacion.length; i++) {
                   empresa = {};
@@ -294,6 +314,15 @@ class ProcesosFie {
                   }
                   confirmacion[i].expedienteEmpresa = empresa?.codigo || "";
                   confirmacion[i].emailsEmpresa = empresa?.email || "";
+                  if (empresa && typeof empresa.email !== "string") {
+                    console.log(
+                      "EMAIL NO STRING EN CONFIRMACION:",
+                      empresa.codigo,
+                      empresa.empresa,
+                      empresa.email,
+                      typeof empresa.email,
+                    );
+                  }
                 }
 
                 console.log("ALTAS:");
@@ -325,39 +354,50 @@ class ProcesosFie {
                 //PASO 3: GENERACION DE CORREOS:
                 const results = [];
                 //const altasTest = [altas[0]];
+                
+                function obtenerEmailsDestino(emailsEmpresa) {
+                  if (typeof emailsEmpresa !== "string") {
+                    // Si no es string (número, objeto, etc.), no intentamos enviar nada
+                    return [];
+                  }
+                
+                  return emailsEmpresa
+                    .split(";")
+                    .map((e) => e.trim())
+                    .filter(Boolean);   // quita vacíos
+                }
+
                 for (const r of altas) {
                   const file = await generarEmailFieDesdePlantilla(
                     r,
                     "ALTAS",
                     pathSalidaPDFAltasCorreos,
                     {
-                      to: r.emailsEmpresa?.split(";") ?? [],
+                      to: obtenerEmailsDestino(r.emailsEmpresa),
                     },
                   );
                   results.push(file);
                 }
 
-                //Correos Bajas:
                 for (const r of bajas) {
                   const file = await generarEmailFieDesdePlantilla(
                     r,
                     "BAJAS",
                     pathSalidaPDFBajasCorreos,
                     {
-                      to: r.emailsEmpresa?.split(";") ?? [],
+                      to: obtenerEmailsDestino(r.emailsEmpresa),
                     },
                   );
                   results.push(file);
                 }
 
-                //Correos Confirmacion:
                 for (const r of confirmacion) {
                   const file = await generarEmailFieDesdePlantilla(
                     r,
                     "CONFIRMACION",
                     pathSalidaPDFConfirmacionCorreos,
                     {
-                      to: r.emailsEmpresa?.split(";") ?? [],
+                      to: obtenerEmailsDestino(r.emailsEmpresa),
                     },
                   );
                   results.push(file);
