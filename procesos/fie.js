@@ -232,6 +232,23 @@ class ProcesosFie {
                 }
 
                 //Asignación de empresas:
+                // Normaliza el email de empresa (string / RichText → string plano)
+                function normalizaEmailEmpresa(email) {
+                  if (!email) return "";
+
+                  if (typeof email === "string") {
+                    return email.trim();
+                  }
+
+                  // Posible RichText de XlsxPopulate: si tiene .text(), lo usamos
+                  if (typeof email.text === "function") {
+                    return email.text().trim();
+                  }
+
+                  // Fallback: lo que sea → string
+                  return String(email).trim();
+                }
+
                 var empresa = {};
                 for (var i = 0; i < altas.length; i++) {
                   empresa = {};
@@ -251,7 +268,7 @@ class ProcesosFie {
                     );
                   }
                   altas[i].expedienteEmpresa = empresa?.codigo || "";
-                  altas[i].emailsEmpresa = empresa?.email || "";
+                  altas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
 
                   // 🔍 Depuración: detectar emails no string
                   if (empresa && typeof empresa.email !== "string") {
@@ -283,7 +300,7 @@ class ProcesosFie {
                     );
                   }
                   bajas[i].expedienteEmpresa = empresa?.codigo || "";
-                  bajas[i].emailsEmpresa = empresa?.email || "";
+                  bajas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN BAJAS:",
@@ -313,7 +330,7 @@ class ProcesosFie {
                     );
                   }
                   confirmacion[i].expedienteEmpresa = empresa?.codigo || "";
-                  confirmacion[i].emailsEmpresa = empresa?.email || "";
+                  confirmacion[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN CONFIRMACION:",
