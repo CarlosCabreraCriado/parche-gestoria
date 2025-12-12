@@ -4,7 +4,7 @@ const { simpleParser } = require("mailparser");
 //const cheerio = require("cheerio");
 const nodemailer = require("nodemailer");
 
-// ===== Utilidades =====
+//  Utilidades 
 function excelSerialToDate(serial) {
   if (serial === undefined || serial === null || serial === "") return null;
   const ms = Math.round((serial - 25569) * 86400 * 1000);
@@ -29,7 +29,7 @@ function safeFilename(str, max = 120) {
   return s || "archivo";
 }
 
-// ===== Config =====
+//  Config 
 const TEMPLATE_EML_ALTA = path.join(__dirname, "fie", "alta.eml"); // tu plantilla
 const TEMPLATE_EML_BAJA = path.join(__dirname, "fie", "baja.eml"); // tu plantilla
 const TEMPLATE_EML_CONFIRMACION = path.join(
@@ -67,6 +67,232 @@ function buildSubject(record, tipoDoc) {
   }
   return `null`;
 }
+
+// util fechas para "fecha actual" 
+function formatTodayDDMMYYYY() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatTodayDDMMYYYY_noSlash() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}${mm}${yyyy}`;
+}
+
+// calcula tipo de proceso (igual que en el individual) 
+function calcularTipoProceso(record) {
+  var tipoProceso = "";
+  const tipoProcStr = safe(record.tipoDeProceso, "");
+  const primeraLetra = (tipoProcStr && tipoProcStr[0]) || null;
+
+  switch (Number(primeraLetra)) {
+    case 1:
+      tipoProceso = "PROCESO MUY CORTO";
+      break;
+    case 2:
+      tipoProceso = "PROCESO CORTO";
+      break;
+    case 3:
+      tipoProceso = "PROCESO INTERMEDIO";
+      break;
+    case 4:
+      tipoProceso = "PROCESO LARGO";
+      break;
+    default:
+      tipoProceso = "";
+      break;
+  }
+  return tipoProceso;
+}
+
+// reemplaza placeholders en una fila <tr> con un record concreto 
+function personalizarFilaHtml(filaHtml, record, tipoDoc) {
+  let row = filaHtml;
+
+  row = row.replaceAll(/{{\s*nombre\s*}}/g, record.nombre || "");
+  row = row.replaceAll(
+    /{{\s*fechaAlta\s*}}/g,
+    formatDateFromExcel(record.fechaFinIt) || "",
+  );
+  row = row.replaceAll(
+    /{{\s*fechaBaja\s*}}/g,
+    formatDateFromExcel(record.fechaBajaIt) || "",
+  );
+  row = row.replaceAll(/{{\s*contingencia\s*}}/g, record.contingencia || "");
+
+  // Próxima revisión: depende de BAJAS o CONFIRMACION
+  if (tipoDoc === "BAJAS") {
+    row = row.replaceAll(
+      /{{\s*proximaRevision\s*}}/g,
+      formatDateFromExcel(record.fechaProximaRevisionParteBaja) || "",
+    );
+  }
+
+  let numeroParteConfirmacion = 0;
+  if (
+    record.partesConfirmacion &&
+    Array.isArray(record.partesConfirmacion) &&
+    record.partesConfirmacion.length > 0
+  ) {
+    row = row.replaceAll(
+      /{{\s*proximaRevision\s*}}/g,
+      formatDateFromExcel(
+        record.partesConfirmacion[0].fechaSiguienteRevisionMedica,
+      ) || "",
+    );
+    row = row.replaceAll(
+      /{{\s*fechaConfirmacion\s*}}/g,
+      formatDateFromExcel(
+        record.partesConfirmacion[0].fechaDelParteDeConfirmacion,
+      ) || "",
+    );
+    numeroParteConfirmacion =
+      record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+  }
+
+  const tipoProceso = calcularTipoProceso(record);
+
+  // Observaciones (misma lógica que el individual)
+  switch (tipoDoc) {
+    case "ALTAS":
+      row = row.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE ALTA MÉDICA. <br/>" + tipoProceso,
+      );
+      break;
+    case "BAJAS":
+      row = row.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE BAJA MÉDICA. <br/>" + tipoProceso,
+      );
+      break;
+    case "CONFIRMACION":
+      row = row.replaceAll(
+        /{{\s*observaciones\s*}}/g,
+        "PARTE DE CONFIRMACIÓN Nº" +
+          numeroParteConfirmacion +
+          "<br/>" +
+          tipoProceso,
+      );
+      break;
+  }
+
+  return row;
+}
+
+// genera un texto plano agrupado 
+function buildGroupedText(records, tipoDoc, expteEmpresa) {
+  const hoy = formatTodayDDMMYYYY();
+
+  const lines = records.map((r) => {
+    const trabajador = safe(r.nombre);
+    const contingencia = safe(r.contingencia);
+    const fBaja = formatDateFromExcel(r.fechaBajaIt) || "";
+    const fAlta = formatDateFromExcel(r.fechaFinIt) || "";
+
+    let parteConf = "";
+    let proxRev = "";
+
+    if (
+      r.partesConfirmacion &&
+      Array.isArray(r.partesConfirmacion) &&
+      r.partesConfirmacion.length > 0
+    ) {
+      parteConf = safe(r.partesConfirmacion[0].numeroDeParteDeConfirmacion || "");
+      proxRev = formatDateFromExcel(
+        r.partesConfirmacion[0].fechaSiguienteRevisionMedica,
+      ) || "";
+    } else if (tipoDoc === "BAJAS") {
+      proxRev = formatDateFromExcel(r.fechaProximaRevisionParteBaja) || "";
+    }
+
+    return `- ${trabajador} | ${contingencia} | Baja: ${fBaja} | Conf: ${parteConf} | PróxRev: ${proxRev} | Alta: ${fAlta}`;
+  });
+
+  return `Buenos días,
+
+Indicarles que hemos recibido información telemática de su empresa (${safe(expteEmpresa)}) correspondiente a procesos de IT (${tipoDoc}) que se detallan:
+
+${lines.join("\n")}
+
+Atentamente,
+Susasesores.com
+`;
+}
+
+// genera .eml agrupado (1 correo por empresa y tipología) 
+async function generarEmailFieAgrupadoDesdePlantilla(
+  records,
+  tipoDoc,
+  OUTPUT_DIR,
+  overrideAddresses = {},
+) {
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error("generarEmailFieAgrupadoDesdePlantilla: records vacío");
+  }
+
+  let TEMPLATE_EML = null;
+  switch (tipoDoc) {
+    case "BAJAS":
+      TEMPLATE_EML = TEMPLATE_EML_BAJA;
+      break;
+    case "ALTAS":
+      TEMPLATE_EML = TEMPLATE_EML_ALTA;
+      break;
+    case "CONFIRMACION":
+      TEMPLATE_EML = TEMPLATE_EML_CONFIRMACION;
+      break;
+    default:
+      throw new Error(`Tipo de documento desconocido: ${tipoDoc}`);
+  }
+
+  const expteEmpresa = records[0].expedienteEmpresa || "";
+
+  const raw = fs.readFileSync(TEMPLATE_EML);
+  const parsed = await simpleParser(raw);
+
+  // Asunto NUEVO (sin nombre), con fecha actual
+  const subject = `${safe(expteEmpresa)} - COMUNICACIÓN IT - (${tipoDoc}) - ${formatTodayDDMMYYYY()}`;
+
+  // HTML: duplicar la fila plantilla (la que contiene {{nombre}})
+  let html = parsed.html || "";
+
+  const rowRegex = /<tr\b[^>]*>[\s\S]*?{{\s*nombre\s*}}[\s\S]*?<\/tr>/i;
+  const match = html.match(rowRegex);
+
+  if (match && match[0]) {
+    const rowTemplate = match[0];
+    const rows = records.map((r) => personalizarFilaHtml(rowTemplate, r, tipoDoc));
+    html = html.replace(rowRegex, rows.join("\n"));
+  } else {
+    // Si por lo que sea no encontramos la fila, al menos evitamos romper
+    // (pero lo normal es que sí exista)
+    console.warn("[emails-fie] No se encontró la fila <tr> con {{nombre}} en la plantilla.");
+  }
+
+  // Texto plano agrupado
+  const text = buildGroupedText(records, tipoDoc, expteEmpresa);
+
+  const rawNew = await saveAsNewEml(parsed, subject, html, text, {
+    to: overrideAddresses.to ?? [],
+  });
+
+  // Nombre de archivo: EXP_TIPO_FECHAACTUAL.eml
+  const base = `${safeFilename(expteEmpresa)}_${tipoDoc}_${formatTodayDDMMYYYY_noSlash()}`;
+  const outPath = path.join(OUTPUT_DIR, `${base}.eml`);
+
+  fs.writeFileSync(outPath, rawNew, "utf-8");
+  console.log("Guardando en:", outPath);
+
+  return outPath;
+}
+
 
 // Modifica el HTML de la plantilla para meter los datos del cliente
 /*
@@ -355,3 +581,7 @@ async function generarEmailFieDesdePlantilla(
 }
 
 module.exports = generarEmailFieDesdePlantilla;
+
+module.exports.generarEmailFieAgrupadoDesdePlantilla = generarEmailFieAgrupadoDesdePlantilla;
+
+

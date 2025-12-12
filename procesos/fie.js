@@ -12,7 +12,9 @@ const { registrarEjecucion } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
-const generarEmailFieDesdePlantilla = require("./emails-fie");
+const emailsFie = require("./emails-fie");
+const generarEmailFieDesdePlantilla = emailsFie;
+const { generarEmailFieAgrupadoDesdePlantilla } = emailsFie;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 class ProcesosFie {
@@ -367,58 +369,89 @@ class ProcesosFie {
                 const generated = await Promise.all(tasks);
                 console.log("PDFs generados:");
                 generated.forEach((f) => console.log(" -", f));
+                
+
 
                 //PASO 3: GENERACION DE CORREOS:
                 const results = [];
                 //const altasTest = [altas[0]];
+
+                function groupByExpedienteEmpresa(registros) {
+                  const grupos = {};
+                  for (const r of registros) {
+                    const key = r.expedienteEmpresa || "SIN_EXPEDIENTE";
+                    if (!grupos[key]) grupos[key] = [];
+                    grupos[key].push(r);
+                  }
+                  return grupos;
+                }
                 
                 function obtenerEmailsDestino(emailsEmpresa) {
-                  if (typeof emailsEmpresa !== "string") {
-                    // Si no es string (número, objeto, etc.), no intentamos enviar nada
-                    return [];
-                  }
+                  // Normaliza cualquier cosa a string
+                  const raw =
+                    typeof emailsEmpresa === "string"
+                      ? emailsEmpresa
+                      : emailsEmpresa?.text
+                        ? String(emailsEmpresa.text())
+                        : String(emailsEmpresa || "");
                 
-                  return emailsEmpresa
+                  return raw
                     .split(";")
                     .map((e) => e.trim())
-                    .filter(Boolean);   // quita vacíos
+                    .filter(Boolean);
                 }
 
-                for (const r of altas) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                const altasPorEmpresa = groupByExpedienteEmpresa(altas);
+
+                for (const expte in altasPorEmpresa) {
+                  const grupo = altasPorEmpresa[expte];
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
                     "ALTAS",
                     pathSalidaPDFAltasCorreos,
                     {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
                     },
                   );
+                
                   results.push(file);
                 }
 
-                for (const r of bajas) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                const bajasPorEmpresa = groupByExpedienteEmpresa(bajas);
+
+                for (const expte in bajasPorEmpresa) {
+                  const grupo = bajasPorEmpresa[expte];
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
                     "BAJAS",
                     pathSalidaPDFBajasCorreos,
                     {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
                     },
                   );
+                
                   results.push(file);
                 }
 
-                for (const r of confirmacion) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                const confirmacionPorEmpresa = groupByExpedienteEmpresa(confirmacion);
+
+                for (const expte in confirmacionPorEmpresa) {
+                  const grupo = confirmacionPorEmpresa[expte];
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
                     "CONFIRMACION",
                     pathSalidaPDFConfirmacionCorreos,
                     {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
                     },
                   );
+                
                   results.push(file);
                 }
+
               })
               .then(() => {
                 //RESCRITURA DE ENFERMEDADES
