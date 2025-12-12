@@ -263,18 +263,23 @@ async function generarEmailFieAgrupadoDesdePlantilla(
   // HTML: duplicar la fila plantilla (la que contiene {{nombre}})
   let html = parsed.html || "";
 
-  const rowRegex = /<tr\b[^>]*>[\s\S]*?{{\s*nombre\s*}}[\s\S]*?<\/tr>/i;
-  const match = html.match(rowRegex);
-
-  if (match && match[0]) {
-    const rowTemplate = match[0];
+  // 1) Sacamos todas las filas <tr>...</tr>
+  const trRegex = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
+  const allTr = html.match(trRegex) || [];
+  
+  // 2) La "fila plantilla" es la que contiene {{nombre}} (y SOLO esa fila)
+  const rowTemplate = allTr.find((tr) => /{{\s*nombre\s*}}/i.test(tr));
+  
+  if (rowTemplate) {
+    // Generamos N filas (sin duplicar cabeceras)
     const rows = records.map((r) => personalizarFilaHtml(rowTemplate, r, tipoDoc));
-    html = html.replace(rowRegex, rows.join("\n"));
+  
+    // Reemplazamos SOLO esa fila plantilla (la primera coincidencia)
+    html = html.replace(rowTemplate, rows.join("\n"));
   } else {
-    // Si por lo que sea no encontramos la fila, al menos evitamos romper
-    // (pero lo normal es que sí exista)
     console.warn("[emails-fie] No se encontró la fila <tr> con {{nombre}} en la plantilla.");
   }
+  
 
   // Texto plano agrupado
   const text = buildGroupedText(records, tipoDoc, expteEmpresa);
