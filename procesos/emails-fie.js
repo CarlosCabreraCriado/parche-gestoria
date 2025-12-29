@@ -28,15 +28,74 @@ function safeFilename(str, max = 120) {
     .slice(0, max);
   return s || "archivo";
 }
+function escapeHtml(str) {
+  return safe(str, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function normalizeContingencia(raw) {
+  return safe(raw, "").replace(/^\d+=/, "");
+}
+
+function buildFilasITHtml(records, tipoDoc) {
+  return records
+    .map((r) => {
+      const nombre = escapeHtml(r.nombre || "");
+      const contingencia = escapeHtml(normalizeContingencia(r.contingencia));
+      const fechaBaja = escapeHtml(formatDateFromExcel(r.fechaBajaIt) || "");
+      const fechaAlta = escapeHtml(formatDateFromExcel(r.fechaFinIt) || "");
+
+      let fechaConfirmacion = "";
+      let proximaRevision = "";
+
+      if (Array.isArray(r.partesConfirmacion) && r.partesConfirmacion.length > 0) {
+        fechaConfirmacion =
+          formatDateFromExcel(r.partesConfirmacion[0].fechaDelParteDeConfirmacion) || "";
+        proximaRevision =
+          formatDateFromExcel(r.partesConfirmacion[0].fechaSiguienteRevisionMedica) || "";
+      } else if (tipoDoc === "BAJAS") {
+        proximaRevision = formatDateFromExcel(r.fechaProximaRevisionParteBaja) || "";
+      }
+
+      const tipoProceso = escapeHtml(calcularTipoProceso(r));
+
+      let observaciones = "";
+      if (tipoDoc === "ALTAS") {
+        observaciones = `PARTE DE ALTA MÉDICA.<br/>${tipoProceso}`;
+      } else if (tipoDoc === "BAJAS") {
+        observaciones = `PARTE DE BAJA MÉDICA.<br/>${tipoProceso}`;
+      } else if (tipoDoc === "CONFIRMACION") {
+        let num = 0;
+        if (Array.isArray(r.partesConfirmacion) && r.partesConfirmacion.length > 0) {
+          num = r.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+        }
+        observaciones = `PARTE DE CONFIRMACIÓN Nº${escapeHtml(String(num))}<br/>${tipoProceso}`;
+      }
+
+      // Mantengo estilos compatibles con Outlook y coherentes con tu cabecera
+      return `
+<tr>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${nombre}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${contingencia}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${fechaBaja}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${escapeHtml(fechaConfirmacion)}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${escapeHtml(proximaRevision)}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${fechaAlta}</td>
+  <td style="border:1px solid #000;padding:4px;font-size:12px;line-height:14px;overflow-wrap:anywhere;">${observaciones}</td>
+</tr>`.trim();
+    })
+    .join("\n");
+}
 
 //  Config 
 const TEMPLATE_EML_ALTA = path.join(__dirname, "fie", "alta.eml"); // tu plantilla
 const TEMPLATE_EML_BAJA = path.join(__dirname, "fie", "baja.eml"); // tu plantilla
-const TEMPLATE_EML_CONFIRMACION = path.join(
-  __dirname,
-  "fie",
-  "confirmacion.eml",
-); // tu plantilla
+const TEMPLATE_HTML_CONFIRMACION = path.join(__dirname, "fie", "confirmacion.html");
+
 
 // Puedes fijar un FROM/TO/CC por defecto si quieres sobreescribir los de la plantilla
 const DEFAULT_FROM = null;
@@ -227,76 +286,59 @@ Susasesores.com
 }
 
 // genera .eml agrupado (1 correo por empresa y tipología) 
-async function generarEmailFieAgrupadoDesdePlantilla(
-  records,
-  tipoDoc,
-  OUTPUT_DIR,
-  overrideAddresses = {},
-) {
+async function generarEmailFieAgrupadoDesdePlantilla(records, tipoDoc, OUTPUT_DIR, overrideAddresses = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw new Error("generarEmailFieAgrupadoDesdePlantilla: records vacío");
   }
 
-  let TEMPLATE_EML = null;
-  switch (tipoDoc) {
-    case "BAJAS":
-      TEMPLATE_EML = TEMPLATE_EML_BAJA;
-      break;
-    case "ALTAS":
-      TEMPLATE_EML = TEMPLATE_EML_ALTA;
-      break;
-    case "CONFIRMACION":
-      TEMPLATE_EML = TEMPLATE_EML_CONFIRMACION;
-      break;
-    default:
-      throw new Error(`Tipo de documento desconocido: ${tipoDoc}`);
-  }
-
   const expteEmpresa = records[0].expedienteEmpresa || "";
-
-  const raw = fs.readFileSync(TEMPLATE_EML);
-  const parsed = await simpleParser(raw);
-
-  // Asunto NUEVO (sin nombre), con fecha actual
   const subject = `${safe(expteEmpresa)} - COMUNICACIÓN IT - (${tipoDoc}) - ${formatTodayDDMMYYYY()}`;
 
-  // HTML: duplicar la fila plantilla (la que contiene {{nombre}})
-  let html = parsed.html || "";
+  let html = "";
+  let parsed = null;
 
-  // 1) Sacamos todas las filas <tr>...</tr>
-  const trRegex = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
-  const allTr = html.match(trRegex) || [];
-  
-  // 2) La "fila plantilla" es la que contiene {{nombre}} (y SOLO esa fila)
-  const rowTemplate = allTr.find((tr) => /{{\s*nombre\s*}}/i.test(tr));
-  
-  if (rowTemplate) {
-    // Generamos N filas (sin duplicar cabeceras)
-    const rows = records.map((r) => personalizarFilaHtml(rowTemplate, r, tipoDoc));
-  
-    // Reemplazamos SOLO esa fila plantilla (la primera coincidencia)
-    html = html.replace(rowTemplate, rows.join("\n"));
+  if (tipoDoc === "CONFIRMACION") {
+    // ✅ plantilla HTML pura
+    html = fs.readFileSync(TEMPLATE_HTML_CONFIRMACION, "utf-8");
   } else {
-    console.warn("[emails-fie] No se encontró la fila <tr> con {{nombre}} en la plantilla.");
+    // ✅ ALTAS/BAJAS siguen con EML
+    const TEMPLATE_EML = tipoDoc === "ALTAS" ? TEMPLATE_EML_ALTA : TEMPLATE_EML_BAJA;
+    const raw = fs.readFileSync(TEMPLATE_EML);
+    parsed = await simpleParser(raw);
+    html = parsed.html || "";
   }
-  
 
-  // Texto plano agrupado
+  // ✅ Inyección FILAS_IT (prioridad)
+  if (/{{\s*FILAS_IT\s*}}/i.test(html)) {
+    const filas = buildFilasITHtml(records, tipoDoc);
+    html = html.replace(/{{\s*FILAS_IT\s*}}/gi, filas);
+  } else {
+    // fallback antiguo (por si alguna plantilla vieja)
+    const trRegex = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
+    const allTr = html.match(trRegex) || [];
+    const rowTemplate = allTr.find((tr) => /{{\s*nombre\s*}}/i.test(tr));
+    if (rowTemplate) {
+      const rows = records.map((r) => personalizarFilaHtml(rowTemplate, r, tipoDoc));
+      html = html.replace(rowTemplate, rows.join("\n"));
+    } else {
+      console.warn("[emails-fie] No se encontró {{FILAS_IT}} ni una fila <tr> con {{nombre}} en la plantilla.");
+    }
+  }
+
   const text = buildGroupedText(records, tipoDoc, expteEmpresa);
 
   const rawNew = await saveAsNewEml(parsed, subject, html, text, {
     to: overrideAddresses.to ?? [],
   });
 
-  // Nombre de archivo: EXP_TIPO_FECHAACTUAL.eml
   const base = `${safeFilename(expteEmpresa)}_${tipoDoc}_${formatTodayDDMMYYYY_noSlash()}`;
   const outPath = path.join(OUTPUT_DIR, `${base}.eml`);
-
   fs.writeFileSync(outPath, rawNew, "utf-8");
-  console.log("Guardando en:", outPath);
 
+  console.log("Guardando en:", outPath);
   return outPath;
 }
+
 
 
 // Modifica el HTML de la plantilla para meter los datos del cliente
@@ -377,57 +419,47 @@ Susasesores.com
 }
 
 // Recompila y guarda como .eml nuevo (conservando inline images y adjuntos)
-async function saveAsNewEml(
-  parsed,
-  newSubject,
-  newHtml,
-  newText,
-  override = {},
-) {
+async function saveAsNewEml(parsed, newSubject, newHtml, newText, override = {}) {
   const transport = nodemailer.createTransport({
     streamTransport: true,
     buffer: true,
     newline: "windows",
   });
 
-  // Reconstruye attachments preservando cid para inline images
-  const attachments = (parsed.attachments || []).map((att) => {
-    // Mailparser nos da content (Buffer), contentId (cid), filename, contentType, headers, etc.
-    const item = {
-      filename: att.filename || "adjunto",
-      content: att.content, // Buffer
-      contentType: att.contentType,
-      cid: att.contentId || undefined, // para inline
-    };
-    return item;
-  });
+  const safeParsed = parsed || {};
 
-  // Convierte headerLines de mailparser a objeto clave:valor
+  const attachments = (safeParsed.attachments || []).map((att) => ({
+    filename: att.filename || "adjunto",
+    content: att.content,
+    contentType: att.contentType,
+    cid: att.contentId || undefined,
+  }));
+
+  // Cabeceras originales (si venimos de un .eml plantilla)
   const originalHeaders = {};
-  for (const h of parsed.headerLines || []) {
-    // h.key, h.line -> "Key: value"; mejor usar parsed.headers.get(h.key) pero esto vale
+  for (const h of safeParsed.headerLines || []) {
     const key = (h.key || "").toString();
     if (!key) continue;
-    // Si hay claves repetidas, mailparser suele agrupar; nos quedamos con el valor "bonito"
-    const val = parsed.headers?.get(key) ?? h.line.replace(/^[^:]+:\s*/, "");
+    const val = safeParsed.headers?.get(key) ?? h.line.replace(/^[^:]+:\s*/, "");
     originalHeaders[key] = val;
   }
 
-  // Forzamos borrador:
   const mergedHeaders = {
     ...originalHeaders,
+    ...(override.headers || {}),
+    "X-Unsent": "1", // ✅ Outlook lo abre como borrador
   };
 
   delete mergedHeaders["Message-ID"];
   delete mergedHeaders["Date"];
 
   const message = {
-    from: override.from || parsed.from?.value?.[0] || undefined,
+    from: override.from || safeParsed.from?.value?.[0] || undefined,
     to: override.to || [],
     cc: override.cc || [],
     bcc: override.bcc || [],
-    subject: newSubject || parsed.subject || "",
-    date: parsed.date || new Date(),
+    subject: newSubject || safeParsed.subject || "",
+    date: new Date(),
     headers: mergedHeaders,
     text: newText,
     html: newHtml,
@@ -437,6 +469,8 @@ async function saveAsNewEml(
   const info = await transport.sendMail(message);
   return info.message.toString("utf-8");
 }
+
+
 
 // Función principal: abre plantilla, personaliza y guarda
 async function generarEmailFieDesdePlantilla(
@@ -454,7 +488,7 @@ async function generarEmailFieDesdePlantilla(
       TEMPLATE_EML = TEMPLATE_EML_ALTA;
       break;
     case "CONFIRMACION":
-      TEMPLATE_EML = TEMPLATE_EML_CONFIRMACION;
+      TEMPLATE_EML = TEMPLATE_HTML_CONFIRMACION;
       break;
     default:
       throw new Error(`Tipo de documento desconocido: ${tipoDoc}`);
