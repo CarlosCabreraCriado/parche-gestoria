@@ -54,17 +54,17 @@ class ProcesosFie {
       var pathSalidaPDFBajas = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados",
+        "PDFs-Generados-Bajas",
       );
       var pathSalidaPDFAltas = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados",
+        "PDFs-Generados-Altas",
       );
       var pathSalidaPDFConfirmacion = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados",
+        "PDFs-Generados-Confirmación",
       );
 
       // Carpetas de emails:
@@ -396,7 +396,7 @@ class ProcesosFie {
                         : String(emailsEmpresa || "");
                 
                   return raw
-                    .split(";")
+                    .split(/[;,]/)
                     .map((e) => e.trim())
                     .filter(Boolean);
                 }
