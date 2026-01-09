@@ -379,7 +379,10 @@ class ProcesosFie {
                 function groupByExpedienteEmpresa(registros) {
                   const grupos = {};
                   for (const r of registros) {
-                    const key = r.expedienteEmpresa || "SIN_EXPEDIENTE";
+                    const key = (r.expedienteEmpresa && String(r.expedienteEmpresa).trim() !== "")
+                      ? String(r.expedienteEmpresa).trim()
+                      : `SIN_EMPRESA_${String(r.naf || "").trim() || "SIN_NAF"}`;
+                  
                     if (!grupos[key]) grupos[key] = [];
                     grupos[key].push(r);
                   }
@@ -405,7 +408,14 @@ class ProcesosFie {
 
                 for (const expte in altasPorEmpresa) {
                   const grupo = altasPorEmpresa[expte];
-                
+                  
+                  // ✅ Evitar sobrescritura: si no hay empresa, usamos el id del grupo como expedienteEmpresa
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) {
+                      r.expedienteEmpresa = expte; // ej: "SIN_EMPRESA_461184082979"
+                    }
+                  }
+
                   const file = await generarEmailFieAgrupadoDesdePlantilla(
                     grupo,
                     "ALTAS",
@@ -422,6 +432,13 @@ class ProcesosFie {
 
                 for (const expte in bajasPorEmpresa) {
                   const grupo = bajasPorEmpresa[expte];
+
+                  // ✅ Evitar sobrescritura: si no hay empresa, usamos el id del grupo como expedienteEmpresa
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) {
+                      r.expedienteEmpresa = expte; // ej: "SIN_EMPRESA_461184082979"
+                    }
+                  }
                 
                   const file = await generarEmailFieAgrupadoDesdePlantilla(
                     grupo,
@@ -439,6 +456,13 @@ class ProcesosFie {
 
                 for (const expte in confirmacionPorEmpresa) {
                   const grupo = confirmacionPorEmpresa[expte];
+
+                  // ✅ Evitar sobrescritura: si no hay empresa, usamos el id del grupo como expedienteEmpresa
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) {
+                      r.expedienteEmpresa = expte; // ej: "SIN_EMPRESA_461184082979"
+                    }
+                  }
                 
                   const file = await generarEmailFieAgrupadoDesdePlantilla(
                     grupo,
@@ -451,6 +475,31 @@ class ProcesosFie {
                 
                   results.push(file);
                 }
+
+                // BORRAR ARCHIVO LEGACY: archivo_ALTAS_<fecha> (cualquiera sea su extensión)
+                const prefijoLegacyAltas = `archivo_ALTAS_${this.getCurrentDateString()}`;
+                for (const f of fs.readdirSync(pathSalidaPDFAltasCorreos)) {
+                  if (f.startsWith(prefijoLegacyAltas)) {
+                    fs.unlinkSync(path.join(pathSalidaPDFAltasCorreos, f));
+                  }
+                }
+
+                // BORRAR ARCHIVO LEGACY: archivo_BAJAS_<fecha> (cualquiera sea su extensión)
+                const prefijoLegacyBajas = `archivo_BAJAS_${this.getCurrentDateString()}`;
+                for (const f of fs.readdirSync(pathSalidaPDFBajasCorreos)) {
+                  if (f.startsWith(prefijoLegacyBajas)) {
+                    fs.unlinkSync(path.join(pathSalidaPDFBajasCorreos, f));
+                  }
+                }
+
+                // BORRAR ARCHIVO LEGACY: archivo_CONFIRMACION_<fecha> (cualquiera sea su extensión)
+                const prefijoLegacyConfirmacion = `archivo_CONFIRMACION_${this.getCurrentDateString()}`;
+                for (const f of fs.readdirSync(pathSalidaPDFConfirmacionCorreos)) {
+                  if (f.startsWith(prefijoLegacyConfirmacion)) {
+                    fs.unlinkSync(path.join(pathSalidaPDFConfirmacionCorreos, f));
+                  }
+                }
+
 
               })
               .then(() => {

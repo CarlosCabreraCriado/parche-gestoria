@@ -1,0 +1,4 @@
+Doble consola
+
+1. npm start
+2. npm run electron
