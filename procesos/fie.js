@@ -417,6 +417,52 @@ class ProcesosFie {
                     .filter(Boolean);
                 }
 
+                function safeFilename(str, max = 120) {
+                  const s = (str ?? "archivo")
+                    .toString()
+                    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+                    .slice(0, max);
+                  return s || "archivo";
+                }
+
+                function excelSerialToDate(serial) {
+                  if (serial === undefined || serial === null || serial === "") return null;
+                  const ms = Math.round((serial - 25569) * 86400 * 1000);
+                  if (Number.isNaN(ms)) return null;
+                  return new Date(ms);
+                }
+
+                function formatDateFromExcel(serial) {
+                  const d = excelSerialToDate(serial);
+                  if (!d) return "";
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  const yyyy = d.getFullYear();
+                  return `${dd}/${mm}/${yyyy}`;
+                }
+                
+                function buildLegacyFileBase(record, tipoDoc) {
+                  switch (tipoDoc) {
+                    case "BAJAS":
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+                  
+                    case "ALTAS":
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaFinIt) || "")}`;
+                  
+                    case "CONFIRMACION": {
+                      const f =
+                        Array.isArray(record.partesConfirmacion) && record.partesConfirmacion.length > 0
+                          ? formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || ""
+                          : "";
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(f)}`;
+                    }
+                  
+                    default:
+                      return `archivo_${tipoDoc}`;
+                  }
+                }
+
+
                 // ======================================================
                 // A) EMPRESAS (AGRUPADO) -> genera 1 correo por empresa
                 // ======================================================
@@ -512,12 +558,13 @@ class ProcesosFie {
                 // ======================================================
                 for (const r of altas) {
                   const file = await generarEmailFieAgrupadoDesdePlantilla(
-    [r],
-    "ALTAS",
-    pathEmailsEmpleadosAltas,
-    {
-      to: obtenerEmailsDestino(r.emailsEmpresa),
-    },
+                    [r],
+                    "ALTAS",
+                    pathEmailsEmpleadosAltas,
+                    {
+                      to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "ALTAS"),
+                    },
                   );
                   results.push(file);
                 }
@@ -529,6 +576,7 @@ class ProcesosFie {
                     pathEmailsEmpleadosBajas,
                     {
                       to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "BAJAS"),
                     },
                   );
                   results.push(file);
@@ -541,6 +589,7 @@ class ProcesosFie {
                     pathEmailsEmpleadosConfirmacion,
                     {
                       to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "CONFIRMACION"),
                     },
                   );
                   results.push(file);

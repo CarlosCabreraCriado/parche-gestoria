@@ -392,7 +392,11 @@ async function generarEmailFieAgrupadoDesdePlantilla(
     from: overrideAddresses.from ?? null,
   });
 
-  const base = `${safeFilename(expteEmpresa)}_${tipoDoc}_${formatTodayDDMMYYYY_noSlash()}`;
+  const base =
+    overrideAddresses && overrideAddresses.fileBase
+      ? safeFilename(overrideAddresses.fileBase)
+      : `${safeFilename(expteEmpresa)}_${tipoDoc}_${formatTodayDDMMYYYY_noSlash()}`;
+  
   const outPath = path.join(OUTPUT_DIR, `${base}.eml`);
   fs.writeFileSync(outPath, rawNew, "utf-8");
 
