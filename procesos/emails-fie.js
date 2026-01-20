@@ -304,12 +304,24 @@ async function saveAsNewEml(parsed, newSubject, newHtml, newText, override = {})
 
   const safeParsed = parsed || {};
 
-  const attachments = (safeParsed.attachments || []).map((att) => ({
-    filename: att.filename || "adjunto",
-    content: att.content,
-    contentType: att.contentType,
-    cid: att.contentId || undefined,
-  }));
+  const attachments = [
+    ...(safeParsed.attachments || []).map((att) => ({
+      filename: att.filename || "adjunto",
+      content: att.content,
+      contentType: att.contentType,
+      cid: att.contentId || undefined,
+    })),
+  
+    // ✅ Logo inline para que Outlook lo muestre sin descargar imágenes externas
+    {
+      filename: "logo_susasesores.png",
+      content: fs.readFileSync(
+        path.join(__dirname, "..", "src", "assets", "correos", "logo_susasesores.png")
+      ),
+      contentType: "image/png",
+      cid: "logo_susasesores",
+    },
+  ];
 
   const originalHeaders = {};
   for (const h of safeParsed.headerLines || []) {
