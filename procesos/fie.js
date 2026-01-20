@@ -54,17 +54,17 @@ class ProcesosFie {
       var pathSalidaPDFBajas = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados-Bajas",
+        "PDFs-Generados",
       );
       var pathSalidaPDFAltas = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados-Altas",
+        "PDFs-Generados",
       );
       var pathSalidaPDFConfirmacion = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "PDFs-Generados-Confirmacion",
+        "PDFs-Generados",
       );
 
       // ================================
