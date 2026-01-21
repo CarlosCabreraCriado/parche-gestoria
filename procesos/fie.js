@@ -12,7 +12,9 @@ const { registrarEjecucion } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
-const generarEmailFieDesdePlantilla = require("./emails-fie");
+const emailsFie = require("./emails-fie");
+const generarEmailFieDesdePlantilla = emailsFie;
+const { generarEmailFieAgrupadoDesdePlantilla } = emailsFie;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 class ProcesosFie {
@@ -65,22 +67,33 @@ class ProcesosFie {
         "PDFs-Generados",
       );
 
-      // Carpetas de emails:
-      var pathSalidaPDFBajasCorreos = path.join(
+      // ================================
+      // Carpetas de emails (doble salida)
+      // ================================
+
+      const baseSalida = path.join(
         path.normalize(argumentos.formularioControl[4]),
         "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "Bajas-Correos",
       );
-      var pathSalidaPDFAltasCorreos = path.join(
-        path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado (" + this.getCurrentDateString() + ")",
-        "Altas-Correos",
-      );
-      var pathSalidaPDFConfirmacionCorreos = path.join(
-        path.normalize(argumentos.formularioControl[4]),
-        "Fie-Procesado (" + this.getCurrentDateString() + ")",
+
+      // EMPRESAS (agrupado por empresa)
+      const pathEmailsEmpresasBase = path.join(baseSalida, "EMPRESAS");
+      const pathEmailsEmpresasAltas = path.join(pathEmailsEmpresasBase, "Altas-Correos");
+      const pathEmailsEmpresasBajas = path.join(pathEmailsEmpresasBase, "Bajas-Correos");
+      const pathEmailsEmpresasConfirmacion = path.join(
+        pathEmailsEmpresasBase,
         "Confirmacion-Correos",
       );
+
+      // EMPLEADOS (legacy por empleado)
+      const pathEmailsEmpleadosBase = path.join(baseSalida, "EMPLEADOS");
+      const pathEmailsEmpleadosAltas = path.join(pathEmailsEmpleadosBase, "Altas-Correos");
+      const pathEmailsEmpleadosBajas = path.join(pathEmailsEmpleadosBase, "Bajas-Correos");
+      const pathEmailsEmpleadosConfirmacion = path.join(
+        pathEmailsEmpleadosBase,
+        "Confirmacion-Correos",
+      );
+
 
       var pathSalidaExcel = path.join(
         path.normalize(argumentos.formularioControl[4]),
@@ -108,28 +121,25 @@ class ProcesosFie {
         console.log(`La carpeta ya existe: ${pathSalidaPDFBajas}`);
       }
 
-      if (!fs.existsSync(pathSalidaPDFConfirmacionCorreos)) {
-        fs.mkdirSync(pathSalidaPDFConfirmacionCorreos, { recursive: true });
-        console.log(`Carpeta creada: ${pathSalidaPDFConfirmacionCorreos}`);
-      } else {
-        console.log(
-          `La carpeta ya existe: ${pathSalidaPDFConfirmacionCorreos}`,
-        );
+      function ensureDir(dirPath) {
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+          console.log(`Carpeta creada: ${dirPath}`);
+        } else {
+          console.log(`La carpeta ya existe: ${dirPath}`);
+        }
       }
 
-      if (!fs.existsSync(pathSalidaPDFAltasCorreos)) {
-        fs.mkdirSync(pathSalidaPDFAltasCorreos, { recursive: true });
-        console.log(`Carpeta creada: ${pathSalidaPDFAltasCorreos}`);
-      } else {
-        console.log(`La carpeta ya existe: ${pathSalidaPDFAltasCorreos}`);
-      }
+      // Crear estructura EMPRESAS
+      ensureDir(pathEmailsEmpresasAltas);
+      ensureDir(pathEmailsEmpresasBajas);
+      ensureDir(pathEmailsEmpresasConfirmacion);
 
-      if (!fs.existsSync(pathSalidaPDFBajasCorreos)) {
-        fs.mkdirSync(pathSalidaPDFBajasCorreos, { recursive: true });
-        console.log(`Carpeta creada: ${pathSalidaPDFBajasCorreos}`);
-      } else {
-        console.log(`La carpeta ya existe: ${pathSalidaPDFBajasCorreos}`);
-      }
+      // Crear estructura EMPLEADOS
+      ensureDir(pathEmailsEmpleadosAltas);
+      ensureDir(pathEmailsEmpleadosBajas);
+      ensureDir(pathEmailsEmpleadosConfirmacion);
+
 
       try {
         //LECTURA EMPRESAS:
@@ -367,54 +377,219 @@ class ProcesosFie {
                 const generated = await Promise.all(tasks);
                 console.log("PDFs generados:");
                 generated.forEach((f) => console.log(" -", f));
+                
 
-                //PASO 3: GENERACION DE CORREOS:
+                // ==================================
+                // PASO 3: GENERACION DE CORREOS
+                //   A) EMPRESAS (agrupado)  ✅ NUEVO
+                //   B) EMPLEADOS (por empleado) ✅ LEGACY
+                // ==================================
+
                 const results = [];
-                //const altasTest = [altas[0]];
-                
-                function obtenerEmailsDestino(emailsEmpresa) {
-                  if (typeof emailsEmpresa !== "string") {
-                    // Si no es string (número, objeto, etc.), no intentamos enviar nada
-                    return [];
+
+                // --- Helpers (reutilizados en ambos procesos) ---
+                function groupByExpedienteEmpresa(registros) {
+                  const grupos = {};
+                  for (const r of registros) {
+                    const key =
+                      r.expedienteEmpresa && String(r.expedienteEmpresa).trim() !== ""
+                        ? String(r.expedienteEmpresa).trim()
+                        : `SIN_EMPRESA_${String(r.naf || "").trim() || "SIN_NAF"}`;
+                  
+                    if (!grupos[key]) grupos[key] = [];
+                    grupos[key].push(r);
                   }
-                
-                  return emailsEmpresa
-                    .split(";")
-                    .map((e) => e.trim())
-                    .filter(Boolean);   // quita vacíos
+                  return grupos;
                 }
 
-                for (const r of altas) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                function obtenerEmailsDestino(emailsEmpresa) {
+                  // Normaliza cualquier cosa a string
+                  const raw =
+                    typeof emailsEmpresa === "string"
+                      ? emailsEmpresa
+                      : emailsEmpresa?.text
+                        ? String(emailsEmpresa.text())
+                        : String(emailsEmpresa || "");
+                
+                  return raw
+                    .split(/[;,]/)
+                    .map((e) => e.trim())
+                    .filter(Boolean);
+                }
+
+                function safeFilename(str, max = 120) {
+                  const s = (str ?? "archivo")
+                    .toString()
+                    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+                    .slice(0, max);
+                  return s || "archivo";
+                }
+
+                function excelSerialToDate(serial) {
+                  if (serial === undefined || serial === null || serial === "") return null;
+                  const ms = Math.round((serial - 25569) * 86400 * 1000);
+                  if (Number.isNaN(ms)) return null;
+                  return new Date(ms);
+                }
+
+                function formatDateFromExcel(serial) {
+                  const d = excelSerialToDate(serial);
+                  if (!d) return "";
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  const yyyy = d.getFullYear();
+                  return `${dd}/${mm}/${yyyy}`;
+                }
+                
+                function buildLegacyFileBase(record, tipoDoc) {
+                  switch (tipoDoc) {
+                    case "BAJAS":
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaBajaIt) || "")}`;
+                  
+                    case "ALTAS":
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(formatDateFromExcel(record.fechaFinIt) || "")}`;
+                  
+                    case "CONFIRMACION": {
+                      const f =
+                        Array.isArray(record.partesConfirmacion) && record.partesConfirmacion.length > 0
+                          ? formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || ""
+                          : "";
+                      return `${safeFilename(record.expte || "")}_${tipoDoc}_${safeFilename(record.dni)}_${safeFilename(f)}`;
+                    }
+                  
+                    default:
+                      return `archivo_${tipoDoc}`;
+                  }
+                }
+
+
+                // ======================================================
+                // A) EMPRESAS (AGRUPADO) -> genera 1 correo por empresa
+                // ======================================================
+                const altasPorEmpresa = groupByExpedienteEmpresa(altas);
+                for (const expte in altasPorEmpresa) {
+                  const grupo = altasPorEmpresa[expte];
+                
+                  // Evitar sobrescritura: si no hay empresa, usamos el id del grupo
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) r.expedienteEmpresa = expte;
+                  }
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
                     "ALTAS",
-                    pathSalidaPDFAltasCorreos,
+                    pathEmailsEmpresasAltas,
+                    {
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
+                    },
+                  );
+                
+                  results.push(file);
+                }
+
+                const bajasPorEmpresa = groupByExpedienteEmpresa(bajas);
+                for (const expte in bajasPorEmpresa) {
+                  const grupo = bajasPorEmpresa[expte];
+                
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) r.expedienteEmpresa = expte;
+                  }
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
+                    "BAJAS",
+                    pathEmailsEmpresasBajas,
+                    {
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
+                    },
+                  );
+                
+                  results.push(file);
+                }
+
+                const confirmacionPorEmpresa = groupByExpedienteEmpresa(confirmacion);
+                for (const expte in confirmacionPorEmpresa) {
+                  const grupo = confirmacionPorEmpresa[expte];
+                
+                  if (!grupo[0].expedienteEmpresa || String(grupo[0].expedienteEmpresa).trim() === "") {
+                    for (const r of grupo) r.expedienteEmpresa = expte;
+                  }
+                
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    grupo,
+                    "CONFIRMACION",
+                    pathEmailsEmpresasConfirmacion,
+                    {
+                      to: obtenerEmailsDestino(grupo[0].emailsEmpresa),
+                    },
+                  );
+                
+                  results.push(file);
+                }
+
+                // ======================================================
+                // BORRADO LEGACY SOLO EN EMPRESAS (AGRUPADO)
+                // ======================================================
+                function borrarLegacy(folder, prefijo) {
+                  if (!fs.existsSync(folder)) return;
+                  for (const f of fs.readdirSync(folder)) {
+                    if (f.startsWith(prefijo)) {
+                      fs.unlinkSync(path.join(folder, f));
+                    }
+                  }
+                }
+
+                borrarLegacy(
+                  pathEmailsEmpresasAltas,
+                  `archivo_ALTAS_${this.getCurrentDateString()}`,
+                );
+                borrarLegacy(
+                  pathEmailsEmpresasBajas,
+                  `archivo_BAJAS_${this.getCurrentDateString()}`,
+                );
+                borrarLegacy(
+                  pathEmailsEmpresasConfirmacion,
+                  `archivo_CONFIRMACION_${this.getCurrentDateString()}`,
+                );
+
+                // ======================================================
+                // B) EMPLEADOS (LEGACY) -> genera 1 correo por empleado
+                //     (TO = emailsEmpresa, como antes)
+                // ======================================================
+                for (const r of altas) {
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    [r],
+                    "ALTAS",
+                    pathEmailsEmpleadosAltas,
                     {
                       to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "ALTAS"),
                     },
                   );
                   results.push(file);
                 }
 
                 for (const r of bajas) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    [r],
                     "BAJAS",
-                    pathSalidaPDFBajasCorreos,
+                    pathEmailsEmpleadosBajas,
                     {
                       to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "BAJAS"),
                     },
                   );
                   results.push(file);
                 }
 
                 for (const r of confirmacion) {
-                  const file = await generarEmailFieDesdePlantilla(
-                    r,
+                  const file = await generarEmailFieAgrupadoDesdePlantilla(
+                    [r],
                     "CONFIRMACION",
-                    pathSalidaPDFConfirmacionCorreos,
+                    pathEmailsEmpleadosConfirmacion,
                     {
                       to: obtenerEmailsDestino(r.emailsEmpresa),
+                      fileBase: buildLegacyFileBase(r, "CONFIRMACION"),
                     },
                   );
                   results.push(file);
@@ -2115,7 +2290,7 @@ class ProcesosFie {
 
                 if (!confirmFrame1) {
                   const msg =
-                    "[ERROR] No se encontró la pantalla de Confirmación (botón #ENVIO_12).";
+                    "[ERROR] No se encontró la pantalla de Confirmacion (botón #ENVIO_12).";
                   console.warn("[FIE_2]", msg);
                   appendLog(nifNormRegistro, msg);
                   registrosError++;
