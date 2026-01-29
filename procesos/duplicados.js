@@ -4,6 +4,10 @@ const XlsxPopulate = require("xlsx-populate");
 const { registrarEjecucion } = require("../metricas");
 const puppeteer = require("puppeteer");
 
+// Activa esto solo si quieres ver console.log del navegador (frames FS)
+// const DEBUG_FS_CONSOLE = true;
+const DEBUG_FS_CONSOLE = false;
+
 /**
  * Procesos de Duplicados (TA2 / SS)
  */
@@ -570,7 +574,9 @@ class ProcesosDuplicados {
         lastErr = e;
         const msg = String(e?.message || e);
         if (!msg.toLowerCase().includes("detached frame")) throw e;
-        console.warn(`[DUPLICADOS][RETRY] ${label}: detached frame (intento ${i + 1}/${retries + 1})`);
+        console.warn(
+          `[DUPLICADOS][RETRY] ${label}: detached frame (intento ${i + 1}/${retries + 1})`,
+        );
         await this.esperar(700);
       }
     }
@@ -642,14 +648,16 @@ class ProcesosDuplicados {
             const bodyTxt = document.body?.innerText || "";
             if (!bodyTxt.includes("Documento TA") || !bodyTxt.includes("Fecha Real")) return false;
 
-            // Hay varias tablas en estas pantallas; nos quedamos con las que
-            // realmente parecen listados (muchos <tr> con <td>)
             const tables = Array.from(document.querySelectorAll("table"));
             const candidates = tables
               .map((t) => {
                 const rows = Array.from(t.querySelectorAll("tr"));
                 const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
-                return { t, rowsCount: rows.length, dataCount: dataRows.length, txt: t.innerText || "" };
+                return {
+                  rowsCount: rows.length,
+                  dataCount: dataRows.length,
+                  txt: t.innerText || "",
+                };
               })
               .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
               .sort((a, b) => b.dataCount - a.dataCount);
@@ -667,93 +675,131 @@ class ProcesosDuplicados {
 
   // =========================
   // ✅ Seleccionar la fila "ALTA" con Fecha Real más actual (robusto)
-  // - Puede haber <a> dentro de la celda. Doble click sobre el elemento clickable.
+  //    - Aplica la lógica del código antiguo: dblclick + click + click
+  //    - Prioriza label/a dentro de la celda si existe
+  //    - Ignora filas sin fecha parseable / vacías
   // =========================
-  async seleccionarAltaMasReciente(frameListado) {
-    return await frameListado.evaluate(() => {
-      const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+async seleccionarAltaMasReciente(frameListado) {
+  return await frameListado.evaluate(() => {
+    const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-      const parseFecha = (s) => {
-        // Soporta "01 01 2012" con espacios o NBSP
-        const txt = norm(s);
-        const m = txt.match(/(\d{2})\s+(\d{2})\s+(\d{4})/);
-        if (!m) return null;
-        const dd = Number(m[1]);
-        const mm = Number(m[2]);
-        const yy = Number(m[3]);
-        const d = new Date(yy, mm - 1, dd);
-        return isNaN(d.getTime()) ? null : d;
-      };
+    // Acepta: 27/01/2026 | 27-01-2026 | 27.01.2026 | 27 01 2026
+    const parseFecha = (s) => {
+      const txt = norm(s);
+      const m = txt.match(/(\d{2})\s*[\/\-. ]\s*(\d{2})\s*[\/\-. ]\s*(\d{4})/);
+      if (!m) return null;
+      const dd = Number(m[1]);
+      const mm = Number(m[2]);
+      const yy = Number(m[3]);
+      const d = new Date(yy, mm - 1, dd);
+      return isNaN(d.getTime()) ? null : d;
+    };
 
-      // 1) Elegimos la tabla correcta (la que tiene más filas de datos)
-      const tables = Array.from(document.querySelectorAll("table"))
-        .map((t) => {
-          const txt = t.innerText || "";
-          const rows = Array.from(t.querySelectorAll("tr"));
-          const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
-          return { t, txt, dataCount: dataRows.length };
-        })
-        .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
-        .sort((a, b) => b.dataCount - a.dataCount);
+    // ✅ Click “modo antiguo”: dblclick + click + click
+    const fireClicksOldStyle = (el) => {
+      if (!el) return false;
+      try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
 
-      const target = tables[0]?.t || null;
-      if (!target) {
-        return {
-          ok: false,
-          reason: "No se encontró la tabla del listado (cabeceras Documento TA / Fecha Real)",
-        };
-      }
+      try {
+        el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+      } catch (_) {}
 
-      const rows = Array.from(target.querySelectorAll("tr"));
-      const candidates = [];
+      try { el.click(); } catch (_) {}
+      try { el.click(); } catch (_) {}
 
-      for (const tr of rows) {
-        const tds = Array.from(tr.querySelectorAll("td"));
-        if (tds.length < 2) continue;
+      return true;
+    };
 
-        const docTxt = norm(tds[0].innerText || "");
-        const fechaTxt = norm(tds[1].innerText || "");
+    // 1) Seleccionamos la tabla más probable del listado
+    const tables = Array.from(document.querySelectorAll("table"))
+      .map((t) => {
+        const txt = t.innerText || "";
+        const rows = Array.from(t.querySelectorAll("tr"));
+        const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
+        return { t, txt, dataCount: dataRows.length };
+      })
+      .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
+      .sort((a, b) => b.dataCount - a.dataCount);
 
-        // ALTA o ALTA (SIT.ACTUAL)
-        if (!docTxt.toUpperCase().includes("ALTA")) continue;
+    const target = tables[0]?.t || null;
+    if (!target) {
+      return { ok: false, reason: "No se encontró la tabla del listado (Documento TA / Fecha Real)." };
+    }
 
-        const fecha = parseFecha(fechaTxt);
-        if (!fecha) continue;
+    const rows = Array.from(target.querySelectorAll("tr"));
 
-        // Preferimos el <a> si existe, porque suele ser lo clickable real
-        const anchor = tds[0].querySelector("a");
-        const clickable = anchor || tds[0];
+    // 2) Detectar índices reales de columnas por la cabecera
+    let docIdx = 0;
+    let fechaIdx = 1;
 
-        candidates.push({
-          doc: docTxt,
-          fechaTxt,
-          fechaMs: fecha.getTime(),
-          clickable,
-        });
-      }
-
-      if (!candidates.length) {
-        return {
-          ok: false,
-          reason:
-            "No se encontraron filas con 'ALTA' y fecha parseable en 'Fecha Real' (tabla localizada, pero sin match)",
-        };
-      }
-
-      candidates.sort((a, b) => b.fechaMs - a.fechaMs);
-      const best = candidates[0];
-
-      best.clickable.scrollIntoView({ block: "center", inline: "center" });
-
-      // Doble click EXACTO sobre la celda/anchor del Documento TA
-      best.clickable.dispatchEvent(
-        new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }),
-      );
-      best.clickable.click();
-
-      return { ok: true, doc: best.doc, fecha: best.fechaTxt };
+    const headerRow = rows.find((tr) => {
+      const cells = Array.from(tr.querySelectorAll("th,td"));
+      const txts = cells.map((c) => norm(c.innerText || ""));
+      return txts.some((x) => x.includes("Documento TA")) && txts.some((x) => x.includes("Fecha Real"));
     });
-  }
+
+    if (headerRow) {
+      const cells = Array.from(headerRow.querySelectorAll("th,td"));
+      const txts = cells.map((c) => norm(c.innerText || ""));
+
+      const foundDoc = txts.findIndex((x) => x.includes("Documento TA"));
+      const foundFecha = txts.findIndex((x) => x.includes("Fecha Real"));
+
+      if (foundDoc >= 0) docIdx = foundDoc;
+      if (foundFecha >= 0) fechaIdx = foundFecha;
+    }
+
+    // 3) Buscar filas cuyo Documento EMPIECE por "ALTA" y elegir la fecha más actual
+    const candidates = [];
+
+    for (const tr of rows) {
+      const tds = Array.from(tr.querySelectorAll("td"));
+      if (tds.length < 2) continue;
+
+      const docCell = tds[docIdx] || tds[0];
+      const fechaCell = tds[fechaIdx] || tds[1];
+
+      const docTxt = norm(docCell?.innerText || "");
+      const fechaTxt = norm(fechaCell?.innerText || "");
+
+      // ✅ "empiece por ALTA" (más estricto que includes)
+      if (!/^ALTA\b/i.test(docTxt)) continue;
+
+      const fecha = parseFecha(fechaTxt);
+      if (!fecha) continue;
+
+      // ✅ Prioridad: label > a > celda
+      const label = docCell?.querySelector("label");
+      const anchor = docCell?.querySelector("a");
+      const clickable = label || anchor || docCell;
+
+      candidates.push({
+        doc: docTxt,
+        fechaTxt,
+        fechaMs: fecha.getTime(),
+        clickable,
+      });
+    }
+
+    if (!candidates.length) {
+      return {
+        ok: false,
+        reason: "No se encontraron filas cuyo Documento empiece por 'ALTA' con Fecha Real parseable.",
+      };
+    }
+
+    candidates.sort((a, b) => b.fechaMs - a.fechaMs);
+    const best = candidates[0];
+
+    const did = fireClicksOldStyle(best.clickable);
+    if (!did) {
+      return { ok: false, reason: "No se pudo clicar el elemento (modo antiguo) en la fila ALTA seleccionada." };
+    }
+
+    return { ok: true, doc: best.doc, fecha: best.fechaTxt };
+  });
+}
+
 
   // =========================
   // ✅ Descargar PDF RAW interceptando la respuesta (Fetch CDP)
@@ -789,8 +835,17 @@ class ProcesosDuplicados {
       setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
     );
 
+    let done = false;
+
     const pdfPromise = new Promise((resolve, reject) => {
       const onPaused = async (ev) => {
+        if (done) {
+          try {
+            await client.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
+          } catch (_) {}
+          return;
+        }
+
         try {
           const reqId = ev.requestId;
           const url = ev.request?.url || "";
@@ -817,8 +872,16 @@ class ProcesosDuplicados {
             );
           }
 
+          done = true;
+          try {
+            client.removeListener("Fetch.requestPaused", onPaused);
+          } catch (_) {}
+
           resolve({ buf, url, status });
         } catch (e) {
+          try {
+            client.removeListener("Fetch.requestPaused", onPaused);
+          } catch (_) {}
           reject(e);
         }
       };
@@ -1006,6 +1069,15 @@ class ProcesosDuplicados {
         const opened = await browser.pages();
         const page = opened.length ? opened[0] : await browser.newPage();
 
+        // ✅ SOLO una vez (evita duplicados)
+        if (DEBUG_FS_CONSOLE) {
+          page.on("console", (msg) => {
+            try {
+              console.log("[FS-CONSOLE]", msg.text());
+            } catch (_) {}
+          });
+        }
+
         page.on("dialog", async (dialog) => {
           try {
             await dialog.accept();
@@ -1060,7 +1132,9 @@ class ProcesosDuplicados {
             return;
           }
 
-          console.log(`[DUPLICADOS][PROC] ${idx + 1}/${kept.length} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`);
+          console.log(
+            `[DUPLICADOS][PROC] ${idx + 1}/${kept.length} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`,
+          );
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           await this.esperar(800);
@@ -1076,26 +1150,21 @@ class ProcesosDuplicados {
           const provCCC = this._padLeftDigits(r.provCCC, 2);
           const ccc9 = this._padLeftDigits(r.ccc, 9);
 
-          await this.withDetachedFrameRetry(
-            () => fillInput(frameForm, "#SDFTESNAF", provNAF),
-            { label: "fill PROV NAF" },
-          );
-          await this.withDetachedFrameRetry(
-            () => fillInput(frameForm, "#SDFNAF", naf10),
-            { label: "fill NAF" },
-          );
-          await this.withDetachedFrameRetry(
-            () => fillInput(frameForm, "#SDFREGCTA_NH", regimen4),
-            { label: "fill REGIMEN" },
-          );
-          await this.withDetachedFrameRetry(
-            () => fillInput(frameForm, "#SDFTESCTA", provCCC),
-            { label: "fill PROV CCC" },
-          );
-          await this.withDetachedFrameRetry(
-            () => fillInput(frameForm, "#SDFCUENTA", ccc9),
-            { label: "fill CCC" },
-          );
+          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESNAF", provNAF), {
+            label: "fill PROV NAF",
+          });
+          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFNAF", naf10), {
+            label: "fill NAF",
+          });
+          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFREGCTA_NH", regimen4), {
+            label: "fill REGIMEN",
+          });
+          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESCTA", provCCC), {
+            label: "fill PROV CCC",
+          });
+          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFCUENTA", ccc9), {
+            label: "fill CCC",
+          });
 
           await frameForm.waitForSelector("#ListaTipoImpresion", { timeout: 30000 });
           await frameForm.select("#ListaTipoImpresion", "OnLine");
@@ -1148,9 +1217,31 @@ class ProcesosDuplicados {
           console.log(`[DUPLICADOS][SELECCION] ${dni} -> ${sel.doc} | Fecha Real: ${sel.fecha}`);
 
           // Esperar popup
-          const popupPage = await popupPromise;
+          let popupPage = await popupPromise;
+
+          // ✅ Fallback: a veces FS no abre la pestaña a la primera (timing/handler)
           if (!popupPage) {
-            throw new Error("Se esperaba una nueva pestaña con el PDF, pero no se abrió.");
+            console.warn(`[DUPLICADOS][POPUP] No abrió a la primera. Reintentando click ALTA...`);
+
+            // Prepara otra espera de popup y repite la interacción
+            const popupPromise2 = this.waitForPopup(browser, page, 25000);
+
+            const sel2 = await this.withDetachedFrameRetry(
+              () => this.seleccionarAltaMasReciente(frameListado),
+              { label: "reintento seleccionar ALTA" },
+            );
+
+            if (!sel2.ok) {
+              throw new Error(`Reintento: no se ha encontrado ALTA en el listado: ${sel2.reason}`);
+            }
+
+            popupPage = await popupPromise2;
+          }
+
+          if (!popupPage) {
+            throw new Error(
+              "Se esperaba una nueva pestaña con el PDF, pero no se abrió (tras reintento).",
+            );
           }
 
           await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
