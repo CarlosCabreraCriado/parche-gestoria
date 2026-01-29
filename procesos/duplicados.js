@@ -72,6 +72,14 @@ class ProcesosDuplicados {
   }
 
   // =========================
+  // ✅ NUEVO: Validar que el buffer ES un PDF real
+  // =========================
+  _isPdfBuffer(buf) {
+    if (!buf || !Buffer.isBuffer(buf) || buf.length < 5) return false;
+    return buf.subarray(0, 5).toString("utf8") === "%PDF-";
+  }
+
+  // =========================
   // Excel: lectura formato NUEVO
   // =========================
   async leerExcelDuplicados(pathExcel) {
@@ -531,87 +539,103 @@ class ProcesosDuplicados {
   }
 
   // =========================
-  // ✅ OPTIMO REAL: Descarga PDF capturando la RESPUESTA de red (CDP)
+  // ✅ NUEVO: Descargar PDF RAW interceptando la respuesta (Fetch CDP)
   // =========================
   /**
-   * Descarga el PDF desde la pestaña popup capturando el body de la respuesta
-   * desde la propia sesión de Chrome (CDP).
-   *
-   * Esto evita el 403 de Axios (certificado/sesión) y no depende del visor/shadow DOM.
+   * Chrome puede transformar el PDF en un "pdf_embedder" HTML. Para evitarlo:
+   * - Interceptamos con Fetch en fase Response
+   * - Leemos el body RAW (base64)
+   * - Validamos que empieza por %PDF-
    */
-  async descargarPdfDesdeRespuestaCDP(popupPage, outputPath, timeoutMs = 90000) {
+  async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
     await popupPage.bringToFront().catch(() => {});
-    console.log("[DUPLICADOS] Popup URL:", popupPage.url());
-
     const client = await popupPage.target().createCDPSession();
-    await client.send("Network.enable");
+
+    const urlMatch = (url) => {
+      const u = String(url || "");
+      return (
+        u.includes("/ImprPDF/") ||
+        u.includes("InSeNaCoder") ||
+        u.toLowerCase().endsWith(".pdf")
+      );
+    };
+
+    // Activamos Fetch en fase Response SOLO para el endpoint del PDF
+    await client.send("Fetch.enable", {
+      patterns: [
+        {
+          urlPattern: "*w2.seg-social.es/ImprPDF/*",
+          requestStage: "Response",
+        },
+        // fallback por si cambia dominio/subruta
+        {
+          urlPattern: "*/ImprPDF/*",
+          requestStage: "Response",
+        },
+      ],
+    }).catch(() => {});
+
+    await client.send("Network.enable").catch(() => {});
     await client.send("Network.setCacheDisabled", { cacheDisabled: true }).catch(() => {});
 
     const timer = new Promise((_, rej) =>
-      setTimeout(() => rej(new Error("Timeout esperando la respuesta del PDF en el popup.")), timeoutMs),
+      setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
     );
 
     const pdfPromise = new Promise((resolve, reject) => {
-      const onResponse = async (params) => {
+      const onPaused = async (ev) => {
         try {
-          const url = String(params?.response?.url || "");
-          const status = Number(params?.response?.status || 0);
-          const mime = String(params?.response?.mimeType || "").toLowerCase();
-          const headers = params?.response?.headers || {};
+          const reqId = ev.requestId;
+          const url = ev.request?.url || "";
+          const status = ev.responseStatusCode || 0;
 
-          const ct = String(headers["content-type"] || headers["Content-Type"] || "").toLowerCase();
-          const cd = String(headers["content-disposition"] || headers["Content-Disposition"] || "").toLowerCase();
-
-          const looksPdf =
-            url.includes("/ImprPDF/") ||
-            url.includes("InSeNaCoder") ||
-            url.toLowerCase().endsWith(".pdf") ||
-            mime.includes("pdf") ||
-            ct.includes("pdf") ||
-            cd.includes("pdf") ||
-            cd.includes("attachment");
-
-          if (!looksPdf) return;
-
-          if (!(status >= 200 && status < 300)) {
-            console.log("[DUPLICADOS][CDP] response NO OK:", status, url);
+          // Solo nos interesa el PDF real
+          if (!urlMatch(url) || !(status >= 200 && status < 300)) {
+            await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
             return;
           }
 
-          console.log("[DUPLICADOS][CDP] response OK:", status, url);
-          console.log("[DUPLICADOS][CDP] mime:", mime);
-          console.log("[DUPLICADOS][CDP] content-type:", ct);
-          console.log("[DUPLICADOS][CDP] content-disposition:", cd);
+          // Leemos body RAW
+          const bodyResp = await client.send("Fetch.getResponseBody", { requestId: reqId });
+          const body = bodyResp?.body || "";
+          const base64Encoded = !!bodyResp?.base64Encoded;
 
-          client.off("Network.responseReceived", onResponse);
+          // Dejamos continuar la navegación
+          await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
 
-          const { body, base64Encoded } = await client.send("Network.getResponseBody", {
-            requestId: params.requestId,
-          });
+          // Convertimos a buffer
+          const buf = base64Encoded ? Buffer.from(body, "base64") : Buffer.from(body, "utf8");
 
-          resolve({ body, base64Encoded });
+          // ✅ Validación PDF real
+          if (!this._isPdfBuffer(buf)) {
+            return reject(
+              new Error(
+                "El contenido capturado NO es un PDF (no empieza por %PDF-). Probablemente es el wrapper del visor.",
+              ),
+            );
+          }
+
+          resolve({ buf, url, status });
         } catch (e) {
           reject(e);
         }
       };
 
-      client.on("Network.responseReceived", onResponse);
+      client.on("Fetch.requestPaused", onPaused);
     });
 
-    // ✅ Clave: recargamos DESPUÉS de enganchar listeners para no llegar tarde
+    // 🔥 IMPORTANTE: recargar tras enganchar listener para capturar respuesta real
     await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
     await popupPage.waitForSelector("body", { timeout: 20000 }).catch(() => {});
-    await popupPage.waitForFunction(() => document.readyState !== "loading", { timeout: 30000 }).catch(() => {});
     await this.esperar(800);
 
-    const { body, base64Encoded } = await Promise.race([pdfPromise, timer]);
+    const { buf, url, status } = await Promise.race([pdfPromise, timer]);
 
-    const buffer = base64Encoded ? Buffer.from(body, "base64") : Buffer.from(body, "utf8");
-    fs.writeFileSync(outputPath, buffer);
+    fs.writeFileSync(outputPath, buf);
+    console.log("[DUPLICADOS][FETCH] PDF RAW guardado:", status, url, "->", outputPath);
 
-    try {
-      await client.detach();
-    } catch (_) {}
+    try { await client.send("Fetch.disable"); } catch (_) {}
+    try { await client.detach(); } catch (_) {}
   }
 
   // =========================
@@ -684,10 +708,7 @@ class ProcesosDuplicados {
         for (const r of rows) {
           const errs = this.validarRegistro(r);
           if (errs.length) {
-            logsPorDni.set(
-              r.dni || `ROW_${r._row}`,
-              `ERROR: ${errs.join(" | ")}`,
-            );
+            logsPorDni.set(r.dni || `ROW_${r._row}`, `ERROR: ${errs.join(" | ")}`);
             continue;
           }
           validRows.push(r);
@@ -856,7 +877,6 @@ class ProcesosDuplicados {
 
             label.click();
             label.click();
-
             return true;
           });
 
@@ -869,10 +889,10 @@ class ProcesosDuplicados {
             throw new Error("Se esperaba una nueva pestaña con el PDF, pero no se abrió.");
           }
 
-          // ✅ FLUJO CORRECTO: descargar el PDF desde la sesión del propio Chrome (CDP response)
-          await this.descargarPdfDesdeRespuestaCDP(popupPage, pdfPath, 90000);
+          // ✅ CAMBIO CLAVE: Guardar PDF RAW real (evita html pdf_embedder)
+          await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
 
-          logsPorDni.set(dni, `OK: PDF descargado (CDP response) -> ${path.basename(pdfPath)}`);
+          logsPorDni.set(dni, `OK: PDF guardado (RAW) -> ${path.basename(pdfPath)}`);
           resumen.ok.push(dni);
           okSet.add(dni);
 
