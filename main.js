@@ -34,6 +34,8 @@ var procesosGoogle;
 var procesosDespacho;
 var procesosKPIs;
 var procesosImport;
+var procesosDuplicados;
+
 
 var procesarPlantillaDocx;
 var procesarPlantillaExcel;
@@ -929,6 +931,8 @@ ipc.on("abrirProyecto", function (event, nombreProy) {
   );
   procesosImport = new ProcesosImport(pathToDbFolder, nombreProyecto, proyecto);
   procesosKPIs = new ProcesosKPIs(pathToDbFolder, nombreProyecto, proyecto);
+  procesosDuplicados = new ProcesosDuplicados(pathToDbFolder, nombreProyecto, proyecto);
+
 
   //Creacion de instancia de ejecucion de procesos:
   procesarPlantillaExcel = new PlantillaExcel(
@@ -1231,6 +1235,9 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
       result = await procesosDespacho[identificador](
         argumentos.formularioControl,
       );
+      break;
+      case "duplicados":
+      result = await procesosDuplicados[identificador](argumentos);
       break;
   }
 
@@ -1904,6 +1911,8 @@ const ProcesosGoogle = require("./procesos/google.js");
 const ProcesosDespacho = require("./procesos/despacho.js");
 const ProcesosImport = require("./procesos/import.js");
 const ProcesosKPIs = require("./procesos/kpis.js");
+const ProcesosDuplicados = require("./procesos/duplicados.js");
+
 
 const PlantillaExcel = require("./plantillas/excel.js");
 const PlantillaDocx = require("./plantillas/docx.js");
