@@ -9,3 +9,5 @@ Lanzar un despliegue .exe
 Powershell administrador
 1. ng build
 2. npm run build
+
+pupeeter untilloadingpage

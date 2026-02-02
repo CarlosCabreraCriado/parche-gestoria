@@ -22,6 +22,24 @@ class ProcesosDuplicados {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  // ✅ Para medir esperas "fijas" (800ms, 1200ms...) sin ensuciar bucles de polling
+  async esperarLog(ms, label) {
+    const key = label ? `[T][WAIT] ${label} (${ms}ms)` : `[T][WAIT] ${ms}ms`;
+    console.time(key);
+    await this.esperar(ms);
+    console.timeEnd(key);
+  }
+
+  // ✅ Wrapper para medir funciones async sin repetir console.time/end por todos lados
+  async timeAsync(label, fn) {
+    console.time(label);
+    try {
+      return await fn();
+    } finally {
+      console.timeEnd(label);
+    }
+  }
+
   getCurrentDateString() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -635,9 +653,6 @@ class ProcesosDuplicados {
 
   // =========================
   // ✅ Detectar el listado por cabeceras (más robusto)
-  // - NO nos basamos en "ALTA (SIT.ACTUAL)" para localizar el frame.
-  // - Localizamos el frame que contiene la tabla y además nos aseguramos
-  //   de que existe una tabla con varias filas de datos.
   // =========================
   async findListadoTAFrame(page, timeoutMs = 60000, pollMs = 400) {
     const start = Date.now();
@@ -675,138 +690,140 @@ class ProcesosDuplicados {
 
   // =========================
   // ✅ Seleccionar la fila "ALTA" con Fecha Real más actual (robusto)
-  //    - Aplica la lógica del código antiguo: dblclick + click + click
-  //    - Prioriza label/a dentro de la celda si existe
-  //    - Ignora filas sin fecha parseable / vacías
   // =========================
-async seleccionarAltaMasReciente(frameListado) {
-  return await frameListado.evaluate(() => {
-    const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  async seleccionarAltaMasReciente(frameListado) {
+    return await frameListado.evaluate(() => {
+      const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-    // Acepta: 27/01/2026 | 27-01-2026 | 27.01.2026 | 27 01 2026
-    const parseFecha = (s) => {
-      const txt = norm(s);
-      const m = txt.match(/(\d{2})\s*[\/\-. ]\s*(\d{2})\s*[\/\-. ]\s*(\d{4})/);
-      if (!m) return null;
-      const dd = Number(m[1]);
-      const mm = Number(m[2]);
-      const yy = Number(m[3]);
-      const d = new Date(yy, mm - 1, dd);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    // ✅ Click “modo antiguo”: dblclick + click + click
-    const fireClicksOldStyle = (el) => {
-      if (!el) return false;
-      try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
-
-      try {
-        el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
-      } catch (_) {}
-
-      try { el.click(); } catch (_) {}
-      try { el.click(); } catch (_) {}
-
-      return true;
-    };
-
-    // 1) Seleccionamos la tabla más probable del listado
-    const tables = Array.from(document.querySelectorAll("table"))
-      .map((t) => {
-        const txt = t.innerText || "";
-        const rows = Array.from(t.querySelectorAll("tr"));
-        const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
-        return { t, txt, dataCount: dataRows.length };
-      })
-      .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
-      .sort((a, b) => b.dataCount - a.dataCount);
-
-    const target = tables[0]?.t || null;
-    if (!target) {
-      return { ok: false, reason: "No se encontró la tabla del listado (Documento TA / Fecha Real)." };
-    }
-
-    const rows = Array.from(target.querySelectorAll("tr"));
-
-    // 2) Detectar índices reales de columnas por la cabecera
-    let docIdx = 0;
-    let fechaIdx = 1;
-
-    const headerRow = rows.find((tr) => {
-      const cells = Array.from(tr.querySelectorAll("th,td"));
-      const txts = cells.map((c) => norm(c.innerText || ""));
-      return txts.some((x) => x.includes("Documento TA")) && txts.some((x) => x.includes("Fecha Real"));
-    });
-
-    if (headerRow) {
-      const cells = Array.from(headerRow.querySelectorAll("th,td"));
-      const txts = cells.map((c) => norm(c.innerText || ""));
-
-      const foundDoc = txts.findIndex((x) => x.includes("Documento TA"));
-      const foundFecha = txts.findIndex((x) => x.includes("Fecha Real"));
-
-      if (foundDoc >= 0) docIdx = foundDoc;
-      if (foundFecha >= 0) fechaIdx = foundFecha;
-    }
-
-    // 3) Buscar filas cuyo Documento EMPIECE por "ALTA" y elegir la fecha más actual
-    const candidates = [];
-
-    for (const tr of rows) {
-      const tds = Array.from(tr.querySelectorAll("td"));
-      if (tds.length < 2) continue;
-
-      const docCell = tds[docIdx] || tds[0];
-      const fechaCell = tds[fechaIdx] || tds[1];
-
-      const docTxt = norm(docCell?.innerText || "");
-      const fechaTxt = norm(fechaCell?.innerText || "");
-
-      // ✅ "empiece por ALTA" (más estricto que includes)
-      if (!/^ALTA\b/i.test(docTxt)) continue;
-
-      const fecha = parseFecha(fechaTxt);
-      if (!fecha) continue;
-
-      // ✅ Prioridad: label > a > celda
-      const label = docCell?.querySelector("label");
-      const anchor = docCell?.querySelector("a");
-      const clickable = label || anchor || docCell;
-
-      candidates.push({
-        doc: docTxt,
-        fechaTxt,
-        fechaMs: fecha.getTime(),
-        clickable,
-      });
-    }
-
-    if (!candidates.length) {
-      return {
-        ok: false,
-        reason: "No se encontraron filas cuyo Documento empiece por 'ALTA' con Fecha Real parseable.",
+      // Acepta: 27/01/2026 | 27-01-2026 | 27.01.2026 | 27 01 2026
+      const parseFecha = (s) => {
+        const txt = norm(s);
+        const m = txt.match(/(\d{2})\s*[\/\-. ]\s*(\d{2})\s*[\/\-. ]\s*(\d{4})/);
+        if (!m) return null;
+        const dd = Number(m[1]);
+        const mm = Number(m[2]);
+        const yy = Number(m[3]);
+        const d = new Date(yy, mm - 1, dd);
+        return isNaN(d.getTime()) ? null : d;
       };
-    }
 
-    candidates.sort((a, b) => b.fechaMs - a.fechaMs);
-    const best = candidates[0];
+      // ✅ Click “modo antiguo”: dblclick + click + click
+      const fireClicksOldStyle = (el) => {
+        if (!el) return false;
+        try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
 
-    const did = fireClicksOldStyle(best.clickable);
-    if (!did) {
-      return { ok: false, reason: "No se pudo clicar el elemento (modo antiguo) en la fila ALTA seleccionada." };
-    }
+        try {
+          el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+        } catch (_) {}
 
-    return { ok: true, doc: best.doc, fecha: best.fechaTxt };
-  });
-}
+        try { el.click(); } catch (_) {}
+        try { el.click(); } catch (_) {}
 
+        return true;
+      };
+
+      // 1) Seleccionamos la tabla más probable del listado
+      const tables = Array.from(document.querySelectorAll("table"))
+        .map((t) => {
+          const txt = t.innerText || "";
+          const rows = Array.from(t.querySelectorAll("tr"));
+          const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
+          return { t, txt, dataCount: dataRows.length };
+        })
+        .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
+        .sort((a, b) => b.dataCount - a.dataCount);
+
+      const target = tables[0]?.t || null;
+      if (!target) {
+        return { ok: false, reason: "No se encontró la tabla del listado (Documento TA / Fecha Real)." };
+      }
+
+      const rows = Array.from(target.querySelectorAll("tr"));
+
+      // 2) Detectar índices reales de columnas por la cabecera
+      let docIdx = 0;
+      let fechaIdx = 1;
+
+      const headerRow = rows.find((tr) => {
+        const cells = Array.from(tr.querySelectorAll("th,td"));
+        const txts = cells.map((c) => norm(c.innerText || ""));
+        return txts.some((x) => x.includes("Documento TA")) && txts.some((x) => x.includes("Fecha Real"));
+      });
+
+      if (headerRow) {
+        const cells = Array.from(headerRow.querySelectorAll("th,td"));
+        const txts = cells.map((c) => norm(c.innerText || ""));
+
+        const foundDoc = txts.findIndex((x) => x.includes("Documento TA"));
+        const foundFecha = txts.findIndex((x) => x.includes("Fecha Real"));
+
+        if (foundDoc >= 0) docIdx = foundDoc;
+        if (foundFecha >= 0) fechaIdx = foundFecha;
+      }
+
+      // 3) Buscar filas cuyo Documento EMPIECE por "ALTA" y elegir la fecha más actual
+      const candidates = [];
+
+      for (const tr of rows) {
+        const tds = Array.from(tr.querySelectorAll("td"));
+        if (tds.length < 2) continue;
+
+        const docCell = tds[docIdx] || tds[0];
+        const fechaCell = tds[fechaIdx] || tds[1];
+
+        const docTxt = norm(docCell?.innerText || "");
+        const fechaTxt = norm(fechaCell?.innerText || "");
+
+        // ✅ "empiece por ALTA" (más estricto que includes)
+        if (!/^ALTA\b/i.test(docTxt)) continue;
+
+        const fecha = parseFecha(fechaTxt);
+        if (!fecha) continue;
+
+        // ✅ Prioridad: label > a > celda
+        const label = docCell?.querySelector("label");
+        const anchor = docCell?.querySelector("a");
+        const clickable = label || anchor || docCell;
+
+        candidates.push({
+          doc: docTxt,
+          fechaTxt,
+          fechaMs: fecha.getTime(),
+          clickable,
+        });
+      }
+
+      if (!candidates.length) {
+        return {
+          ok: false,
+          reason: "No se encontraron filas cuyo Documento empiece por 'ALTA' con Fecha Real parseable.",
+        };
+      }
+
+      candidates.sort((a, b) => b.fechaMs - a.fechaMs);
+      const best = candidates[0];
+
+      const did = fireClicksOldStyle(best.clickable);
+      if (!did) {
+        return { ok: false, reason: "No se pudo clicar el elemento (modo antiguo) en la fila ALTA seleccionada." };
+      }
+
+      return { ok: true, doc: best.doc, fecha: best.fechaTxt };
+    });
+  }
 
   // =========================
   // ✅ Descargar PDF RAW interceptando la respuesta (Fetch CDP)
   // =========================
   async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
+    // ✅ Timer global de este método
+    console.time(`[T][PDF] total_${path.basename(outputPath)}`);
+
     await popupPage.bringToFront().catch(() => {});
+
+    console.time("[T][PDF] createCDPSession");
     const client = await popupPage.target().createCDPSession();
+    console.timeEnd("[T][PDF] createCDPSession");
 
     const urlMatch = (url) => {
       const u = String(url || "");
@@ -817,6 +834,7 @@ async seleccionarAltaMasReciente(frameListado) {
       );
     };
 
+    console.time("[T][PDF] Fetch.enable + Network.enable");
     await client
       .send("Fetch.enable", {
         patterns: [
@@ -825,11 +843,11 @@ async seleccionarAltaMasReciente(frameListado) {
         ],
       })
       .catch(() => {});
-
     await client.send("Network.enable").catch(() => {});
     await client
       .send("Network.setCacheDisabled", { cacheDisabled: true })
       .catch(() => {});
+    console.timeEnd("[T][PDF] Fetch.enable + Network.enable");
 
     const timer = new Promise((_, rej) =>
       setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
@@ -889,14 +907,33 @@ async seleccionarAltaMasReciente(frameListado) {
       client.on("Fetch.requestPaused", onPaused);
     });
 
+    console.time("[T][PDF] popup_reload_domcontentloaded");
     await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+    console.timeEnd("[T][PDF] popup_reload_domcontentloaded");
+
+    console.time("[T][PDF] wait_body");
     await popupPage.waitForSelector("body", { timeout: 20000 }).catch(() => {});
-    await this.esperar(800);
+    console.timeEnd("[T][PDF] wait_body");
 
+    // 👇 espera fija (medida)
+    await this.esperarLog(800, "descargarPdfRawViaFetchCDP post_body");
+
+    console.time("[T][PDF] wait_pdf_fetch_race");
     const { buf, url, status } = await Promise.race([pdfPromise, timer]);
+    console.timeEnd("[T][PDF] wait_pdf_fetch_race");
 
+    console.time("[T][PDF] writeFileSync");
     fs.writeFileSync(outputPath, buf);
-    console.log("[DUPLICADOS][PDF] PDF RAW guardado:", status, url, "->", outputPath);
+    console.timeEnd("[T][PDF] writeFileSync");
+
+    console.log(
+      "[DUPLICADOS][PDF] PDF RAW guardado:",
+      status,
+      url,
+      "->",
+      outputPath,
+      `| bytes=${buf?.length || 0}`,
+    );
 
     try {
       await client.send("Fetch.disable");
@@ -904,6 +941,8 @@ async seleccionarAltaMasReciente(frameListado) {
     try {
       await client.detach();
     } catch (_) {}
+
+    console.timeEnd(`[T][PDF] total_${path.basename(outputPath)}`);
   }
 
   // =========================
@@ -911,6 +950,7 @@ async seleccionarAltaMasReciente(frameListado) {
   // =========================
   async duplicadosTa2(argumentos) {
     console.log("[DUPLICADOS] Iniciando proceso DUPLICADOS TA2");
+    console.time("[T] DUPLICADOS_TA2_TOTAL");
 
     const nombreProceso = "DUPLICADOS TA2";
     let registrosProcesados = 0;
@@ -928,18 +968,22 @@ async seleccionarAltaMasReciente(frameListado) {
 
         if (!chromeExePath || !fs.existsSync(chromeExePath)) {
           console.error("[DUPLICADOS][INPUT] Ruta a chrome.exe no válida.");
+          console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
           return resolve(false);
         }
         if (!pathExcel || typeof pathExcel !== "string" || !fs.existsSync(pathExcel)) {
           console.error("[DUPLICADOS][INPUT] Ruta a Excel no válida.");
+          console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
           return resolve(false);
         }
         if (!pathSalidaBase || typeof pathSalidaBase !== "string" || !pathSalidaBase.trim()) {
           console.error("[DUPLICADOS][INPUT] Ruta de salida no válida.");
+          console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
           return resolve(false);
         }
         if (!/^\d{4}$/.test(regimen4)) {
           console.error("[DUPLICADOS][INPUT] Régimen inválido. Debe ser 4 dígitos (ej: 0111).");
+          console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
           return resolve(false);
         }
 
@@ -990,7 +1034,9 @@ async seleccionarAltaMasReciente(frameListado) {
         };
 
         console.log("[DUPLICADOS][INPUT] Leyendo Excel:", path.normalize(pathExcel));
-        const { rows } = await this.leerExcelDuplicados(pathExcel);
+        const { rows } = await this.timeAsync("[T] excel_leerExcelDuplicados", () =>
+          this.leerExcelDuplicados(pathExcel),
+        );
 
         for (const r of rows) r.regimen = regimen4;
 
@@ -1048,23 +1094,26 @@ async seleccionarAltaMasReciente(frameListado) {
         if (!kept.length) {
           console.warn("[DUPLICADOS][INPUT] No hay registros válidos para procesar.");
           flushLogs(logsPorDni, stats);
+          console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
           return resolve(false);
         }
 
         const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
 
-        browser = await puppeteer.launch({
-          headless: false,
-          defaultViewport: null,
-          executablePath: chromeExePath,
-          args: [
-            "--start-maximized",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-features=IsolateOrigins,site-per-process",
-            "--disable-popup-blocking",
-          ],
-        });
+        browser = await this.timeAsync("[T] puppeteer_launch", () =>
+          puppeteer.launch({
+            headless: false,
+            defaultViewport: null,
+            executablePath: chromeExePath,
+            args: [
+              "--start-maximized",
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-features=IsolateOrigins,site-per-process",
+              "--disable-popup-blocking",
+            ],
+          }),
+        );
 
         const opened = await browser.pages();
         const page = opened.length ? opened[0] : await browser.newPage();
@@ -1084,7 +1133,9 @@ async seleccionarAltaMasReciente(frameListado) {
           } catch (_) {}
         });
 
-        await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+        await this.timeAsync("[T] goto_FS_inicial", () =>
+          page.goto(urlFS, { waitUntil: "domcontentloaded" }),
+        );
         console.log("[DUPLICADOS][FS] FS abierto. Selecciona el certificado si aparece.");
 
         const openAFIOnlineReal = async () => {
@@ -1093,7 +1144,7 @@ async seleccionarAltaMasReciente(frameListado) {
             textIncludes: "Inscripción y Afiliación Online Real",
           });
           if (!ok) throw new Error("No se pudo clicar 'Inscripción y Afiliación Online Real'");
-          await this.esperar(1200);
+          await this.esperarLog(1200, "openAFIOnlineReal");
         };
 
         const openATR65Duplicados = async () => {
@@ -1102,7 +1153,7 @@ async seleccionarAltaMasReciente(frameListado) {
             textIncludes: "Duplicados de documentos trabajador",
           });
           if (!ok) throw new Error("No se pudo clicar 'Duplicados de documentos trabajador' (ATR65)");
-          await this.esperar(1200);
+          await this.esperarLog(1200, "openATR65Duplicados");
         };
 
         const fillInput = async (frame, selector, value, { timeout = 30000 } = {}) => {
@@ -1122,6 +1173,8 @@ async seleccionarAltaMasReciente(frameListado) {
           const dni = this._dniNorm(r.dni);
           const trabajador = this._safeFileName(r.trabajador);
 
+          console.time(`[T][REG] total_${dni}`);
+
           const { dirClientePdf, dirClientePng } = await this.ensureClientDirs(rootOut, dni);
 
           const pngPath = path.join(dirClientePng, `Cuadro TA2 SS ${trabajador}.png`);
@@ -1129,6 +1182,7 @@ async seleccionarAltaMasReciente(frameListado) {
 
           if (okSet.has(dni)) {
             logsPorDni.set(dni, "SKIP_OK_PREVIO: ya estaba OK (modo resume)");
+            console.timeEnd(`[T][REG] total_${dni}`);
             return;
           }
 
@@ -1136,13 +1190,17 @@ async seleccionarAltaMasReciente(frameListado) {
             `[DUPLICADOS][PROC] ${idx + 1}/${kept.length} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`,
           );
 
-          await page.goto(urlFS, { waitUntil: "domcontentloaded" });
-          await this.esperar(800);
+          await this.timeAsync(`[T][${dni}] goto_FS`, () =>
+            page.goto(urlFS, { waitUntil: "domcontentloaded" }),
+          );
+          await this.esperarLog(800, `${dni} post_goto_FS`);
 
-          await openAFIOnlineReal();
-          await openATR65Duplicados();
+          await this.timeAsync(`[T][${dni}] openAFIOnlineReal`, () => openAFIOnlineReal());
+          await this.timeAsync(`[T][${dni}] openATR65Duplicados`, () => openATR65Duplicados());
 
-          const frameForm = await this.findFrameWithSelector(page, "#SDFTESNAF", 30000);
+          const frameForm = await this.timeAsync(`[T][${dni}] findFrame_form`, () =>
+            this.findFrameWithSelector(page, "#SDFTESNAF", 30000),
+          );
           if (!frameForm) throw new Error("No se encontró el formulario ATR65 (selector #SDFTESNAF)");
 
           const provNAF = this._padLeftDigits(r.provNAF, 2);
@@ -1150,86 +1208,133 @@ async seleccionarAltaMasReciente(frameListado) {
           const provCCC = this._padLeftDigits(r.provCCC, 2);
           const ccc9 = this._padLeftDigits(r.ccc, 9);
 
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESNAF", provNAF), {
-            label: "fill PROV NAF",
-          });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFNAF", naf10), {
-            label: "fill NAF",
-          });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFREGCTA_NH", regimen4), {
-            label: "fill REGIMEN",
-          });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESCTA", provCCC), {
-            label: "fill PROV CCC",
-          });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFCUENTA", ccc9), {
-            label: "fill CCC",
-          });
+          console.time(`[T][${dni}] fillInputs_total`);
 
-          await frameForm.waitForSelector("#ListaTipoImpresion", { timeout: 30000 });
-          await frameForm.select("#ListaTipoImpresion", "OnLine");
+          await this.timeAsync(`[T][${dni}] fill_PROVNAF`, () =>
+            this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESNAF", provNAF), {
+              label: "fill PROV NAF",
+            }),
+          );
+          await this.timeAsync(`[T][${dni}] fill_NAF`, () =>
+            this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFNAF", naf10), {
+              label: "fill NAF",
+            }),
+          );
+          await this.timeAsync(`[T][${dni}] fill_REGIMEN`, () =>
+            this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFREGCTA_NH", regimen4), {
+              label: "fill REGIMEN",
+            }),
+          );
+          await this.timeAsync(`[T][${dni}] fill_PROVCCC`, () =>
+            this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESCTA", provCCC), {
+              label: "fill PROV CCC",
+            }),
+          );
+          await this.timeAsync(`[T][${dni}] fill_CCC`, () =>
+            this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFCUENTA", ccc9), {
+              label: "fill CCC",
+            }),
+          );
 
-          const { text: dilBefore } = await this.readDILInAnyFrame(page);
+          console.timeEnd(`[T][${dni}] fillInputs_total`);
 
-          const clickedContinuar = await this.clickContinuarRobusta({
-            page,
-            frameForm,
-            timeoutMs: 35000,
-          });
+          await this.timeAsync(`[T][${dni}] wait_listaTipoImpresion`, () =>
+            frameForm.waitForSelector("#ListaTipoImpresion", { timeout: 30000 }),
+          );
+          await this.timeAsync(`[T][${dni}] select_listaTipoImpresion`, () =>
+            frameForm.select("#ListaTipoImpresion", "OnLine"),
+          );
+
+          const { text: dilBefore } = await this.timeAsync(`[T][${dni}] readDIL_before`, () =>
+            this.readDILInAnyFrame(page),
+          );
+
+          const clickedContinuar = await this.timeAsync(`[T][${dni}] clickContinuarRobusta`, () =>
+            this.clickContinuarRobusta({
+              page,
+              frameForm,
+              timeoutMs: 35000,
+            }),
+          );
           if (!clickedContinuar) {
             throw new Error("No se pudo pulsar 'Continuar' (click robusto falló).");
           }
 
-          const dilAfter = await this.waitForDILAfterContinuar(page, dilBefore, 15000);
-          if (dilAfter) console.log(`[DUPLICADOS][DIL] ${dni} -> ${dilAfter}`);
-
-          const dilError = this.interpretarDIL(dilAfter);
-          if (dilError) {
-            throw new Error(`Validación FS (DIL): ${dilError}`);
+          // ✅ Tras Continuar: no nos comemos 15s esperando DIL si el listado ya está listo.
+          // Hacemos una carrera: LISTADO vs DIL.
+          const listadoPromise = this.findListadoTAFrame(page, 20000, 250); // 20s, polling más ágil
+          const dilPromise = this.waitForDILAfterContinuar(page, dilBefore, 5000); // 5s basta
+                  
+          console.time(`[T][${dni}] continuar_race_listado_vs_dil`);
+          const winner = await Promise.race([
+            listadoPromise.then((fr) => ({ type: "listado", fr })),
+            dilPromise.then((text) => ({ type: "dil", text })),
+          ]);
+          console.timeEnd(`[T][${dni}] continuar_race_listado_vs_dil`);
+          
+          // Intentamos recuperar el listado (si el winner fue DIL, igualmente puede estar ya cargado)
+          let frameListado = null;
+          
+          if (winner.type === "listado") {
+            frameListado = winner.fr;
+          } else {
+            const dilAfter = winner.text || "";
+            if (dilAfter) console.log(`[DUPLICADOS][DIL] ${dni} -> ${dilAfter}`);
+          
+            const dilError = this.interpretarDIL(dilAfter);
+            if (dilError) throw new Error(`Validación FS (DIL): ${dilError}`);
+          
+            // Si DIL no es error, buscamos listado pero sin esperar 90s.
+            frameListado = await this.findListadoTAFrame(page, 15000, 250);
           }
-
-          // ✅ Localizar listado
-          const frameListado = await this.findListadoTAFrame(page, 90000);
+          
           if (!frameListado) {
             const maybeError = await this.detectPossibleErrorInFrames(page);
             throw new Error(
               `No se detectó el listado TA tras Continuar.${maybeError ? " " + maybeError : ""}`,
             );
           }
+          
 
-          // ✅ REQUISITO: CAPTURA LO PRIMERO (tabla cargada) ANTES de abrir PDF
+          // ✅ CAPTURA antes de abrir PDF (medida)
+          console.time(`[T][${dni}] safeScreenshot`);
           await this.safeScreenshot(page, pngPath);
+          console.timeEnd(`[T][${dni}] safeScreenshot`);
 
-          // ✅ Preparar popupPromise ANTES de hacer doble click
+          // ✅ Preparar popupPromise ANTES de hacer click
           const popupPromise = this.waitForPopup(browser, page, 45000);
 
-          // ✅ Seleccionar ALTA más reciente (con reintento detached)
+          // ✅ Seleccionar ALTA más reciente (medida)
+          console.time(`[T][${dni}] seleccionarAltaMasReciente`);
           const sel = await this.withDetachedFrameRetry(
             () => this.seleccionarAltaMasReciente(frameListado),
             { label: "seleccionar ALTA más reciente" },
           );
+          console.timeEnd(`[T][${dni}] seleccionarAltaMasReciente`);
 
           if (!sel.ok) {
-            // ✅ Si no existe ALTA (solo BAJA/CAMBIO): error, log y siguiente registro
             throw new Error(`No se ha encontrado ALTA en el listado: ${sel.reason}`);
           }
 
           console.log(`[DUPLICADOS][SELECCION] ${dni} -> ${sel.doc} | Fecha Real: ${sel.fecha}`);
 
-          // Esperar popup
+          // Esperar popup (ya medías; lo dejamos)
+          console.time(`t_popup_${dni}`);
           let popupPage = await popupPromise;
+          console.timeEnd(`t_popup_${dni}`);
 
-          // ✅ Fallback: a veces FS no abre la pestaña a la primera (timing/handler)
+          // ✅ Fallback: a veces FS no abre la pestaña a la primera
           if (!popupPage) {
             console.warn(`[DUPLICADOS][POPUP] No abrió a la primera. Reintentando click ALTA...`);
 
-            // Prepara otra espera de popup y repite la interacción
             const popupPromise2 = this.waitForPopup(browser, page, 25000);
 
+            console.time(`[T][${dni}] seleccionarAlta_reintento`);
             const sel2 = await this.withDetachedFrameRetry(
               () => this.seleccionarAltaMasReciente(frameListado),
               { label: "reintento seleccionar ALTA" },
             );
+            console.timeEnd(`[T][${dni}] seleccionarAlta_reintento`);
 
             if (!sel2.ok) {
               throw new Error(`Reintento: no se ha encontrado ALTA en el listado: ${sel2.reason}`);
@@ -1244,7 +1349,9 @@ async seleccionarAltaMasReciente(frameListado) {
             );
           }
 
+          console.time(`t_pdf_${dni}`);
           await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+          console.timeEnd(`t_pdf_${dni}`);
 
           logsPorDni.set(dni, `OK: PDF guardado -> ${path.basename(pdfPath)}`);
           resumen.ok.push(dni);
@@ -1253,6 +1360,8 @@ async seleccionarAltaMasReciente(frameListado) {
           try {
             await popupPage.close();
           } catch (_) {}
+
+          console.timeEnd(`[T][REG] total_${dni}`);
         };
 
         let okCount = 0;
@@ -1272,6 +1381,11 @@ async seleccionarAltaMasReciente(frameListado) {
             logsPorDni.set(dni || `ROW_${r._row}`, msg);
             resumen.error.push({ dni, row: r._row, error: msg });
             console.warn("[DUPLICADOS]", msg);
+
+            // ✅ Si hubo error, cerramos el timer del registro si quedó abierto
+            try {
+              if (dni) console.timeEnd(`[T][REG] total_${dni}`);
+            } catch (_) {}
           }
 
           if ((i + 1) % 5 === 0) flushLogs(logsPorDni, stats);
@@ -1289,6 +1403,7 @@ async seleccionarAltaMasReciente(frameListado) {
           if (browser) await browser.close();
         } catch (_) {}
 
+        console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
         return resolve(true);
       } catch (err) {
         console.error("[DUPLICADOS] Error general:", err?.message || err);
@@ -1303,6 +1418,8 @@ async seleccionarAltaMasReciente(frameListado) {
         try {
           if (browser) await browser.close();
         } catch (_) {}
+
+        console.timeEnd("[T] DUPLICADOS_TA2_TOTAL");
         return resolve(false);
       }
     });
