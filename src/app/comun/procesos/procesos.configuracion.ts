@@ -864,11 +864,12 @@ var libreriaProcesos: LibreriaProcesos[] = [
     tipo: "directorio",
     descripcion: "Procesos de asesoría",
     subCategoria: [
-            {
-        nombre: "DUPLICADOS TA2",
+      {
+        // OJO: este "nombre" es el que se intenta ejecutar según tus logs
+        nombre: "dUPLICADOSTA2+IDC",
         categoria: "Duplicados",
         tipo: "proceso",
-        descripcion: "",
+        descripcion: "Por cada trabajador: descarga TA2 y a continuación IDC (mismo Excel).",
         autor: "Gonzalo Martín",
         argumentos: [
           {
@@ -891,8 +892,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               titulo: "Excel de clientes",
               tipo: "archivo",
               accept: ".xlsm, .xlsx, .XLSX",
-              placeholder:
-                "Introduzca la ruta del archivo de datos de clientes.",
+              placeholder: "Introduzca la ruta del archivo de datos de clientes.",
               valorDefault: "",
             },
           },
@@ -924,6 +924,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   },
+
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
