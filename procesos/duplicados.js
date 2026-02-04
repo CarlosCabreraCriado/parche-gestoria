@@ -130,29 +130,16 @@ class ProcesosDuplicados {
   }
 
   // =========================
-  // ✅ Carpetas por cliente (DNI) y por proceso (TA2 / IDC)
-  // rootOut/<DNI_sin_letra>/TA2/PDF + CAPTURAS
-  // rootOut/<DNI_sin_letra>/IDC/PDF
+  // Carpetas por cliente (DNI)
   // =========================
-  async ensureClientDirsByProceso(rootOut, dni, proceso, { capturas = false } = {}) {
+  async ensureClientDirFlat(rootOut, dni) {
     const dniKey = this._dniFolderKey(dni);
     const dniFolder = this._safeFileName(dniKey || "SIN_DNI");
-
+  
     const dirDni = path.join(rootOut, dniFolder);
-    const dirProceso = path.join(dirDni, proceso);
-    const dirPdf = path.join(dirProceso, "PDF");
-
     await this.ensureDir(dirDni);
-    await this.ensureDir(dirProceso);
-    await this.ensureDir(dirPdf);
-
-    let dirCapturas = null;
-    if (capturas) {
-      dirCapturas = path.join(dirProceso, "CAPTURAS");
-      await this.ensureDir(dirCapturas);
-    }
-
-    return { dirDni, dirProceso, dirPdf, dirCapturas, dniFolder };
+  
+    return { dirDni, dniFolder };
   }
 
   // =========================
@@ -903,8 +890,9 @@ class ProcesosDuplicados {
     });
   }
 
+
   // =========================
-  // ✅ Descargar PDF RAW (Fetch CDP)
+  // ✅ Descargar PDF RAW (Fetch CDP) - ROBUSTO (cleanup SIEMPRE)
   // =========================
   async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
     await popupPage.bringToFront().catch(() => {});
@@ -915,99 +903,132 @@ class ProcesosDuplicados {
       return u.includes("/ImprPDF/") || u.includes("InSeNaCoder") || u.toLowerCase().endsWith(".pdf");
     };
 
-    await client
-      .send("Fetch.enable", {
-        patterns: [
-          { urlPattern: "*w2.seg-social.es/ImprPDF/*", requestStage: "Response" },
-          { urlPattern: "*/ImprPDF/*", requestStage: "Response" },
-        ],
-      })
-      .catch(() => {});
-    await client.send("Network.enable").catch(() => {});
-    await client.send("Network.setCacheDisabled", { cacheDisabled: true }).catch(() => {});
-
-    const timer = new Promise((_, rej) =>
-      setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
-    );
-
     let done = false;
+    let onPaused = null;
 
-    const pdfPromise = new Promise((resolve, reject) => {
-      const onPaused = async (ev) => {
-        if (done) {
-          try {
-            await client.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {});
-          } catch (_) {}
-          return;
-        }
+    try {
+      await client.send("Network.enable").catch(() => {});
+      await client.send("Network.setCacheDisabled", { cacheDisabled: true }).catch(() => {});
 
-        try {
-          const reqId = ev.requestId;
-          const url = ev.request?.url || "";
-          const status = ev.responseStatusCode || 0;
+      await client
+        .send("Fetch.enable", {
+          patterns: [
+            { urlPattern: "*w2.seg-social.es/ImprPDF/*", requestStage: "Response" },
+            { urlPattern: "*/ImprPDF/*", requestStage: "Response" },
+          ],
+        })
+        .catch(() => {});
 
-          if (!urlMatch(url) || !(status >= 200 && status < 300)) {
-            await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+      const timer = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
+      );
+
+      const pdfPromise = new Promise((resolve, reject) => {
+        onPaused = async (ev) => {
+          // Si ya resolvimos, no bloquees nada.
+          if (done) {
+            try { await client.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {}); } catch (_) {}
             return;
           }
 
-          const bodyResp = await client.send("Fetch.getResponseBody", { requestId: reqId });
-          const body = bodyResp?.body || "";
-          const base64Encoded = !!bodyResp?.base64Encoded;
+          try {
+            const reqId = ev.requestId;
+            const url = ev.request?.url || "";
+            const status = ev.responseStatusCode || 0;
 
-          await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+            // No es el PDF -> continúa.
+            if (!urlMatch(url) || !(status >= 200 && status < 300)) {
+              await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+              return;
+            }
 
-          const buf = base64Encoded ? Buffer.from(body, "base64") : Buffer.from(body, "utf8");
+            const bodyResp = await client.send("Fetch.getResponseBody", { requestId: reqId });
+            const body = bodyResp?.body || "";
+            const base64Encoded = !!bodyResp?.base64Encoded;
 
-          if (!this._isPdfBuffer(buf)) {
-            return reject(
-              new Error(
-                "El contenido capturado NO es un PDF (no empieza por %PDF-). Probablemente es el wrapper del visor.",
-              ),
-            );
+            await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+
+            const buf = base64Encoded ? Buffer.from(body, "base64") : Buffer.from(body, "utf8");
+
+            if (!this._isPdfBuffer(buf)) {
+              return reject(
+                new Error(
+                  "El contenido capturado NO es un PDF (no empieza por %PDF-). Probablemente es el wrapper del visor.",
+                ),
+              );
+            }
+
+            done = true;
+            resolve({ buf, url, status });
+          } catch (e) {
+            reject(e);
           }
+        };
 
-          done = true;
-          try {
-            client.removeListener("Fetch.requestPaused", onPaused);
-          } catch (_) {}
+        client.on("Fetch.requestPaused", onPaused);
+      });
 
-          resolve({ buf, url, status });
-        } catch (e) {
-          try {
-            client.removeListener("Fetch.requestPaused", onPaused);
-          } catch (_) {}
-          reject(e);
-        }
-      };
+      // A veces el visor carga “HTML wrapper” primero; el reload ayuda.
+      await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      await popupPage.waitForSelector("body", { timeout: 20000 }).catch(() => {});
+      await this.esperarLog(800, "descargarPdfRawViaFetchCDP post_body");
 
-      client.on("Fetch.requestPaused", onPaused);
-    });
+      const { buf, url, status } = await Promise.race([pdfPromise, timer]);
 
-    await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-    await popupPage.waitForSelector("body", { timeout: 20000 }).catch(() => {});
-    await this.esperarLog(800, "descargarPdfRawViaFetchCDP post_body");
+      fs.writeFileSync(outputPath, buf);
 
-    const { buf, url, status } = await Promise.race([pdfPromise, timer]);
+      console.log(
+        "[DUPLICADOS][PDF] PDF RAW guardado:",
+        status,
+        url,
+        "->",
+        outputPath,
+        `| bytes=${buf?.length || 0}`,
+      );
 
-    fs.writeFileSync(outputPath, buf);
+      return true;
+    } finally {
+      // ✅ Cleanup SIEMPRE, haya ok o error (evita “se queda colgado”)
+      try {
+        if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
+      } catch (_) {}
 
-    console.log(
-      "[DUPLICADOS][PDF] PDF RAW guardado:",
-      status,
-      url,
-      "->",
-      outputPath,
-      `| bytes=${buf?.length || 0}`,
-    );
-
-    try {
-      await client.send("Fetch.disable");
-    } catch (_) {}
-    try {
-      await client.detach();
-    } catch (_) {}
+      try { await client.send("Fetch.disable").catch(() => {}); } catch (_) {}
+      try { await client.detach(); } catch (_) {}
+    }
   }
+
+  _isPdfDownloadRetryableError(err) {
+    const msg = String(err?.message || err).toLowerCase();
+    return (
+      msg.includes("no es un pdf") ||
+      msg.includes("wrapper del visor") ||
+      msg.includes("timeout esperando el pdf")
+    );
+  }
+  
+  async descargarPdfCon1Reintento({ popupPage, outputPath, timeoutMs = 90000, label = "PDF" }) {
+    try {
+      await this.descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs);
+      return;
+    } catch (e) {
+      // Si no es un fallo típico de “visor/tiempos”, no reintentes.
+      if (!this._isPdfDownloadRetryableError(e)) throw e;
+    
+      console.warn(`[DUPLICADOS][${label}] Fallo descarga (1er intento). Reintentando 1 vez...`, e?.message || e);
+    
+      // Cierra el popup “malo” antes de reintentar
+      try { await popupPage.close(); } catch (_) {}
+    
+      await this.esperarLog(1200, `retry_${label}_wait`);
+    
+      // El reintento NO crea popup nuevo aquí: lo haremos desde el caller (TA2/IDC),
+      // porque necesitas volver a hacer click/dblclick para abrir de nuevo el PDF.
+      throw e; // el caller detectará y hará la reapertura + 2º intento
+    }
+  }
+  
+  
 
   // =========================
   // PROCESO ÚNICO: TA2 + IDC por empleado
@@ -1220,8 +1241,8 @@ class ProcesosDuplicados {
             return;
           }
 
-          const { dirPdf, dirCapturas } = await this.ensureClientDirsByProceso(rootOut, dni, "TA2", { capturas: true });
-          const pngPath = path.join(dirCapturas, `Cuadro TA2 SS ${trabajador}.png`);
+          const { dirDni } = await this.ensureClientDirFlat(rootOut, dni);
+          const pngPath = path.join(dirDni, `Cuadro TA2 SS ${trabajador}.png`);
 
           console.log(`[DUPLICADOS][TA2] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`);
 
@@ -1287,7 +1308,7 @@ class ProcesosDuplicados {
           if (!sel.ok) throw new Error(`TA2: no se ha encontrado ALTA: ${sel.reason}`);
 
           const aFecha = this._fechaRealToA(sel.fecha);
-          const pdfPath = path.join(dirPdf, `TA2 ${aFecha} ${trabajador}.pdf`);
+          const pdfPath = path.join(dirDni, `TA2 ${aFecha} ${trabajador}.pdf`);
 
           console.log(`[DUPLICADOS][TA2][SELECCION] ${dni} -> ${sel.doc} | Fecha Real: ${sel.fecha}`);
 
@@ -1304,7 +1325,35 @@ class ProcesosDuplicados {
 
           if (!popupPage) throw new Error("TA2: no se abrió la pestaña del PDF tras reintento.");
 
-          await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+          // 1er intento
+          try {
+            await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+          } catch (e1) {
+            if (!this._isPdfDownloadRetryableError(e1)) throw e1;
+          
+            console.warn(`[DUPLICADOS][TA2][PDF] Reintento por fallo de visor/PDF...`, e1?.message || e1);
+          
+            // Cierra popup malo
+            try { await popupPage.close(); } catch (_) {}
+          
+            // Reabrir popup (click de nuevo sobre la fila)
+            const popupPromiseR = this.waitForPopup(browser, page, 25000);
+          
+            const selR = await this.withDetachedFrameRetry(() => this.seleccionarAltaMasReciente(frameListado), {
+              label: "TA2 reintento seleccionar ALTA (para PDF)",
+            });
+            if (!selR.ok) throw new Error(`TA2 reintento: no se ha encontrado ALTA: ${selR.reason}`);
+          
+            const popupPageR = await popupPromiseR;
+            if (!popupPageR) throw new Error("TA2 reintento: no se abrió la pestaña del PDF.");
+          
+            // 2º intento (si falla aquí, se captura arriba y se pasa al siguiente registro)
+            try {
+              await this.descargarPdfRawViaFetchCDP(popupPageR, pdfPath, 90000);
+            } finally {
+              try { await popupPageR.close(); } catch (_) {}
+            }
+          }
 
           logsTA2.set(dni, `OK: PDF guardado -> ${path.basename(pdfPath)}`);
           okSetTA2.add(dni);
@@ -1324,7 +1373,7 @@ class ProcesosDuplicados {
             return;
           }
 
-          const { dirPdf } = await this.ensureClientDirsByProceso(rootOut, dni, "IDC", { capturas: false });
+          const { dirDni } = await this.ensureClientDirFlat(rootOut, dni);
 
           console.log(`[DUPLICADOS][IDC] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`);
 
@@ -1371,7 +1420,7 @@ class ProcesosDuplicados {
           if (!sel.ok) throw new Error(`IDC: no se pudo seleccionar fila: ${sel.reason}`);
 
           const aFecha = this._fechaRealToA(sel.fecha); // "01 01 2012" -> A010112
-          const pdfPath = path.join(dirPdf, `IDC ${aFecha} ${trabajador}.pdf`);
+          const pdfPath = path.join(dirDni, `IDC ${aFecha} ${trabajador}.pdf`);
 
           console.log(`[DUPLICADOS][IDC][SELECCION] ${dni} -> F. R. Alta: ${sel.fecha}`);
 
@@ -1388,7 +1437,34 @@ class ProcesosDuplicados {
 
           if (!popupPage) throw new Error("IDC: no se abrió la pestaña del PDF tras reintento.");
 
-          await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+          // 1er intento
+    try {
+      await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+    } catch (e1) {
+      if (!this._isPdfDownloadRetryableError(e1)) throw e1;
+    
+      console.warn(`[DUPLICADOS][IDC][PDF] Reintento por fallo de visor/PDF...`, e1?.message || e1);
+    
+      try { await popupPage.close(); } catch (_) {}
+    
+      // Reabrir popup (doble click de nuevo)
+      const popupPromiseR = this.waitForPopup(browser, page, 25000);
+    
+      const selR = await this.withDetachedFrameRetry(() => this.seleccionarAltaIDCMasReciente(frameListado), {
+        label: "IDC reintento seleccionar F. R. Alta (para PDF)",
+      });
+      if (!selR.ok) throw new Error(`IDC reintento: no se pudo seleccionar fila: ${selR.reason}`);
+    
+      const popupPageR = await popupPromiseR;
+      if (!popupPageR) throw new Error("IDC reintento: no se abrió la pestaña del PDF.");
+    
+      try {
+        await this.descargarPdfRawViaFetchCDP(popupPageR, pdfPath, 90000);
+      } finally {
+        try { await popupPageR.close(); } catch (_) {}
+      }
+    }
+    
 
           logsIDC.set(dni, `OK: PDF guardado -> ${path.basename(pdfPath)}`);
           okSetIDC.add(dni);
