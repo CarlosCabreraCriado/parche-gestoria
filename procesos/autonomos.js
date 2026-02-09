@@ -13,8 +13,10 @@ const puppeteer = require("puppeteer");
  *
  * Notas:
  * - Mes y año del nombre: MES y AÑO actual (sistema).
- * - Recibos emitidos: descargar el más reciente.
- * - Robusto: timeouts razonables, 1 reintento en descarga PDF, si falla un registro se loggea y se continúa.
+ * - Recibos emitidos: descargar el primero que salga en la lista.
+ * - Robusto: timeouts razonables, 1 reintento en descarga PDF A (popup),
+ *           PDF B se genera con printToPDF (sin chrome://print).
+ * - Si falla un registro se loggea y se continúa.
  */
 class ProcesosBasesRecibosAutonomos {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
@@ -321,6 +323,112 @@ class ProcesosBasesRecibosAutonomos {
     return false;
   }
 
+  /**
+   * Click ultra-robusto dentro de un FRAME usando DOM click (evita "not clickable").
+   * - Espera selector
+   * - Scroll into view
+   * - Intenta click() DOM
+   */
+  async safeDomClick(frame, selector, { timeout = 60000, label = "" } = {}) {
+    await frame.waitForSelector(selector, { timeout });
+
+    const ok = await frame.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return { ok: false, reason: "not_found" };
+
+      // Scroll
+      try {
+        el.scrollIntoView({ block: "center", inline: "center" });
+      } catch (_) {}
+
+      // Por si es <a> con target blank
+      try {
+        el.target = "_self";
+      } catch (_) {}
+
+      // Click DOM
+      try {
+        el.click();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, reason: String(e) };
+      }
+    }, selector);
+
+    if (!ok?.ok) {
+      throw new Error(
+        `${label ? label + ": " : ""}safeDomClick falló en selector "${selector}" (reason=${ok?.reason || "unknown"})`,
+      );
+    }
+  }
+
+  /**
+   * Para inputs: set value “a lo bruto” (evita teclas/overlay raros)
+   */
+  async safeSetInput(
+    frame,
+    selector,
+    value,
+    { timeout = 60000, label = "" } = {},
+  ) {
+    await frame.waitForSelector(selector, { timeout });
+
+    const ok = await frame.evaluate(
+      (sel, val) => {
+        const el = document.querySelector(sel);
+        if (!el) return { ok: false, reason: "not_found" };
+
+        try {
+          el.scrollIntoView({ block: "center", inline: "center" });
+        } catch (_) {}
+
+        // set value + events
+        el.focus();
+        el.value = String(val ?? "");
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        return { ok: true };
+      },
+      selector,
+      value,
+    );
+
+    if (!ok?.ok) {
+      throw new Error(
+        `${label ? label + ": " : ""}safeSetInput falló en selector "${selector}" (reason=${ok?.reason || "unknown"})`,
+      );
+    }
+  }
+
+  /**
+   * Click al primer recibo del listado (DOM click, sin ElementHandle)
+   */
+  async clickPrimerReciboEnListado(frListado) {
+    const ok = await frListado.evaluate(() => {
+      const pick =
+        document.querySelector("#enlace_0") ||
+        document.querySelector('a[href*="AC_VER_RECIBO"]') ||
+        document.querySelector("a.enlaceFuncDetalle") ||
+        document.querySelector("a.pr_enlaceLocal");
+
+      if (!pick) return false;
+
+      try {
+        pick.target = "_self";
+      } catch (_) {}
+      try {
+        pick.scrollIntoView({ block: "center", inline: "center" });
+      } catch (_) {}
+      pick.click();
+      return true;
+    });
+
+    if (!ok)
+      throw new Error(
+        "No se encontró enlace al detalle del recibo en el listado.",
+      );
+  }
+
   async waitForPopup(browser, openerPage, timeoutMs = 45000) {
     const target = await browser
       .waitForTarget(
@@ -359,9 +467,14 @@ class ProcesosBasesRecibosAutonomos {
 
   /**
    * Descarga un PDF real capturando la respuesta con CDP Fetch.
-   * Muy robusto en visores que devuelven HTML si no se captura el request.
+   * Útil cuando la web abre un popup/visor que descarga "de verdad" un PDF.
    */
-  async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
+  async descargarPdfRawViaFetchCDP(
+    popupPage,
+    outputPath,
+    timeoutMs = 90000,
+    { label = "PDF", triggerFn = null, doReload = false } = {},
+  ) {
     await popupPage.bringToFront().catch(() => {});
     const client = await popupPage.target().createCDPSession();
 
@@ -394,19 +507,21 @@ class ProcesosBasesRecibosAutonomos {
               await client
                 .send("Fetch.continueRequest", { requestId: ev.requestId })
                 .catch(() => {});
-            } catch (_) {}
+            } catch {}
             return;
           }
 
           try {
             const reqId = ev.requestId;
             const status = ev.responseStatusCode || 0;
+
             const headers = {};
             for (const h of ev.responseHeaders || []) {
               headers[String(h.name || "").toLowerCase()] = String(
                 h.value || "",
               );
             }
+
             const ctype = (headers["content-type"] || "").toLowerCase();
 
             const maybePdf =
@@ -414,8 +529,7 @@ class ProcesosBasesRecibosAutonomos {
               status < 300 &&
               (ctype.includes("application/pdf") ||
                 ctype.includes("octet-stream") ||
-                ctype.includes("binary") ||
-                true);
+                ctype.includes("binary"));
 
             if (!maybePdf) {
               await client
@@ -436,7 +550,7 @@ class ProcesosBasesRecibosAutonomos {
               .catch(() => {});
 
             if (!this._isPdfBuffer(buf)) {
-              // No era un PDF real -> seguir escuchando
+              // No era PDF real
               return;
             }
 
@@ -451,32 +565,45 @@ class ProcesosBasesRecibosAutonomos {
         client.on("Fetch.requestPaused", onPaused);
       });
 
-      // Forzar reload para disparar el request del PDF
-      await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-      await popupPage
-        .waitForSelector("body", { timeout: 20000 })
-        .catch(() => {});
-      await this.esperar(800);
+      // 1) disparador opcional
+      if (typeof triggerFn === "function") {
+        await triggerFn().catch((e) => {
+          throw new Error(`triggerFn fallo: ${e?.message || e}`);
+        });
+      }
+
+      // 2) reload opcional (normalmente NO hace falta)
+      if (doReload) {
+        await popupPage
+          .reload({ waitUntil: "domcontentloaded" })
+          .catch(() => {});
+        await popupPage
+          .waitForSelector("body", { timeout: 20000 })
+          .catch(() => {});
+        await this.esperar(800);
+      }
 
       await Promise.race([pdfPromise, timer]);
       return true;
     } finally {
       try {
         if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
-      } catch (_) {}
+      } catch {}
       try {
         await client.send("Fetch.disable").catch(() => {});
-      } catch (_) {}
+      } catch {}
       try {
         await client.detach();
-      } catch (_) {}
+      } catch {}
     }
   }
 
-  /**
-   * Descarga PDF con 1 reintento.
-   */
-  async descargarPdfConReintento({ openPopupFn, outputPath, label }) {
+  async descargarPdfConReintento({
+    openPopupFn,
+    outputPath,
+    label,
+    triggerFn,
+  }) {
     let lastErr = null;
 
     for (let intento = 1; intento <= 2; intento++) {
@@ -485,7 +612,11 @@ class ProcesosBasesRecibosAutonomos {
         popup = await openPopupFn();
         if (!popup) throw new Error("No se abrió el popup/pestaña del PDF.");
 
-        await this.descargarPdfRawViaFetchCDP(popup, outputPath, 90000);
+        await this.descargarPdfRawViaFetchCDP(popup, outputPath, 90000, {
+          label,
+          triggerFn: triggerFn ? () => triggerFn(popup) : null,
+          doReload: false,
+        });
 
         try {
           await popup.close();
@@ -493,7 +624,6 @@ class ProcesosBasesRecibosAutonomos {
         return true;
       } catch (e) {
         lastErr = e;
-
         try {
           if (popup) await popup.close();
         } catch (_) {}
@@ -511,48 +641,81 @@ class ProcesosBasesRecibosAutonomos {
     throw lastErr;
   }
 
-  // -------------------------
-  // Selección “recibo más reciente”
-  // -------------------------
-  async seleccionarLinkReciboMasRecienteEnContexto(ctx /* Page o Frame */) {
-    // ctx puede ser: pageB (Page) o frListado (Frame)
-    const $all = (sel) => (ctx.$$ ? ctx.$$(sel) : []);
-    const $ = (sel) => (ctx.$ ? ctx.$(sel) : null);
+  /**
+   * ✅ Genera PDF de la página actual SIN abrir chrome://print
+   * (DevTools Protocol -> Page.printToPDF)
+   */
+  async guardarPdfConPrintToPDF(page, outputPath, { timeoutMs = 60000 } = {}) {
+    await page.bringToFront().catch(() => {});
+    await page.waitForSelector("body", { timeout: 20000 }).catch(() => {});
+    await this.esperar(250);
 
-    // ✅ Tu HTML real usa paramRecibo=0 y SPM.ACC.AC_VER_RECIBO
-    const selectorFuerte =
-      'a[href*="SPM.ACC.AC_VER_RECIBO=AC_VER_RECIBO"], a.enlaceFuncDetalle[href*="AC_VER_RECIBO"], a.pr_enlaceLocal[href*="AC_VER_RECIBO"]';
+    const client = await page.target().createCDPSession();
+    try {
+      await client.send("Page.enable").catch(() => {});
+      // Para que respete estilos de pantalla (el HTML tiene estilos de impresión en media="print")
+      await client
+        .send("Emulation.setEmulatedMedia", { media: "screen" })
+        .catch(() => {});
 
-    let links = await $all(selectorFuerte);
+      const timer = new Promise((_, rej) =>
+        setTimeout(
+          () => rej(new Error("Timeout en Page.printToPDF")),
+          timeoutMs,
+        ),
+      );
 
-    // Fallback más laxo
-    if (!links || links.length === 0) {
-      links = await $all('a[href*="AC_VER_RECIBO"], a[href*="paramRecibo="]');
+      const pdfPromise = client.send("Page.printToPDF", {
+        printBackground: true,
+        preferCSSPageSize: true,
+        marginTop: 0.4,
+        marginBottom: 0.4,
+        marginLeft: 0.4,
+        marginRight: 0.4,
+      });
+
+      const pdf = await Promise.race([pdfPromise, timer]);
+      const buf = Buffer.from(pdf.data, "base64");
+      fs.writeFileSync(outputPath, buf);
+      return true;
+    } finally {
+      try {
+        await client.detach();
+      } catch (_) {}
     }
+  }
 
-    if (!links || links.length === 0) {
+  // -------------------------
+  // Selección “primer recibo que salga” (SIN ElementHandle)
+  // -------------------------
+  async clickPrimerReciboEnListado(frListado) {
+    const ok = await frListado.evaluate(() => {
+      const pick =
+        document.querySelector("#enlace_0") ||
+        document.querySelector('a[href*="AC_VER_RECIBO"]') ||
+        document.querySelector("a.enlaceFuncDetalle") ||
+        document.querySelector("a.pr_enlaceLocal") ||
+        document.querySelector("a");
+
+      if (!pick) return false;
+
+      try {
+        pick.target = "_self";
+      } catch (_) {}
+      try {
+        pick.scrollIntoView({ block: "center", inline: "center" });
+      } catch (_) {}
+
+      // Click DOM (robusto aunque esté “no clickable” para puppeteer)
+      pick.click();
+      return true;
+    });
+
+    if (!ok) {
       throw new Error(
-        "No se encontró ningún enlace 'Ver detalle del recibo' (AC_VER_RECIBO).",
+        "No se encontró enlace clicable al detalle del recibo en el listado.",
       );
     }
-
-    // Si hay varios, podemos elegir el que tenga mayor paramRecibo (normalmente 0 es el último/primero según orden)
-    const scored = [];
-    for (const a of links) {
-      const href = await a.evaluate((el) => el.getAttribute("href") || "");
-      const m = href.match(/paramRecibo=(\d+)/);
-      const n = m ? Number(m[1]) : 0;
-
-      // score: cuanto más pequeño, más “reciente” en tu ejemplo (0)
-      scored.push({ a, score: n, href });
-    }
-
-    scored.sort((x, y) => x.score - y.score);
-
-    return {
-      handle: scored[0].a,
-      strategy: `paramRecibo_min(${scored[0].score})`,
-    };
   }
 
   async findAnyFrameWithAnySelector(
@@ -580,7 +743,7 @@ class ProcesosBasesRecibosAutonomos {
    * Tras clicar "Consulta de recibos emitidos", la UI puede:
    * - cargar dentro de un frame de FS, o
    * - abrir una nueva pestaña/ventana.
-   * Esta función devuelve { pageB, frameB } donde están los selectores PROSA.
+   * Esta función devuelve { pageB, frameB } donde está PROSA.
    */
   async getProsaContext(browser, seedPage, timeoutMs = 60000) {
     const start = Date.now();
@@ -588,7 +751,6 @@ class ProcesosBasesRecibosAutonomos {
     const looksLikeProsaFrame = async (fr) => {
       try {
         return await fr.evaluate(() => {
-          // Huellas PROSA / Seguridad Social (según tus HTML)
           const hasTicket =
             !!document.querySelector('input[name="ARQ.SPM.TICKET"]') ||
             !!document.querySelector("#ARQ_SPM_TICKET");
@@ -603,7 +765,7 @@ class ProcesosBasesRecibosAutonomos {
               .includes("consulta de recibos") ||
             (document.body?.innerText || "")
               .toLowerCase()
-              .includes("oficina virtual");
+              .includes("detalle adeudo");
 
           return (
             (hasProsaJs && (hasProsaInput || hasHeader)) ||
@@ -619,29 +781,17 @@ class ProcesosBasesRecibosAutonomos {
       for (const fr of pg.frames()) {
         if (await looksLikeProsaFrame(fr)) return { pageB: pg, frameB: fr };
       }
-      // A veces PROSA es el main frame
       if (await looksLikeProsaFrame(pg.mainFrame()))
         return { pageB: pg, frameB: pg.mainFrame() };
       return null;
     };
 
     while (Date.now() - start < timeoutMs) {
-      // 1) Intentar en la seedPage (frames)
       const inSeed = await findInPageFrames(seedPage);
       if (inSeed) return inSeed;
 
-      // 2) Intentar en todas las pestañas
       const pages = await browser.pages();
       for (const pg of pages) {
-        const url = (pg.url() || "").toLowerCase();
-        const urlHint =
-          url.includes("prosainternet") ||
-          url.includes("gestiondomiciliacioncuenta") ||
-          url.includes("xv24e003");
-        if (!urlHint && pg !== seedPage) {
-          // aunque no haya hint, puede ser que el url sea "about:blank" pero el frame tenga el contenido
-        }
-
         const found = await findInPageFrames(pg);
         if (found) return found;
       }
@@ -650,8 +800,68 @@ class ProcesosBasesRecibosAutonomos {
     }
 
     throw new Error(
-      "No se pudo localizar el contexto PROSA (ni en frames ni en pestaña nueva).",
+      "No se pudo localizar el contexto PROSA (frames o pestaña nueva).",
     );
+  }
+
+  async findFirstInFrames(page, selectors, timeoutMs = 30000, pollMs = 300) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      for (const fr of page.frames()) {
+        for (const sel of selectors) {
+          try {
+            const el = await fr.$(sel);
+            if (el) return { frame: fr, selector: sel, el };
+          } catch (_) {}
+        }
+      }
+      await this.esperar(pollMs);
+    }
+    return null;
+  }
+
+  /**
+   * Guarda el PDF de lo que se ve en la pestaña actual (incluye frames).
+   * Mucho más estable que clicar imprimir/popup.
+   */
+  async guardarPdfPantallaActual(page, outputPath) {
+    await page.bringToFront().catch(() => {});
+    await page.emulateMediaType("print").catch(() => {});
+    await this.esperar(400);
+
+    await page.pdf({
+      path: outputPath,
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+      margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
+    });
+  }
+
+  /**
+   * Espera a que la pantalla de resultados de Bases/Cuotas esté "cargada".
+   * (Pon varios selectores para aguantar cambios del portal)
+   */
+  async waitResultadosBasesCuotas(page) {
+    const hit = await this.findFirstInFrames(
+      page,
+      [
+        // tablas/listados típicos
+        "table",
+        ".pr_tablaResponsive",
+        "[id^='TABLA_']",
+        // a veces aparece el botón imprimir pero no lo necesitamos
+        "#Sub2204801005_67",
+        "button[aria-label*='Imprimir']",
+        "#botonImprimir",
+      ],
+      40000,
+    );
+
+    if (!hit)
+      throw new Error(
+        "No se detectó la pantalla de resultados (no hay tabla/listado).",
+      );
   }
 
   // -------------------------
@@ -660,7 +870,6 @@ class ProcesosBasesRecibosAutonomos {
   async basesYRecibosAutonomos(argumentos) {
     console.log("[BASES/RECIBOS] Iniciando proceso Bases y Recibos Autónomos");
 
-    const nombreProceso = "Bases y recibos al cobro autónomos";
     let registrosProcesados = 0;
 
     return new Promise(async (resolve) => {
@@ -880,7 +1089,7 @@ class ProcesosBasesRecibosAutonomos {
           );
 
           // ==========
-          // PARTE A
+          // PARTE A (CORREGIDA - sin popup, sin Fetch)
           // ==========
           try {
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
@@ -896,19 +1105,20 @@ class ProcesosBasesRecibosAutonomos {
               "#SDFWPROVNAF",
               30000,
             );
-            if (!frameForm)
+            if (!frameForm) {
               throw new Error(
                 "No se encontró el formulario de bases/cuotas (#SDFWPROVNAF).",
               );
+            }
 
             await fillInFrame(frameForm, "#SDFWPROVNAF", r.naf1);
             await fillInFrame(frameForm, "#SDFWRESTONAF", r.naf2);
             await fillInFrame(frameForm, "#SDFWAOMAPA", "2025");
 
             // Continuar
-            await frameForm
-              .waitForSelector("#Sub2207101004_35", { timeout: 25000 })
-              .catch(() => {});
+            await frameForm.waitForSelector("#Sub2207101004_35", {
+              timeout: 25000,
+            });
             const btnCont = await frameForm.$("#Sub2207101004_35");
             if (!btnCont)
               throw new Error(
@@ -916,7 +1126,7 @@ class ProcesosBasesRecibosAutonomos {
               );
 
             await btnCont.click({ delay: 40 });
-            await this.esperar(900);
+            await this.esperar(1200);
 
             // DIL de error
             const dil = await readDIL();
@@ -925,36 +1135,11 @@ class ProcesosBasesRecibosAutonomos {
               logMap.set(dniKey, `PARTE_A_ERROR_DIL: ${dil}`);
               console.warn("[BASES/RECIBOS][A] DIL:", dil);
             } else {
-              // Imprimir -> nueva pestaña
-              const openPopupFn = async () => {
-                let frBtn = null;
-                for (const fr of page.frames()) {
-                  try {
-                    const b = await fr.$("#Sub2204801005_67");
-                    if (b) {
-                      frBtn = fr;
-                      break;
-                    }
-                  } catch (_) {}
-                }
-                if (!frBtn)
-                  throw new Error(
-                    "No se encontró el botón Imprimir (parte A).",
-                  );
+              // ✅ Esperar a pantalla de resultados y guardar PDF directo
+              await this.waitResultadosBasesCuotas(page);
 
-                const popupPromise = this.waitForPopup(browser, page, 30000);
-                const b = await frBtn.$("#Sub2204801005_67");
-                await b.click({ delay: 40 });
-
-                const popup = await popupPromise;
-                return popup;
-              };
-
-              await this.descargarPdfConReintento({
-                openPopupFn,
-                outputPath: pdfA,
-                label: "PARTE_A_PDF",
-              });
+              // ✅ PDF directo (incluye frames)
+              await this.guardarPdfPantallaActual(page, pdfA);
 
               okA++;
               logMap.set(
@@ -969,39 +1154,36 @@ class ProcesosBasesRecibosAutonomos {
             console.warn("[BASES/RECIBOS][A]", msg);
           }
 
-          // ==========
-          // PARTE B
-          // ==========
+          // ========== PARTE B ==========
           try {
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+
             await openCotizacionRETA();
             await openConsultaRecibosEmitidos();
 
-            // Clave: localizar dónde está PROSA (frame o pestaña)
-            const { pageB, frameB } = await this.getProsaContext(
-              browser,
-              page,
-              60000,
-            );
+            // localizar PROSA
+            const ctx1 = await this.getProsaContext(browser, page, 60000);
+            const { pageB } = ctx1;
 
-            // Si Prosa está en otra pestaña, trabajamos ahí
             if (pageB !== page) {
               try {
                 await pageB.bringToFront();
               } catch (_) {}
             }
 
-            // 1) Si estamos en pantalla de autorizados -> clicar 316077
-            const enlace316 = await frameB
-              .$("#enlace_316077")
-              .catch(() => null);
-            if (enlace316) {
-              console.log(
-                "[BASES/RECIBOS][B] Seleccionando autorizado 316077...",
-              );
-              await enlace316.click({ delay: 40 });
+            // 1) Pantalla autorizados -> clicar 316077 si aparece
+            const ctxAuth = await this.getProsaContext(browser, pageB, 60000);
+            const frameMaybeAuth = ctxAuth.frameB;
 
-              // Esperar a que aparezca el formulario de régimen en algún frame del pageB
+            const existe316 = await frameMaybeAuth
+              .$("#enlace_316077")
+              .then(Boolean)
+              .catch(() => false);
+            if (existe316) {
+              await this.safeDomClick(frameMaybeAuth, "#enlace_316077", {
+                label: "AUTH 316077",
+              });
+
               const next = await this.findAnyFrameWithAnySelector(
                 pageB,
                 ["#seleccion_1"],
@@ -1011,7 +1193,7 @@ class ProcesosBasesRecibosAutonomos {
                 throw new Error("Tras clicar 316077 no aparece #seleccion_1.");
             }
 
-            // 2) Ya en formulario: obtener el frame que contiene #seleccion_1 (puede haber cambiado)
+            // 2) formulario con #seleccion_1
             const frm = await this.findAnyFrameWithAnySelector(
               pageB,
               ["#seleccion_1"],
@@ -1037,65 +1219,39 @@ class ProcesosBasesRecibosAutonomos {
 
             await frForm.waitForSelector("#botConRegIde", { timeout: 60000 });
             await frForm.click("#botConRegIde", { delay: 40 });
+
             await this.esperar(900);
 
-            // 🔁 Tras continuar, PROSA navega (a veces) a "Aviso importante" o directamente a la lista.
-            // Re-localizamos el contexto PROSA.
-            const { pageB: pageAviso } = await this.getProsaContext(
-              browser,
-              pageB,
-              60000,
-            );
-
-            // Bring to front la pestaña PROSA real
-            try {
-              await pageAviso.bringToFront();
-            } catch (_) {}
-
-            // ✅ Asegurar DOM antes de buscar nada (evita falsos negativos)
-            await pageAviso
-              .waitForSelector("body", { timeout: 20000 })
-              .catch(() => {});
-            await this.esperar(400);
-
-            // -------------
-            // 1) AVISO IMPORTANTE (OPCIONAL)
-            // -------------
+            // 3) AVISO IMPORTANTE (si aparece)
             const foundAviso = await this.findAnyFrameWithAnySelector(
-              pageAviso,
+              pageB,
               ["#cheAviImport", "#botContAviso"],
-              8000, // 👈 corto: si no está, seguimos
+              8000,
             );
 
-            const frAviso = foundAviso.frame;
+            if (foundAviso) {
+              const frAviso = foundAviso.frame;
+              await frAviso.waitForSelector("#cheAviImport", {
+                timeout: 20000,
+              });
+              const isChecked = await frAviso
+                .$eval("#cheAviImport", (el) => el.checked)
+                .catch(() => false);
 
-            // ✅ Tick
-            await frAviso.waitForSelector("#cheAviImport", {
-              timeout: 20000,
-            });
-            const isChecked = await frAviso
-              .$eval("#cheAviImport", (el) => el.checked)
-              .catch(() => false);
-            if (!isChecked) await frAviso.click("#cheAviImport", { delay: 30 });
+              if (!isChecked)
+                await frAviso.click("#cheAviImport", { delay: 30 });
 
-            // ✅ Continuar
-            await frAviso.waitForSelector("#botContAviso", {
-              timeout: 20000,
-            });
-            await frAviso.click("#botContAviso", { delay: 40 });
-            await this.esperar(900);
+              await frAviso.waitForSelector("#botContAviso", {
+                timeout: 20000,
+              });
+              await frAviso.click("#botContAviso", { delay: 40 });
 
-            // ✅ Tras continuar, esperar “asentado” (a veces actualiza por JS)
-            await pageAviso
-              .waitForSelector("body", { timeout: 20000 })
-              .catch(() => {});
-            await this.esperar(400);
+              await this.esperar(900);
+            }
 
-            // -------------
-            // 2) LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
-            // -------------
+            // 4) LISTADO recibos (frame donde esté el enlace)
             const listado = await this.findAnyFrameWithAnySelector(
-              pageProsa,
+              pageB,
               [
                 "#TABLA_2",
                 'a[href*="AC_VER_RECIBO"]',
@@ -1105,6 +1261,7 @@ class ProcesosBasesRecibosAutonomos {
               ],
               60000,
             );
+
             if (!listado)
               throw new Error(
                 "No se encontró la lista de recibos (TABLA_2 / AC_VER_RECIBO).",
@@ -1112,88 +1269,50 @@ class ProcesosBasesRecibosAutonomos {
 
             const frListado = listado.frame;
 
-            // 🔥 TU CASO: con esto basta. Coge enlace_0 si existe, si no el primero que matchee AC_VER_RECIBO.
-            let verDetalle = await frListado.$("#enlace_0").catch(() => null);
-            if (!verDetalle)
-              verDetalle = await frListado
-                .$('a[href*="AC_VER_RECIBO"]')
-                .catch(() => null);
-            if (!verDetalle)
-              verDetalle = await frListado
-                .$("a.enlaceFuncDetalle.pr_enlaceLocal")
-                .catch(() => null);
+            // 5) Click al primer recibo (DENTRO del frame) + esperar a que aparezca el detalle
+            // OJO: muchas veces NO hay navegación “real”, solo cambia el contenido.
+            const waitDetalle = pageB
+              .waitForSelector("#TABLA_3", { timeout: 45000 })
+              .catch(() => null);
 
-            if (!verDetalle) {
-              throw new Error(
-                "No se encontró el enlace 'Ver detalle del recibo' dentro del frame listado.",
-              );
-            }
+            const waitNav = pageB
+              .waitForNavigation({
+                waitUntil: "domcontentloaded",
+                timeout: 15000,
+              })
+              .catch(() => null);
 
-            console.log(
-              "[BASES/RECIBOS][B] Click en 'Ver detalle del recibo'...",
-            );
+            // ✅ Click robusto (DOM click) en el frame del listado
+            await this.clickPrimerReciboEnListado(frListado);
 
-            // -------------
-            // 3) Abrir detalle: POPUP o SAME TAB (fallback mejorado con race)
-            // -------------
-            const openPopupFnB = async () => {
-              const popupPromise = this.waitForPopup(
-                browser,
-                pageAviso,
-                8000,
-              ).catch(() => null);
-              const navPromise = pageAviso
-                .waitForNavigation({
-                  waitUntil: "domcontentloaded",
-                  timeout: 8000,
-                })
-                .then(() => pageAviso)
-                .catch(() => null);
+            // Espera a que pase “algo”: navegación o que aparezca la tabla del detalle
+            await Promise.race([waitDetalle, waitNav]);
 
-              // Forzar _blank (si lo respeta)
-              try {
-                await verDetalle.evaluate((el) => (el.target = "_blank"));
-              } catch (_) {}
+            // Asegura que estamos en detalle (tu HTML real tiene #TABLA_3)
+            await pageB.waitForSelector("#TABLA_3", { timeout: 45000 });
+            await this.esperar(400);
 
-              // Click robusto
-              await verDetalle
-                .click({ delay: 40 })
-                .catch(() => verDetalle.evaluate((el) => el.click()));
+            // 6) Ya estamos en DETALLE ADEUDO (HTML normal). Esperar algo propio del detalle
+            // (con tu HTML: id="TABLA_3" existe en el detalle)
+            await pageB
+              .waitForSelector("#TABLA_3", { timeout: 45000 })
+              .catch(async () => {
+                // fallback: si por lo que sea no aparece TABLA_3, al menos espera body
+                await pageB
+                  .waitForSelector("body", { timeout: 20000 })
+                  .catch(() => {});
+              });
 
-              // Gana el primero: popup o navegación
-              const winner = await Promise.race([popupPromise, navPromise]);
-              if (winner) return winner;
-
-              // Fallback: cambio de DOM por JS (sin navigation)
-              const changed = await this.findAnyFrameWithAnySelector(
-                pageAviso,
-                [
-                  'a[href*="AC_IMPRIMIR"]',
-                  "#botonImprimir",
-                  "#botonImprimirMovil",
-                  'embed[type="application/pdf"]',
-                  'iframe[src*=".pdf"]',
-                ],
-                8000,
-              );
-              if (changed) return pageAviso;
-
-              throw new Error(
-                "No se abrió popup ni se detectó navegación al detalle del recibo.",
-              );
-            };
-
-            await this.descargarPdfConReintento({
-              openPopupFn: openPopupFnB,
-              outputPath: pdfB,
-              label: "PARTE_B_PDF",
+            // ✅ 7) Generar PDF sin imprimir (sin chrome://print)
+            await this.guardarPdfConPrintToPDF(pageB, pdfB, {
+              timeoutMs: 60000,
             });
 
             okB++;
             const prev = logMap.get(dniKey) || "";
             logMap.set(
               dniKey,
-              `${prev}${prev ? " | " : ""}OK_B(${strategy}): PDF B guardado -> ${path.basename(pdfB)}`,
+              `${prev}${prev ? " | " : ""}OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
             );
           } catch (e) {
             errB++;
@@ -1213,9 +1332,6 @@ class ProcesosBasesRecibosAutonomos {
           `[BASES/RECIBOS] OK_A=${okA} ERR_A=${errA} | OK_B=${okB} ERR_B=${errB}`,
         );
         console.log(`[BASES/RECIBOS] Procesados: ${registrosProcesados}`);
-
-        // Si tu repo lo tiene:
-        // registrarEjecucion({ nombreProceso, registrosProcesados });
 
         try {
           if (browser) await browser.close();
