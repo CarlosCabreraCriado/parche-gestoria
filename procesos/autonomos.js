@@ -1,34 +1,35 @@
-/**
- * Proceso: Bases y recibos al cobro autónomos
- *
- * Flujo basado en:
- * - Consulta de bases y cuotas ingresadas (año actual) + Imprimir (nueva pestaña)
- * - Consulta de recibos emitidos régimen de autónomos + primer recibo + imprimir/guardar
- */
-
 const path = require("path");
 const fs = require("fs");
 const XlsxPopulate = require("xlsx-populate");
 const puppeteer = require("puppeteer");
 
-// Si quieres métricas como el resto de procesos, descomenta:
-// const { registrarEjecucion } = require("../metricas");
-
-const {
-  waitForPopup,
-  descargarPdfRawViaFetchCDP,
-  descargarPdfConReintento,
-} = require("./utils/pdfNuevaPestanaCdp");
-
-class BasesYRecibosAutonomos {
-  constructor() {
-    this.DEFAULT_ANIO_ECONOMICO = "2025";
-    this.MAX_REINTENTOS_POR_REGISTRO = 2;
+/**
+ * Procesos Bases y Recibos Autónomos
+ *
+ * Inputs (argumentos.formularioControl):
+ *  [0] chromeExePath  (ruta chrome.exe)
+ *  [1] pathExcelInput (fichero input)
+ *  [2] pathSalidaBase (carpeta destino)
+ *
+ * Notas:
+ * - Mes y año del nombre: MES y AÑO actual (sistema).
+ * - Recibos emitidos: descargar el más reciente.
+ * - Robusto: timeouts razonables, 1 reintento en descarga PDF, si falla un registro se loggea y se continúa.
+ */
+class ProcesosBasesRecibosAutonomos {
+  constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
+    this.pathToDbFolder = pathToDbFolder;
+    this.nombreProyecto = nombreProyecto;
+    this.proyectoDB = proyectoDB;
   }
 
-  // =========================
-  // Helpers generales (estilo repo)
-  // =========================
+  // -------------------------
+  // Utilidades
+  // -------------------------
+  async esperar(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   getCurrentDateString() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -37,688 +38,1204 @@ class BasesYRecibosAutonomos {
     return `${yyyy}-${mm}-${dd}`;
   }
 
-  async esperar(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  ensureDir(dir) {
-    if (!dir || typeof dir !== "string") {
-      throw new Error(
-        `[AUTONOMOS] ensureDir recibió una ruta inválida: ${String(dir)}`,
-      );
-    }
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  }
-
-  safeFileName(name) {
-    return String(name || "")
+  _safeFileName(str) {
+    return String(str ?? "")
       .trim()
-      .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+      .replace(/[\\\/\:*?"<>|]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
 
-  dniToFolder(dni) {
-    const digits = String(dni || "").replace(/\D/g, "");
-    return digits || "DNI_DESCONOCIDO";
+  _stripDiacritics(str) {
+    return String(str ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
   }
 
-  getMesAnioString(fecha = new Date()) {
-    const mm = String(fecha.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(fecha.getFullYear());
-    return `${mm}-${yyyy}`; // ✅ mes actual
+  _normHeader(str) {
+    return this._stripDiacritics(str)
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/[^\w\s]/g, "");
   }
 
-  nowStamp() {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+  _digitsOnly(val) {
+    return String(val ?? "").replace(/\D/g, "");
   }
 
-  async withTimeout(promise, ms, errorMsg) {
-    let t;
-    const timeout = new Promise((_, reject) => {
-      t = setTimeout(
-        () => reject(new Error(errorMsg || `Timeout ${ms}ms`)),
-        ms,
-      );
-    });
-    try {
-      return await Promise.race([promise, timeout]);
-    } finally {
-      clearTimeout(t);
+  _padLeftDigitsOrEmpty(val, len) {
+    const s = this._digitsOnly(val);
+    if (!s) return "";
+    return s.padStart(len, "0");
+  }
+
+  _dniNorm(dni) {
+    return String(dni ?? "")
+      .toUpperCase()
+      .replace(/\s+/g, "")
+      .trim();
+  }
+
+  _dniFolderKey(dni) {
+    const s = this._dniNorm(dni);
+    if (!s) return "SIN_DNI";
+    // Quitar última letra si existe (DNI/NIE)
+    if (/[A-Z]$/.test(s)) return s.slice(0, -1);
+    return s;
+  }
+
+  async ensureDir(dir) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
+
+  _excelColName(n) {
+    // 1 -> A, 2 -> B ...
+    let s = "";
+    while (n > 0) {
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
     }
+    return s;
   }
 
-  // =========================
-  // 1) Lectura Excel (incluye columnas ocultas)
-  // =========================
-  async leerExcel(pathExcel) {
-    const workbook = await XlsxPopulate.fromFileAsync(pathExcel);
-    const sheet = workbook.sheet(0);
+  // -------------------------
+  // Excel: lectura incluyendo columnas ocultas (XlsxPopulate las devuelve igual)
+  // -------------------------
+  async leerExcelInput(pathExcel) {
+    const wb = await XlsxPopulate.fromFileAsync(path.normalize(pathExcel));
+    const sh = wb.sheet(0);
+    const used = sh.usedRange();
 
-    const usedRange = sheet.usedRange();
-    if (!usedRange) {
-      throw new Error(
-        "El Excel parece vacío o sin rango usado (usedRange es null).",
-      );
-    }
+    const numRows = used ? used._numRows : 0;
+    const numCols = used ? used._numColumns : 0;
 
-    const maxRow = usedRange.endCell().rowNumber();
-    const maxCol = usedRange.endCell().columnNumber();
+    const getCell = (r, c) => sh.cell(r, c).value();
 
-    // Buscar fila cabecera por "EXPTE." en columna A
+    // 1) Encontrar fila cabecera buscando “EXPTE.”, “DNI” y “ADMINISTRADOR”
+    const maxScan = Math.min(30, numRows);
     let headerRow = null;
-    for (let r = 1; r <= Math.min(maxRow, 50); r++) {
-      const val = sheet.cell(r, 1).value();
-      if (
-        String(val || "")
-          .trim()
-          .toUpperCase() === "EXPTE."
-      ) {
+    let headerMap = null;
+
+    const findInRow = (rowHeaders, name) => {
+      const target = this._normHeader(name);
+      const found = rowHeaders.find((h) => h.norm === target);
+      return found ? found.c : null;
+    };
+
+    for (let r = 1; r <= maxScan; r++) {
+      const rowHeaders = [];
+      for (let c = 1; c <= numCols; c++) {
+        const v = getCell(r, c);
+        if (v === null || v === undefined || v === "") continue;
+        rowHeaders.push({ c, raw: v, norm: this._normHeader(v) });
+      }
+      if (!rowHeaders.length) continue;
+
+      const colExpte = findInRow(rowHeaders, "EXPTE.");
+      const colDni = findInRow(rowHeaders, "DNI");
+      const colAdmin = findInRow(rowHeaders, "ADMINISTRADOR");
+
+      if (colExpte && colDni && colAdmin) {
         headerRow = r;
+        headerMap = {
+          EXPTE: colExpte,
+          EMPRESA: findInRow(rowHeaders, "EMPRESA"),
+          NAF: findInRow(rowHeaders, "NAF"),
+          DNI: colDni,
+          CLAVE: findInRow(rowHeaders, "CLAVE"),
+          FALTA_BAJA: findInRow(rowHeaders, "F.ALTA/BAJA"),
+          ADMIN: colAdmin,
+          BASE: findInRow(rowHeaders, "BASE"),
+          TOTAL: findInRow(rowHeaders, "TOTAL"),
+          PREV_ANO: findInRow(rowHeaders, "PREV AÑO"),
+        };
         break;
       }
     }
-    if (!headerRow) {
+
+    if (!headerRow || !headerMap?.DNI) {
       throw new Error(
-        "No se encontró la fila de cabeceras (buscando 'EXPTE.' en columna A).",
+        "No se encontró la fila de cabecera. Necesito al menos 'EXPTE.', 'DNI' y 'ADMINISTRADOR'.",
       );
     }
 
-    // Map cabeceras por columna (ocultas incluidas)
-    const headersByCol = {};
-    for (let c = 1; c <= maxCol; c++) {
-      headersByCol[c] = sheet.cell(headerRow, c).value();
-    }
+    // 2) Forzar columnas G/H para NAF1/NAF2
+    // Excel: A=1, B=2 ... G=7, H=8
+    const colNAF1 = 7;
+    const colNAF2 = 8;
 
-    // Forzar nombres G/H -> NAF1/NAF2
-    headersByCol[7] = "NAF1";
-    headersByCol[8] = "NAF2";
-
-    // Leer registros
-    const registros = [];
-    let emptyAStreak = 0;
-
-    for (let r = headerRow + 1; r <= maxRow; r++) {
-      const expte = sheet.cell(r, 1).value();
-
-      if (
-        expte === null ||
-        expte === undefined ||
-        String(expte).trim() === ""
-      ) {
-        emptyAStreak++;
-        if (emptyAStreak >= 5) break;
-        continue;
-      }
-      emptyAStreak = 0;
-
-      const rowObj = {};
-      for (let c = 1; c <= maxCol; c++) {
-        const key = headersByCol[c] || `COL_${c}`;
-        rowObj[key] = sheet.cell(r, c).value();
-      }
-
-      // Normalización de claves más usadas
-      rowObj.DNI = rowObj["DNI"] ?? "";
-      rowObj.ADMINISTRADOR =
-        rowObj["ADMINISTRADOR "] ?? rowObj["ADMINISTRADOR"] ?? "";
-      rowObj.NAF1 = String(rowObj["NAF1"] ?? "").trim();
-      rowObj.NAF2 = String(rowObj["NAF2"] ?? "").trim();
-
-      registros.push({ row: r, data: rowObj });
-    }
-
-    return { headerRow, maxCol, headersByCol, registros };
-  }
-
-  validarRegistro(reg) {
-    const errores = [];
-    const dni = String(reg.DNI || "").trim();
-    const admin = String(reg.ADMINISTRADOR || "").trim();
-    const naf1 = String(reg.NAF1 || "").trim();
-    const naf2 = String(reg.NAF2 || "").trim();
-
-    if (!dni) errores.push("DNI vacío");
-    if (!admin) errores.push("ADMINISTRADOR vacío");
-    if (!/^\d{2}$/.test(naf1))
-      errores.push("NAF1 inválido (2 dígitos numéricos)");
-    if (!/^\d{10}$/.test(naf2))
-      errores.push("NAF2 inválido (10 dígitos numéricos)");
-
-    return errores;
-  }
-
-  // =========================
-  // Helpers Puppeteer (frames)
-  // =========================
-  // ---------------------------
-  // Helpers Puppeteer (frames) - FIXED
-  // ---------------------------
-
-  async clickLinkByTextInAnyFrame(page, text, timeoutMs = 20000) {
-    const end = Date.now() + timeoutMs;
-    const target = String(text || "").trim();
-
-    while (Date.now() < end) {
-      for (const frame of page.frames()) {
-        try {
-          // ⚠️ evitamos evaluate largo; localizamos handles y clicamos
-          const links = await frame.$$("a");
-          for (const a of links) {
-            try {
-              const txt = await a.evaluate((el) =>
-                (el.textContent || "").replace(/\s+/g, " ").trim(),
-              );
-              if (txt && txt.includes(target)) {
-                // click robusto
-                await a.evaluate((el) =>
-                  el.scrollIntoView({ block: "center", inline: "center" }),
-                );
-                await a.click({ delay: 30 });
-
-                // A veces navega; no siempre hay navigation event, pero esto reduce el "context destroyed"
-                await Promise.race([
-                  page
-                    .waitForNavigation({
-                      waitUntil: "domcontentloaded",
-                      timeout: 8000,
-                    })
-                    .catch(() => null),
-                  page.waitForTimeout(800),
-                ]);
-
-                return true;
-              }
-            } catch (_) {
-              // puede fallar si el frame se recarga mientras iteramos
-            }
-          }
-        } catch (_) {
-          // frame puede estar navegando
-        }
-      }
-
-      await this.esperar(250);
-    }
-
-    throw new Error(`No se encontró link con texto: "${text}"`);
-  }
-
-  async waitForSelectorInAnyFrame(page, selector, timeoutMs = 20000) {
-    const end = Date.now() + timeoutMs;
-
-    while (Date.now() < end) {
-      for (const frame of page.frames()) {
-        try {
-          const h = await frame.$(selector);
-          if (h) return { frame, handle: h };
-        } catch (_) {}
-      }
-      await this.esperar(250);
-    }
-
-    throw new Error(`No se encontró selector en ningún frame: ${selector}`);
-  }
-
-  async typeInAnyFrame(page, selector, value, timeoutMs = 20000) {
-    const { frame, handle } = await this.waitForSelectorInAnyFrame(
-      page,
-      selector,
-      timeoutMs,
-    );
-
-    // ✅ IMPORTANTE: el teclado es de page, no del frame
-    await handle.click({ clickCount: 3, delay: 20 }).catch(() => {});
-    await page.keyboard.press("Backspace").catch(() => {});
-    await handle.type(String(value ?? ""), { delay: 20 });
-  }
-
-  async clickInAnyFrame(page, selector, timeoutMs = 20000) {
-    const { handle } = await this.waitForSelectorInAnyFrame(
-      page,
-      selector,
-      timeoutMs,
-    );
-
-    await handle.click({ delay: 30 });
-
-    // si provoca navegación, evitamos "execution context destroyed" en el siguiente paso
-    await Promise.race([
-      page
-        .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8000 })
-        .catch(() => null),
-      page.waitForTimeout(600),
-    ]);
-  }
-
-  async readTextIfExistsInAnyFrame(page, selector) {
-    for (const frame of page.frames()) {
-      const txt = await frame
-        .$eval(selector, (el) => {
-          const style = window.getComputedStyle(el);
-          const visible =
-            style && style.display !== "none" && style.visibility !== "hidden";
-          return visible ? (el.textContent || "").trim() : "";
-        })
-        .catch(() => "");
-      if (txt) return txt;
-    }
-    return "";
-  }
-
-  async savePageAsPDF(page, filePath) {
-    await page.emulateMediaType("screen");
-    await page.pdf({
-      path: filePath,
-      format: "A4",
-      printBackground: true,
-      margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
-    });
-  }
-
-  // =========================
-  // Parte 1: Bases/cuotas + PDF en nueva pestaña (CDP/Fetch)
-  // =========================
-  async ejecutarParte1(
-    page,
-    browser,
-    { naf1, naf2, anioEconomico, outPdfPath },
-  ) {
-    await page.goto("https://w2.seg-social.es/fs/indexframes.html", {
-      waitUntil: "domcontentloaded",
-    });
-
-    // Certificado manual
-    await this.esperar(1500);
-
-    await this.clickLinkByTextInAnyFrame(page, "Cotización RETA");
-    await this.clickLinkByTextInAnyFrame(
-      page,
-      "Consulta de bases y cuotas ingresadas",
-    );
-
-    await this.typeInAnyFrame(page, "#SDFWPROVNAF", naf1);
-    await this.typeInAnyFrame(page, "#SDFWRESTONAF", naf2);
-    await this.typeInAnyFrame(page, "#SDFWAOMAPA", anioEconomico);
-
-    await this.clickInAnyFrame(page, "#Sub2207101004_35"); // Continuar
-
-    // Error DIL -> saltar registro (según tu criterio)
-    await this.esperar(900);
-    const dil = await this.readTextIfExistsInAnyFrame(page, "#DIL");
-    if (dil) throw new Error(`Error DIL en Parte 1: ${dil}`);
-
-    await descargarPdfConReintento({
-      label: "CUOTAS_Y_BASES",
-      reintentos: 2,
-      openPdfFn: async () => {
-        await this.clickInAnyFrame(page, "#Sub2204801005_67"); // Imprimir
-      },
-      getPopupFn: async () => {
-        return await waitForPopup(browser, page, 45000);
-      },
-      downloadFn: async (popup) => {
-        await descargarPdfRawViaFetchCDP(popup, outPdfPath, 90000, {
-          fetchPatterns: [{ urlPattern: "*", requestStage: "Response" }],
-          forceReload: true,
-        });
-      },
-      closePopupFn: async (popup) => {
-        try {
-          await popup.close();
-        } catch (_) {}
-      },
-    });
-  }
-
-  // =========================
-  // Parte 2: Recibos (autorizado fijo 316077 + primer recibo)
-  // =========================
-  async ejecutarParte2(page, browser, { naf1, naf2, outPdfPath }) {
-    await page.goto("https://w2.seg-social.es/fs/indexframes.html", {
-      waitUntil: "domcontentloaded",
-    });
-    await this.esperar(1200);
-
-    await this.clickLinkByTextInAnyFrame(page, "Cotización RETA");
-    await this.clickLinkByTextInAnyFrame(
-      page,
-      "Consulta de recibos emitidos régimen de autónomos",
-    );
-
-    await page.waitForTimeout(1500);
-
-    // Capturar dialogs (popups nativos)
-    let lastDialogMsg = "";
-    page.removeAllListeners("dialog");
-    page.on("dialog", async (dialog) => {
-      lastDialogMsg = dialog.message();
-      await dialog.dismiss().catch(() => {});
-    });
-
-    // ✅ Autorizado fijo 316077 (ROBUSTO: por texto en cualquier frame)
-    // Evita depender del DOM principal (#enlace_316077) si se renderiza dentro de frames.
-    await this.clickLinkByTextInAnyFrame(page, "316077", 20000).catch(() => {
-      throw new Error("No se encontró el enlace del autorizado 316077.");
-    });
-
-    await page.waitForSelector("#seleccion_1", { timeout: 20000 });
-    await page.select("#seleccion_1", "0521");
-    await page.select("#seleccion_3", "07");
-
-    // Inputs NAF
-    await page.focus("#idTexto1");
-    await page.click("#idTexto1", { clickCount: 3 });
-    await page.keyboard.press("Backspace");
-    await page.type("#idTexto1", naf1, { delay: 20 });
-
-    await page.focus("#idTexto2");
-    await page.click("#idTexto2", { clickCount: 3 });
-    await page.keyboard.press("Backspace");
-    await page.type("#idTexto2", naf2, { delay: 20 });
-
-    await page.click("#botConRegIde");
-
-    if (lastDialogMsg)
-      throw new Error(`Popup/diálogo en Parte 2: ${lastDialogMsg}`);
-
-    // Aviso importante
-    await page.waitForSelector("#cheAviImport", { timeout: 20000 });
-    await page.click("#cheAviImport").catch(() => {});
-    await page.click("#botContAviso");
-
-    // ✅ Primer recibo (primer enlace detalle)
-    await page.waitForSelector("a.enlaceFuncDetalle", { timeout: 20000 });
-    await page.click("a.enlaceFuncDetalle");
-
-    await page.waitForTimeout(1500);
-
-    // Guardar PDF: preferimos botón imprimir si abre pestaña, si no PDF del detalle
-    let printed = false;
-
-    const printSelectorCandidates = [
-      "button[title*='Imprimir']",
-      "a[title*='Imprimir']",
-      "a[href*='IMPRIMIR']",
-      "button[onclick*='print']",
-      "a[onclick*='print']",
-    ];
-
-    for (const sel of printSelectorCandidates) {
-      const exists = await page.$(sel);
-      if (!exists) continue;
-
-      try {
-        const printPage = await this.waitForNewPageFromAction(
-          browser,
-          async () => {
-            await page.click(sel);
-          },
-          8000,
-        );
-
-        await printPage.bringToFront();
-        await printPage.waitForTimeout(1200);
-        await this.savePageAsPDF(printPage, outPdfPath);
-        await printPage.close();
-        printed = true;
-      } catch (_) {
-        // No abrió pestaña: fallback PDF del detalle
-      }
-      break;
-    }
-
-    if (!printed) {
-      await this.savePageAsPDF(page, outPdfPath);
-    }
-  }
-
-  async waitForNewPageFromAction(browser, actionFn, timeoutMs = 15000) {
-    const p = new Promise((resolve, reject) => {
-      const t = setTimeout(
-        () => reject(new Error("No se abrió nueva pestaña a tiempo")),
-        timeoutMs,
-      );
-      browser.once("targetcreated", async (target) => {
-        clearTimeout(t);
-        try {
-          const newPage = await target.page();
-          resolve(newPage);
-        } catch (e) {
-          reject(e);
-        }
+    // 3) Lista de cabeceras completa (debug)
+    const headers = [];
+    for (let c = 1; c <= numCols; c++) {
+      const v = getCell(headerRow, c);
+      headers.push({
+        col: c,
+        excelCol: this._excelColName(c),
+        header: v ?? "",
+        norm: this._normHeader(v ?? ""),
       });
-    });
+    }
 
-    await actionFn();
-    return await p;
+    // 4) Parsear registros hasta primer DNI vacío
+    const rows = [];
+    for (let r = headerRow + 1; r <= numRows; r++) {
+      const dni = getCell(r, headerMap.DNI);
+      if (dni === null || dni === undefined || String(dni).trim() === "") break;
+
+      const rec = {
+        EXPTE: headerMap.EXPTE ? getCell(r, headerMap.EXPTE) : "",
+        EMPRESA: headerMap.EMPRESA ? getCell(r, headerMap.EMPRESA) : "",
+        NAF: headerMap.NAF ? getCell(r, headerMap.NAF) : "",
+        DNI: dni,
+        CLAVE: headerMap.CLAVE ? getCell(r, headerMap.CLAVE) : "",
+        FALTA_BAJA: headerMap.FALTA_BAJA
+          ? getCell(r, headerMap.FALTA_BAJA)
+          : "",
+        ADMIN: headerMap.ADMIN ? getCell(r, headerMap.ADMIN) : "",
+        BASE: headerMap.BASE ? getCell(r, headerMap.BASE) : "",
+        TOTAL: headerMap.TOTAL ? getCell(r, headerMap.TOTAL) : "",
+        PREV_ANO: headerMap.PREV_ANO ? getCell(r, headerMap.PREV_ANO) : "",
+
+        // NAF1/NAF2 “forzados” desde G/H
+        NAF1: getCell(r, colNAF1),
+        NAF2: getCell(r, colNAF2),
+
+        _row: r,
+      };
+
+      rows.push(this.normalizarRegistro(rec));
+    }
+
+    return { headers, headerRow, rows };
   }
 
-  // =========================
-  // MAIN
-  // =========================
-  async run(argumentos) {
-    const chromeExePath = argumentos?.formularioControl?.[0];
-    const excelPath = argumentos?.formularioControl?.[1];
-    const pathSalidaBase = argumentos?.formularioControl?.[2];
+  normalizarRegistro(r) {
+    const dni = this._dniNorm(r.DNI);
 
-    // Validaciones como en Duplicados
-    if (!chromeExePath || !fs.existsSync(chromeExePath)) {
-      console.error("[AUTONOMOS][INPUT] Ruta a chrome.exe no válida.");
-      return false;
-    }
-    if (
-      !excelPath ||
-      typeof excelPath !== "string" ||
-      !fs.existsSync(excelPath)
-    ) {
-      console.error("[AUTONOMOS][INPUT] Ruta a Excel no válida.");
-      return false;
-    }
-    if (
-      !pathSalidaBase ||
-      typeof pathSalidaBase !== "string" ||
-      !pathSalidaBase.trim()
-    ) {
-      console.error("[AUTONOMOS][INPUT] Ruta de salida no válida.");
-      return false;
-    }
+    const naf1 = this._padLeftDigitsOrEmpty(r.NAF1, 2);
+    const naf2 = this._padLeftDigitsOrEmpty(r.NAF2, 10);
 
-    // ✅ Carpeta raíz del proceso (estilo Duplicados)
-    const rootOut = path.join(
-      path.normalize(pathSalidaBase),
-      `Bases y recibos autónomos (${this.getCurrentDateString()})`,
-    );
+    return {
+      expte: String(r.EXPTE ?? "").trim(),
+      empresa: String(r.EMPRESA ?? "").trim(),
+      nafRaw: String(r.NAF ?? "").trim(),
+      dni,
+      clave: String(r.CLAVE ?? "").trim(),
+      fechaAltaBaja: String(r.FALTA_BAJA ?? "").trim(),
+      administrador: String(r.ADMIN ?? "").trim(),
+      base: String(r.BASE ?? "").trim(),
+      total: String(r.TOTAL ?? "").trim(),
+      prevAno: String(r.PREV_ANO ?? "").trim(),
+      naf1,
+      naf2,
+      _row: r._row,
+    };
+  }
 
-    this.ensureDir(rootOut);
+  validarRegistro(r) {
+    const missing = [];
+    const invalid = [];
 
-    const logPath = path.join(
-      rootOut,
-      `LOG_BASES_RECIBOS_${this.nowStamp()}.txt`,
-    );
-    const logLines = [];
-    const log = (msg) => {
-      const line = `[${new Date().toISOString()}] ${msg}`;
-      logLines.push(line);
-      console.log(line);
-      fs.writeFileSync(logPath, logLines.join("\n"), "utf-8");
+    const req = (val, msg) => {
+      if (val === null || val === undefined || String(val).trim() === "")
+        missing.push(msg);
     };
 
-    log("INICIO proceso: Bases y recibos al cobro autónomos");
+    req(r.dni, "DNI vacío");
+    req(r.administrador, "ADMINISTRADOR vacío");
+    req(r.naf1, "NAF1 vacío (columna G)");
+    req(r.naf2, "NAF2 vacío (columna H)");
 
-    // 1) Leer Excel
-    const excelInfo = await this.leerExcel(excelPath);
-    log(
-      `Excel leído. headerRow=${excelInfo.headerRow}. Registros detectados=${excelInfo.registros.length}`,
-    );
+    if (r.naf1 && !/^\d{2}$/.test(r.naf1)) invalid.push("NAF1 no es 2 dígitos");
+    if (r.naf2 && !/^\d{10}$/.test(r.naf2))
+      invalid.push("NAF2 no es 10 dígitos");
 
-    // 2) Validar
-    const validos = [];
-    const invalidos = [];
+    return { missing, invalid };
+  }
 
-    for (const r of excelInfo.registros) {
-      const errs = this.validarRegistro(r.data);
-      if (errs.length) invalidos.push({ ...r, errores: errs });
-      else validos.push(r);
+  // -------------------------
+  // Web helpers (frames + popups)
+  // -------------------------
+  async findFrameWithSelector(page, selector, timeoutMs = 25000, pollMs = 400) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      for (const fr of page.frames()) {
+        try {
+          const el = await fr.$(selector);
+          if (el) return fr;
+        } catch (_) {}
+      }
+      await this.esperar(pollMs);
     }
+    return null;
+  }
 
-    log(
-      `Validación: válidos=${validos.length} | inválidos=${invalidos.length}`,
-    );
-    for (const inv of invalidos) {
-      log(
-        `SKIP fila ${inv.row} DNI=${inv.data.DNI || ""} -> ${inv.errores.join(" | ")}`,
-      );
+  async clickLinkInFrames(
+    page,
+    { hrefIncludes, textIncludes },
+    timeoutMs = 25000,
+  ) {
+    const norm = (s) =>
+      String(s ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const targetText = textIncludes ? norm(textIncludes) : null;
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      for (const fr of page.frames()) {
+        try {
+          if (hrefIncludes) {
+            const a = await fr.$(`a[href*="${hrefIncludes}"]`);
+            if (a) {
+              await a.evaluate((el) => (el.target = "_self"));
+              await a.click({ delay: 40 });
+              return true;
+            }
+          }
+
+          if (targetText) {
+            const ok = await fr.evaluate((t) => {
+              const norm2 = (s) =>
+                (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+              const a = Array.from(document.querySelectorAll("a")).find((x) =>
+                norm2(x.textContent).includes(t),
+              );
+              if (a) {
+                a.target = "_self";
+                a.click();
+                return true;
+              }
+              return false;
+            }, targetText);
+            if (ok) return true;
+          }
+        } catch (_) {}
+      }
+      await this.esperar(400);
     }
+    return false;
+  }
 
-    // 3) Browser (con cleanup SIEMPRE)
-    let browser = null;
+  async waitForPopup(browser, openerPage, timeoutMs = 45000) {
+    const target = await browser
+      .waitForTarget(
+        (t) => {
+          try {
+            return (
+              t.type() === "page" &&
+              t.opener() &&
+              t.opener() === openerPage.target()
+            );
+          } catch (_) {
+            return false;
+          }
+        },
+        { timeout: timeoutMs },
+      )
+      .catch(() => null);
+
+    if (!target) return null;
+    return target.page();
+  }
+
+  _isPdfBuffer(buf) {
+    if (!buf || !Buffer.isBuffer(buf) || buf.length < 5) return false;
+    return buf.subarray(0, 5).toString("utf8") === "%PDF-";
+  }
+
+  _isPdfDownloadRetryableError(err) {
+    const msg = String(err?.message || err).toLowerCase();
+    return (
+      msg.includes("no es un pdf") ||
+      msg.includes("timeout") ||
+      msg.includes("pdf")
+    );
+  }
+
+  /**
+   * Descarga un PDF real capturando la respuesta con CDP Fetch.
+   * Muy robusto en visores que devuelven HTML si no se captura el request.
+   */
+  async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
+    await popupPage.bringToFront().catch(() => {});
+    const client = await popupPage.target().createCDPSession();
+
+    let done = false;
+    let onPaused = null;
+
     try {
-      browser = await puppeteer.launch({
-        headless: false,
-        executablePath: chromeExePath,
-        defaultViewport: null,
-        args: [
-          "--start-maximized",
-          "--disable-notifications",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-popup-blocking", // ✅ ayuda a impresión/nueva pestaña
-        ],
+      await client.send("Network.enable").catch(() => {});
+      await client
+        .send("Network.setCacheDisabled", { cacheDisabled: true })
+        .catch(() => {});
+
+      await client
+        .send("Fetch.enable", {
+          patterns: [{ urlPattern: "*", requestStage: "Response" }],
+        })
+        .catch(() => {});
+
+      const timer = new Promise((_, rej) =>
+        setTimeout(
+          () => rej(new Error("Timeout esperando el PDF (Fetch CDP).")),
+          timeoutMs,
+        ),
+      );
+
+      const pdfPromise = new Promise((resolve, reject) => {
+        onPaused = async (ev) => {
+          if (done) {
+            try {
+              await client
+                .send("Fetch.continueRequest", { requestId: ev.requestId })
+                .catch(() => {});
+            } catch (_) {}
+            return;
+          }
+
+          try {
+            const reqId = ev.requestId;
+            const status = ev.responseStatusCode || 0;
+            const headers = {};
+            for (const h of ev.responseHeaders || []) {
+              headers[String(h.name || "").toLowerCase()] = String(
+                h.value || "",
+              );
+            }
+            const ctype = (headers["content-type"] || "").toLowerCase();
+
+            const maybePdf =
+              status >= 200 &&
+              status < 300 &&
+              (ctype.includes("application/pdf") ||
+                ctype.includes("octet-stream") ||
+                ctype.includes("binary") ||
+                true);
+
+            if (!maybePdf) {
+              await client
+                .send("Fetch.continueRequest", { requestId: reqId })
+                .catch(() => {});
+              return;
+            }
+
+            const bodyResp = await client.send("Fetch.getResponseBody", {
+              requestId: reqId,
+            });
+            const buf = bodyResp?.base64Encoded
+              ? Buffer.from(bodyResp.body || "", "base64")
+              : Buffer.from(bodyResp.body || "", "utf8");
+
+            await client
+              .send("Fetch.continueRequest", { requestId: reqId })
+              .catch(() => {});
+
+            if (!this._isPdfBuffer(buf)) {
+              // No era un PDF real -> seguir escuchando
+              return;
+            }
+
+            done = true;
+            fs.writeFileSync(outputPath, buf);
+            resolve(true);
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        client.on("Fetch.requestPaused", onPaused);
       });
 
-      // ✅ usa la primera pestaña si ya existe (como en Duplicados)
-      const opened = await browser.pages();
-      const page = opened.length ? opened[0] : await browser.newPage();
-      page.setDefaultTimeout(25000);
+      // Forzar reload para disparar el request del PDF
+      await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      await popupPage
+        .waitForSelector("body", { timeout: 20000 })
+        .catch(() => {});
+      await this.esperar(800);
 
-      let ok = 0,
-        ko = 0;
-      const startAll = Date.now();
-
-      // 4) Procesar registros
-      for (let i = 0; i < validos.length; i++) {
-        const rec = validos[i].data;
-        const idx = `${i + 1}/${validos.length}`;
-
-        const dniFolder = this.dniToFolder(rec.DNI);
-        const carpetaRegistro = path.join(rootOut, dniFolder);
-        this.ensureDir(carpetaRegistro);
-
-        const mesAnio = this.getMesAnioString(new Date()); // ✅ mes actual
-        const adminSafe = this.safeFileName(rec.ADMINISTRADOR);
-
-        const pdf1 = path.join(
-          carpetaRegistro,
-          this.safeFileName(
-            `CUOTAS Y BASES INGRESADAS ${adminSafe} ${mesAnio}`,
-          ) + ".pdf",
-        );
-        const pdf2 = path.join(
-          carpetaRegistro,
-          this.safeFileName(`RECIBOS AL COBRO ${adminSafe} ${mesAnio}`) +
-            ".pdf",
-        );
-
-        log(
-          `Procesando ${idx} | fila=${validos[i].row} | DNI=${rec.DNI} | NAF=${rec.NAF1}-${rec.NAF2}`,
-        );
-
-        let success = false;
-        let lastErr = "";
-
-        for (
-          let intento = 1;
-          intento <= this.MAX_REINTENTOS_POR_REGISTRO;
-          intento++
-        ) {
-          try {
-            log(`  Intento ${intento}/${this.MAX_REINTENTOS_POR_REGISTRO}`);
-
-            await this.withTimeout(
-              this.ejecutarParte1(page, browser, {
-                naf1: rec.NAF1,
-                naf2: rec.NAF2,
-                anioEconomico: this.DEFAULT_ANIO_ECONOMICO,
-                outPdfPath: pdf1,
-              }),
-              100000,
-              "Timeout Parte 1 (bases/cuotas)",
-            );
-
-            await this.withTimeout(
-              this.ejecutarParte2(page, browser, {
-                naf1: rec.NAF1,
-                naf2: rec.NAF2,
-                outPdfPath: pdf2,
-              }),
-              110000,
-              "Timeout Parte 2 (recibos)",
-            );
-
-            log(`  OK -> PDFs guardados:\n    - ${pdf1}\n    - ${pdf2}`);
-            success = true;
-            break;
-          } catch (e) {
-            lastErr = e?.message || String(e);
-            log(`  ERROR intento ${intento}: ${lastErr}`);
-
-            // Limpieza para evitar estados raros
-            try {
-              await page.goto("about:blank", { waitUntil: "domcontentloaded" });
-            } catch (_) {}
-
-            // pequeño respiro
-            await this.esperar(800);
-          }
-        }
-
-        if (success) ok++;
-        else {
-          ko++;
-          log(`  FAIL definitivo | DNI=${rec.DNI} | Motivo: ${lastErr}`);
-        }
-      }
-
-      const totalMs = Date.now() - startAll;
-      log("FIN proceso");
-      log(
-        `RESUMEN -> OK=${ok} | KO=${ko} | Invalidos=${invalidos.length} | Tiempo=${Math.round(
-          totalMs / 1000,
-        )}s`,
-      );
-
-      // Si quieres métricas:
-      // registrarEjecucion({ nombreProceso: "Bases y recibos al cobro autónomos", registrosProcesados: validos.length });
-
+      await Promise.race([pdfPromise, timer]);
       return true;
     } finally {
       try {
-        if (browser) await browser.close();
+        if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
+      } catch (_) {}
+      try {
+        await client.send("Fetch.disable").catch(() => {});
+      } catch (_) {}
+      try {
+        await client.detach();
       } catch (_) {}
     }
   }
-}
 
-class ProcesosAutonomos {
-  constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
-    this.pathToDbFolder = pathToDbFolder;
-    this.nombreProyecto = nombreProyecto;
-    this.proyectoDB = proyectoDB;
+  /**
+   * Descarga PDF con 1 reintento.
+   */
+  async descargarPdfConReintento({ openPopupFn, outputPath, label }) {
+    let lastErr = null;
 
-    this._basesRecibosAutonomos = new BasesYRecibosAutonomos();
+    for (let intento = 1; intento <= 2; intento++) {
+      let popup = null;
+      try {
+        popup = await openPopupFn();
+        if (!popup) throw new Error("No se abrió el popup/pestaña del PDF.");
+
+        await this.descargarPdfRawViaFetchCDP(popup, outputPath, 90000);
+
+        try {
+          await popup.close();
+        } catch (_) {}
+        return true;
+      } catch (e) {
+        lastErr = e;
+
+        try {
+          if (popup) await popup.close();
+        } catch (_) {}
+
+        if (!this._isPdfDownloadRetryableError(e) || intento === 2) break;
+
+        console.warn(
+          `[${label}] Fallo de descarga (intento ${intento}). Reintentando 1 vez...`,
+          e?.message || e,
+        );
+        await this.esperar(1200);
+      }
+    }
+
+    throw lastErr;
   }
 
-  async basesYRecibosAlCobroAutonomos(argumentos) {
-    return await this._basesRecibosAutonomos.run(argumentos);
+  // -------------------------
+  // Selección “recibo más reciente”
+  // -------------------------
+  async seleccionarLinkReciboMasRecienteEnContexto(ctx /* Page o Frame */) {
+    // ctx puede ser: pageB (Page) o frListado (Frame)
+    const $all = (sel) => (ctx.$$ ? ctx.$$(sel) : []);
+    const $ = (sel) => (ctx.$ ? ctx.$(sel) : null);
+
+    // ✅ Tu HTML real usa paramRecibo=0 y SPM.ACC.AC_VER_RECIBO
+    const selectorFuerte =
+      'a[href*="SPM.ACC.AC_VER_RECIBO=AC_VER_RECIBO"], a.enlaceFuncDetalle[href*="AC_VER_RECIBO"], a.pr_enlaceLocal[href*="AC_VER_RECIBO"]';
+
+    let links = await $all(selectorFuerte);
+
+    // Fallback más laxo
+    if (!links || links.length === 0) {
+      links = await $all('a[href*="AC_VER_RECIBO"], a[href*="paramRecibo="]');
+    }
+
+    if (!links || links.length === 0) {
+      throw new Error(
+        "No se encontró ningún enlace 'Ver detalle del recibo' (AC_VER_RECIBO).",
+      );
+    }
+
+    // Si hay varios, podemos elegir el que tenga mayor paramRecibo (normalmente 0 es el último/primero según orden)
+    const scored = [];
+    for (const a of links) {
+      const href = await a.evaluate((el) => el.getAttribute("href") || "");
+      const m = href.match(/paramRecibo=(\d+)/);
+      const n = m ? Number(m[1]) : 0;
+
+      // score: cuanto más pequeño, más “reciente” en tu ejemplo (0)
+      scored.push({ a, score: n, href });
+    }
+
+    scored.sort((x, y) => x.score - y.score);
+
+    return {
+      handle: scored[0].a,
+      strategy: `paramRecibo_min(${scored[0].score})`,
+    };
+  }
+
+  async findAnyFrameWithAnySelector(
+    page,
+    selectors,
+    timeoutMs = 60000,
+    pollMs = 400,
+  ) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      for (const fr of page.frames()) {
+        for (const sel of selectors) {
+          try {
+            const el = await fr.$(sel);
+            if (el) return { frame: fr, selector: sel };
+          } catch (_) {}
+        }
+      }
+      await this.esperar(pollMs);
+    }
+    return null;
+  }
+
+  /**
+   * Tras clicar "Consulta de recibos emitidos", la UI puede:
+   * - cargar dentro de un frame de FS, o
+   * - abrir una nueva pestaña/ventana.
+   * Esta función devuelve { pageB, frameB } donde están los selectores PROSA.
+   */
+  async getProsaContext(browser, seedPage, timeoutMs = 60000) {
+    const start = Date.now();
+
+    const looksLikeProsaFrame = async (fr) => {
+      try {
+        return await fr.evaluate(() => {
+          // Huellas PROSA / Seguridad Social (según tus HTML)
+          const hasTicket =
+            !!document.querySelector('input[name="ARQ.SPM.TICKET"]') ||
+            !!document.querySelector("#ARQ_SPM_TICKET");
+          const hasFrontend = !!document.querySelector("#FRONTEND");
+          const hasProsaJs = Array.from(document.scripts || []).some((s) =>
+            (s.src || "").includes("prosa.min.js"),
+          );
+          const hasProsaInput = hasTicket || hasFrontend;
+          const hasHeader =
+            (document.title || "")
+              .toLowerCase()
+              .includes("consulta de recibos") ||
+            (document.body?.innerText || "")
+              .toLowerCase()
+              .includes("oficina virtual");
+
+          return (
+            (hasProsaJs && (hasProsaInput || hasHeader)) ||
+            (hasProsaInput && hasHeader)
+          );
+        });
+      } catch {
+        return false;
+      }
+    };
+
+    const findInPageFrames = async (pg) => {
+      for (const fr of pg.frames()) {
+        if (await looksLikeProsaFrame(fr)) return { pageB: pg, frameB: fr };
+      }
+      // A veces PROSA es el main frame
+      if (await looksLikeProsaFrame(pg.mainFrame()))
+        return { pageB: pg, frameB: pg.mainFrame() };
+      return null;
+    };
+
+    while (Date.now() - start < timeoutMs) {
+      // 1) Intentar en la seedPage (frames)
+      const inSeed = await findInPageFrames(seedPage);
+      if (inSeed) return inSeed;
+
+      // 2) Intentar en todas las pestañas
+      const pages = await browser.pages();
+      for (const pg of pages) {
+        const url = (pg.url() || "").toLowerCase();
+        const urlHint =
+          url.includes("prosainternet") ||
+          url.includes("gestiondomiciliacioncuenta") ||
+          url.includes("xv24e003");
+        if (!urlHint && pg !== seedPage) {
+          // aunque no haya hint, puede ser que el url sea "about:blank" pero el frame tenga el contenido
+        }
+
+        const found = await findInPageFrames(pg);
+        if (found) return found;
+      }
+
+      await this.esperar(350);
+    }
+
+    throw new Error(
+      "No se pudo localizar el contexto PROSA (ni en frames ni en pestaña nueva).",
+    );
+  }
+
+  // -------------------------
+  // PROCESO PRINCIPAL
+  // -------------------------
+  async basesYRecibosAutonomos(argumentos) {
+    console.log("[BASES/RECIBOS] Iniciando proceso Bases y Recibos Autónomos");
+
+    const nombreProceso = "Bases y recibos al cobro autónomos";
+    let registrosProcesados = 0;
+
+    return new Promise(async (resolve) => {
+      let browser = null;
+
+      try {
+        const chromeExePath = argumentos?.formularioControl?.[0];
+        const pathExcel = argumentos?.formularioControl?.[1];
+        const pathSalidaBase = argumentos?.formularioControl?.[2];
+
+        if (!chromeExePath || !fs.existsSync(chromeExePath)) {
+          console.error("[BASES/RECIBOS][INPUT] Ruta a chrome.exe no válida.");
+          return resolve(false);
+        }
+        if (!pathExcel || !fs.existsSync(pathExcel)) {
+          console.error("[BASES/RECIBOS][INPUT] Ruta a Excel no válida.");
+          return resolve(false);
+        }
+        if (!pathSalidaBase || !String(pathSalidaBase).trim()) {
+          console.error("[BASES/RECIBOS][INPUT] Ruta de salida no válida.");
+          return resolve(false);
+        }
+
+        // Mes/Año actuales para nombre
+        const nowGlobal = new Date();
+        const mesActual = String(nowGlobal.getMonth() + 1).padStart(2, "0");
+        const anioActual = String(nowGlobal.getFullYear());
+        const tagMesAno = `${mesActual}-${anioActual}`;
+
+        const rootOut = path.join(
+          path.normalize(pathSalidaBase),
+          `BasesYRecibosAutonomos (${this.getCurrentDateString()})`,
+        );
+        await this.ensureDir(rootOut);
+
+        const logPath = path.join(rootOut, "log.txt");
+        const logMap = new Map(); // key: dniKey, value: texto
+
+        const flushLog = () => {
+          const lines = Array.from(logMap.entries()).map(
+            ([k, v]) => `${k} -> ${v}`,
+          );
+          fs.writeFileSync(logPath, lines.join("\n"), "utf8");
+        };
+
+        console.log(
+          "[BASES/RECIBOS][INPUT] Leyendo Excel:",
+          path.normalize(pathExcel),
+        );
+        const { headerRow, rows } = await this.leerExcelInput(pathExcel);
+
+        console.log(
+          "[BASES/RECIBOS][INPUT] Cabecera detectada en fila:",
+          headerRow,
+        );
+        console.log("[BASES/RECIBOS][INPUT] Registros leídos:", rows.length);
+
+        // Validación
+        const toProcess = [];
+        for (const r of rows) {
+          const dniKey = this._dniFolderKey(r.dni);
+          const { missing, invalid } = this.validarRegistro(r);
+
+          if (missing.length) {
+            logMap.set(
+              dniKey,
+              `SKIP_FALTA_DATOS: ${missing.join(" | ")} (fila ${r._row})`,
+            );
+            continue;
+          }
+          if (invalid.length) {
+            logMap.set(
+              dniKey,
+              `SKIP_FORMATO_INVALIDO: ${invalid.join(" | ")} (fila ${r._row})`,
+            );
+            continue;
+          }
+
+          toProcess.push(r);
+        }
+
+        if (!toProcess.length) {
+          console.warn("[BASES/RECIBOS] No hay registros válidos.");
+          flushLog();
+          return resolve(false);
+        }
+
+        const urlFS = "https://w2.seg-social.es/fs/indexframes.html";
+
+        browser = await puppeteer.launch({
+          headless: false,
+          defaultViewport: null,
+          executablePath: chromeExePath,
+          args: [
+            "--start-maximized",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--disable-popup-blocking",
+          ],
+        });
+
+        const opened = await browser.pages();
+        const page = opened.length ? opened[0] : await browser.newPage();
+
+        // Aceptar diálogos JS (por si acaso)
+        page.on("dialog", async (dialog) => {
+          try {
+            await dialog.accept();
+          } catch (_) {}
+        });
+
+        // Helpers navegación FS
+        const openCotizacionRETA = async () => {
+          const ok = await this.clickLinkInFrames(
+            page,
+            {
+              hrefIncludes: "menuSLD-RETA.html",
+              textIncludes: "Cotización RETA",
+            },
+            30000,
+          );
+          if (!ok) throw new Error("No se pudo clicar 'Cotización RETA'.");
+          await this.esperar(800);
+        };
+
+        const openConsultaBasesCuotas = async () => {
+          const ok = await this.clickLinkInFrames(
+            page,
+            {
+              hrefIncludes: "TRANSACCION=RCRS3",
+              textIncludes: "Consulta de bases y cuotas ingresadas",
+            },
+            30000,
+          );
+          if (!ok)
+            throw new Error(
+              "No se pudo clicar 'Consulta de bases y cuotas ingresadas'.",
+            );
+          await this.esperar(900);
+        };
+
+        const openConsultaRecibosEmitidos = async () => {
+          const ok = await this.clickLinkInFrames(
+            page,
+            {
+              hrefIncludes: "XV24E003",
+              textIncludes: "Consulta de recibos emitidos",
+            },
+            30000,
+          );
+          if (!ok)
+            throw new Error(
+              "No se pudo clicar 'Consulta de recibos emitidos régimen de autónomos'.",
+            );
+          await this.esperar(900);
+        };
+
+        const fillInFrame = async (frame, selector, value, timeout = 30000) => {
+          await frame.waitForSelector(selector, { timeout });
+          const el = await frame.$(selector);
+          if (!el) throw new Error(`No se encontró el input ${selector}`);
+          await el.click({ clickCount: 3 });
+          await page.keyboard.down("Control");
+          await page.keyboard.press("A");
+          await page.keyboard.up("Control");
+          await page.keyboard.press("Backspace");
+          await page.keyboard.type(String(value ?? ""), { delay: 15 });
+        };
+
+        const readDIL = async () => {
+          for (const fr of page.frames()) {
+            try {
+              const txt = await fr.evaluate(() => {
+                const el = document.querySelector("#DIL");
+                return el ? (el.textContent || "").trim() : "";
+              });
+              if (txt) return txt;
+            } catch (_) {}
+          }
+          return "";
+        };
+
+        // -------------------------
+        // LOOP por registro
+        // -------------------------
+        let okA = 0,
+          errA = 0,
+          okB = 0,
+          errB = 0;
+
+        for (let i = 0; i < toProcess.length; i++) {
+          registrosProcesados++;
+          const r = toProcess[i];
+
+          const dniKey = this._dniFolderKey(r.dni);
+          const admin = this._safeFileName(r.administrador || "SIN_ADMIN");
+
+          const dirDni = path.join(rootOut, this._safeFileName(dniKey));
+          await this.ensureDir(dirDni);
+
+          const pdfA = path.join(
+            dirDni,
+            this._safeFileName(
+              `CUOTAS Y BASES INGRESADAS - ${admin} - ${tagMesAno}.pdf`,
+            ),
+          );
+          const pdfB = path.join(
+            dirDni,
+            this._safeFileName(
+              `RECIBOS AL COBRO - ${admin} - ${tagMesAno}.pdf`,
+            ),
+          );
+
+          console.log(
+            `[BASES/RECIBOS] ${i + 1}/${toProcess.length} | DNI: ${r.dni} | NAF: ${r.naf1}-${r.naf2}`,
+          );
+
+          // ==========
+          // PARTE A
+          // ==========
+          try {
+            await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+            console.log(
+              "[BASES/RECIBOS] FS abierto. Selecciona certificado si aparece.",
+            );
+
+            await openCotizacionRETA();
+            await openConsultaBasesCuotas();
+
+            const frameForm = await this.findFrameWithSelector(
+              page,
+              "#SDFWPROVNAF",
+              30000,
+            );
+            if (!frameForm)
+              throw new Error(
+                "No se encontró el formulario de bases/cuotas (#SDFWPROVNAF).",
+              );
+
+            await fillInFrame(frameForm, "#SDFWPROVNAF", r.naf1);
+            await fillInFrame(frameForm, "#SDFWRESTONAF", r.naf2);
+            await fillInFrame(frameForm, "#SDFWAOMAPA", "2025");
+
+            // Continuar
+            await frameForm
+              .waitForSelector("#Sub2207101004_35", { timeout: 25000 })
+              .catch(() => {});
+            const btnCont = await frameForm.$("#Sub2207101004_35");
+            if (!btnCont)
+              throw new Error(
+                "No se encontró el botón Continuar (bases/cuotas).",
+              );
+
+            await btnCont.click({ delay: 40 });
+            await this.esperar(900);
+
+            // DIL de error
+            const dil = await readDIL();
+            if (dil) {
+              errA++;
+              logMap.set(dniKey, `PARTE_A_ERROR_DIL: ${dil}`);
+              console.warn("[BASES/RECIBOS][A] DIL:", dil);
+            } else {
+              // Imprimir -> nueva pestaña
+              const openPopupFn = async () => {
+                let frBtn = null;
+                for (const fr of page.frames()) {
+                  try {
+                    const b = await fr.$("#Sub2204801005_67");
+                    if (b) {
+                      frBtn = fr;
+                      break;
+                    }
+                  } catch (_) {}
+                }
+                if (!frBtn)
+                  throw new Error(
+                    "No se encontró el botón Imprimir (parte A).",
+                  );
+
+                const popupPromise = this.waitForPopup(browser, page, 30000);
+                const b = await frBtn.$("#Sub2204801005_67");
+                await b.click({ delay: 40 });
+
+                const popup = await popupPromise;
+                return popup;
+              };
+
+              await this.descargarPdfConReintento({
+                openPopupFn,
+                outputPath: pdfA,
+                label: "PARTE_A_PDF",
+              });
+
+              okA++;
+              logMap.set(
+                dniKey,
+                `OK_A: PDF A guardado -> ${path.basename(pdfA)}`,
+              );
+            }
+          } catch (e) {
+            errA++;
+            const msg = `ERROR_A: ${e?.message || e}`;
+            logMap.set(dniKey, msg);
+            console.warn("[BASES/RECIBOS][A]", msg);
+          }
+
+          // ==========
+          // PARTE B
+          // ==========
+          try {
+            await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+            await openCotizacionRETA();
+            await openConsultaRecibosEmitidos();
+
+            // Clave: localizar dónde está PROSA (frame o pestaña)
+            const { pageB, frameB } = await this.getProsaContext(
+              browser,
+              page,
+              60000,
+            );
+
+            // Si Prosa está en otra pestaña, trabajamos ahí
+            if (pageB !== page) {
+              try {
+                await pageB.bringToFront();
+              } catch (_) {}
+            }
+
+            // 1) Si estamos en pantalla de autorizados -> clicar 316077
+            const enlace316 = await frameB
+              .$("#enlace_316077")
+              .catch(() => null);
+            if (enlace316) {
+              console.log(
+                "[BASES/RECIBOS][B] Seleccionando autorizado 316077...",
+              );
+              await enlace316.click({ delay: 40 });
+
+              // Esperar a que aparezca el formulario de régimen en algún frame del pageB
+              const next = await this.findAnyFrameWithAnySelector(
+                pageB,
+                ["#seleccion_1"],
+                60000,
+              );
+              if (!next)
+                throw new Error("Tras clicar 316077 no aparece #seleccion_1.");
+            }
+
+            // 2) Ya en formulario: obtener el frame que contiene #seleccion_1 (puede haber cambiado)
+            const frm = await this.findAnyFrameWithAnySelector(
+              pageB,
+              ["#seleccion_1"],
+              60000,
+            );
+            if (!frm)
+              throw new Error(
+                "No se encontró #seleccion_1 (formulario de régimen).",
+              );
+
+            const frForm = frm.frame;
+
+            await frForm.select("#seleccion_1", "0521");
+            await frForm.select("#seleccion_3", "07");
+
+            await frForm.waitForSelector("#idTexto1", { timeout: 60000 });
+            await frForm.click("#idTexto1", { clickCount: 3 });
+            await frForm.type("#idTexto1", r.naf1, { delay: 10 });
+
+            await frForm.waitForSelector("#idTexto2", { timeout: 60000 });
+            await frForm.click("#idTexto2", { clickCount: 3 });
+            await frForm.type("#idTexto2", r.naf2, { delay: 10 });
+
+            await frForm.waitForSelector("#botConRegIde", { timeout: 60000 });
+            await frForm.click("#botConRegIde", { delay: 40 });
+            await this.esperar(900);
+
+            // 🔁 Tras continuar, PROSA navega (a veces) a "Aviso importante" o directamente a la lista.
+            // Re-localizamos el contexto PROSA.
+            const { pageB: pageAviso } = await this.getProsaContext(
+              browser,
+              pageB,
+              60000,
+            );
+
+            // Bring to front la pestaña PROSA real
+            try {
+              await pageAviso.bringToFront();
+            } catch (_) {}
+
+            // ✅ Asegurar DOM antes de buscar nada (evita falsos negativos)
+            await pageAviso
+              .waitForSelector("body", { timeout: 20000 })
+              .catch(() => {});
+            await this.esperar(400);
+
+            // -------------
+            // 1) AVISO IMPORTANTE (OPCIONAL)
+            // -------------
+            const foundAviso = await this.findAnyFrameWithAnySelector(
+              pageAviso,
+              ["#cheAviImport", "#botContAviso"],
+              8000, // 👈 corto: si no está, seguimos
+            );
+
+            const frAviso = foundAviso.frame;
+
+            // ✅ Tick
+            await frAviso.waitForSelector("#cheAviImport", {
+              timeout: 20000,
+            });
+            const isChecked = await frAviso
+              .$eval("#cheAviImport", (el) => el.checked)
+              .catch(() => false);
+            if (!isChecked) await frAviso.click("#cheAviImport", { delay: 30 });
+
+            // ✅ Continuar
+            await frAviso.waitForSelector("#botContAviso", {
+              timeout: 20000,
+            });
+            await frAviso.click("#botContAviso", { delay: 40 });
+            await this.esperar(900);
+
+            // ✅ Tras continuar, esperar “asentado” (a veces actualiza por JS)
+            await pageAviso
+              .waitForSelector("body", { timeout: 20000 })
+              .catch(() => {});
+            await this.esperar(400);
+
+            // -------------
+            // 2) LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
+            // -------------
+            const listado = await this.findAnyFrameWithAnySelector(
+              pageProsa,
+              [
+                "#TABLA_2",
+                'a[href*="AC_VER_RECIBO"]',
+                "#enlace_0",
+                "a.enlaceFuncDetalle",
+                "a.pr_enlaceLocal",
+              ],
+              60000,
+            );
+            if (!listado)
+              throw new Error(
+                "No se encontró la lista de recibos (TABLA_2 / AC_VER_RECIBO).",
+              );
+
+            const frListado = listado.frame;
+
+            // 🔥 TU CASO: con esto basta. Coge enlace_0 si existe, si no el primero que matchee AC_VER_RECIBO.
+            let verDetalle = await frListado.$("#enlace_0").catch(() => null);
+            if (!verDetalle)
+              verDetalle = await frListado
+                .$('a[href*="AC_VER_RECIBO"]')
+                .catch(() => null);
+            if (!verDetalle)
+              verDetalle = await frListado
+                .$("a.enlaceFuncDetalle.pr_enlaceLocal")
+                .catch(() => null);
+
+            if (!verDetalle) {
+              throw new Error(
+                "No se encontró el enlace 'Ver detalle del recibo' dentro del frame listado.",
+              );
+            }
+
+            console.log(
+              "[BASES/RECIBOS][B] Click en 'Ver detalle del recibo'...",
+            );
+
+            // -------------
+            // 3) Abrir detalle: POPUP o SAME TAB (fallback mejorado con race)
+            // -------------
+            const openPopupFnB = async () => {
+              const popupPromise = this.waitForPopup(
+                browser,
+                pageAviso,
+                8000,
+              ).catch(() => null);
+              const navPromise = pageAviso
+                .waitForNavigation({
+                  waitUntil: "domcontentloaded",
+                  timeout: 8000,
+                })
+                .then(() => pageAviso)
+                .catch(() => null);
+
+              // Forzar _blank (si lo respeta)
+              try {
+                await verDetalle.evaluate((el) => (el.target = "_blank"));
+              } catch (_) {}
+
+              // Click robusto
+              await verDetalle
+                .click({ delay: 40 })
+                .catch(() => verDetalle.evaluate((el) => el.click()));
+
+              // Gana el primero: popup o navegación
+              const winner = await Promise.race([popupPromise, navPromise]);
+              if (winner) return winner;
+
+              // Fallback: cambio de DOM por JS (sin navigation)
+              const changed = await this.findAnyFrameWithAnySelector(
+                pageAviso,
+                [
+                  'a[href*="AC_IMPRIMIR"]',
+                  "#botonImprimir",
+                  "#botonImprimirMovil",
+                  'embed[type="application/pdf"]',
+                  'iframe[src*=".pdf"]',
+                ],
+                8000,
+              );
+              if (changed) return pageAviso;
+
+              throw new Error(
+                "No se abrió popup ni se detectó navegación al detalle del recibo.",
+              );
+            };
+
+            await this.descargarPdfConReintento({
+              openPopupFn: openPopupFnB,
+              outputPath: pdfB,
+              label: "PARTE_B_PDF",
+            });
+
+            okB++;
+            const prev = logMap.get(dniKey) || "";
+            logMap.set(
+              dniKey,
+              `${prev}${prev ? " | " : ""}OK_B(${strategy}): PDF B guardado -> ${path.basename(pdfB)}`,
+            );
+          } catch (e) {
+            errB++;
+            const prev = logMap.get(dniKey) || "";
+            const msg = `ERROR_B: ${e?.message || e}`;
+            logMap.set(dniKey, prev ? `${prev} | ${msg}` : msg);
+            console.warn("[BASES/RECIBOS][B]", msg);
+          }
+
+          if ((i + 1) % 5 === 0) flushLog();
+        }
+
+        flushLog();
+
+        console.log("[BASES/RECIBOS] Terminado.");
+        console.log(
+          `[BASES/RECIBOS] OK_A=${okA} ERR_A=${errA} | OK_B=${okB} ERR_B=${errB}`,
+        );
+        console.log(`[BASES/RECIBOS] Procesados: ${registrosProcesados}`);
+
+        // Si tu repo lo tiene:
+        // registrarEjecucion({ nombreProceso, registrosProcesados });
+
+        try {
+          if (browser) await browser.close();
+        } catch (_) {}
+
+        return resolve(true);
+      } catch (err) {
+        console.error("[BASES/RECIBOS] Error general:", err?.message || err);
+        try {
+          if (browser) await browser.close();
+        } catch (_) {}
+        return resolve(false);
+      }
+    });
+  }
+
+  // Alias cómodo
+  async ["basesYRecibosAlCobroAutonomos"](argumentos) {
+    return this.basesYRecibosAutonomos(argumentos);
   }
 }
 
-module.exports = ProcesosAutonomos;
+module.exports = ProcesosBasesRecibosAutonomos;
