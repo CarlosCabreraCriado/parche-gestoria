@@ -135,10 +135,10 @@ class ProcesosDuplicados {
   async ensureClientDirFlat(rootOut, dni) {
     const dniKey = this._dniFolderKey(dni);
     const dniFolder = this._safeFileName(dniKey || "SIN_DNI");
-  
+
     const dirDni = path.join(rootOut, dniFolder);
     await this.ensureDir(dirDni);
-  
+
     return { dirDni, dniFolder };
   }
 
@@ -197,8 +197,7 @@ class ProcesosDuplicados {
 
       const numRows = aoa.length;
       const numCols = aoa.reduce((m, row) => Math.max(m, row.length), 0);
-      const getCell = (r, c) =>
-        (aoa[r - 1] && aoa[r - 1][c - 1]) ?? undefined;
+      const getCell = (r, c) => (aoa[r - 1] && aoa[r - 1][c - 1]) ?? undefined;
       return { numRows, numCols, getCell };
     };
 
@@ -353,11 +352,16 @@ class ProcesosDuplicados {
     req(r.provCCC, "PROV CCC vacío");
     req(r.ccc, "CCC vacío");
 
-    if (r.provCCC && !/^\d{2}$/.test(r.provCCC)) invalid.push("PROV CCC no parece 2 dígitos");
-    if (r.provNAF && !/^\d{2}$/.test(r.provNAF)) invalid.push("PROV NAF no parece 2 dígitos");
-    if (r.ccc && !/^\d{9}$/.test(r.ccc)) invalid.push("CCC no parece 9 dígitos (7+2)");
-    if (r.naf && !/^\d{10}$/.test(r.naf)) invalid.push("NAF no parece 10 dígitos (8+2)");
-    if (r.regimen && !/^\d{4}$/.test(r.regimen)) invalid.push("REGIMEN no parece 4 dígitos (ej: 0111)");
+    if (r.provCCC && !/^\d{2}$/.test(r.provCCC))
+      invalid.push("PROV CCC no parece 2 dígitos");
+    if (r.provNAF && !/^\d{2}$/.test(r.provNAF))
+      invalid.push("PROV NAF no parece 2 dígitos");
+    if (r.ccc && !/^\d{9}$/.test(r.ccc))
+      invalid.push("CCC no parece 9 dígitos (7+2)");
+    if (r.naf && !/^\d{10}$/.test(r.naf))
+      invalid.push("NAF no parece 10 dígitos (8+2)");
+    if (r.regimen && !/^\d{4}$/.test(r.regimen))
+      invalid.push("REGIMEN no parece 4 dígitos (ej: 0111)");
 
     return { missing, invalid };
   }
@@ -376,7 +380,8 @@ class ProcesosDuplicados {
         skipped.push({
           dni: r.dni,
           row: r._row,
-          reason: "SKIP_DUPLICADO: DNI duplicado (se procesa la primera aparición)",
+          reason:
+            "SKIP_DUPLICADO: DNI duplicado (se procesa la primera aparición)",
         });
         continue;
       }
@@ -403,7 +408,11 @@ class ProcesosDuplicados {
     return null;
   }
 
-  async clickLinkInFrames(page, { hrefIncludes, textIncludes }, timeoutMs = 25000) {
+  async clickLinkInFrames(
+    page,
+    { hrefIncludes, textIncludes },
+    timeoutMs = 25000,
+  ) {
     const norm = (s) =>
       String(s ?? "")
         .trim()
@@ -426,7 +435,8 @@ class ProcesosDuplicados {
 
           if (targetText) {
             const ok = await fr.evaluate((t) => {
-              const norm2 = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+              const norm2 = (s) =>
+                (s || "").trim().toLowerCase().replace(/\s+/g, " ");
               const a = Array.from(document.querySelectorAll("a")).find((x) =>
                 norm2(x.textContent).includes(t),
               );
@@ -451,7 +461,10 @@ class ProcesosDuplicados {
       await page.screenshot({ path: fullPathPng, fullPage: true });
       return true;
     } catch (e) {
-      console.warn("[DUPLICADOS][CAPTURA] No se pudo guardar screenshot:", e?.message || e);
+      console.warn(
+        "[DUPLICADOS][CAPTURA] No se pudo guardar screenshot:",
+        e?.message || e,
+      );
       return false;
     }
   }
@@ -474,7 +487,8 @@ class ProcesosDuplicados {
           return pats.find((p) => low.includes(p));
         }, patterns);
 
-        if (hit) return `Posible error detectado en pantalla (contiene '${hit}')`;
+        if (hit)
+          return `Posible error detectado en pantalla (contiene '${hit}')`;
       } catch (_) {}
     }
     return null;
@@ -515,13 +529,16 @@ class ProcesosDuplicados {
     const tryClickByText = async (text) => {
       try {
         const ok = await frameForm.evaluate((t) => {
-          const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+          const norm = (s) =>
+            (s || "").replace(/\s+/g, " ").trim().toLowerCase();
           const target = norm(t);
 
           const candidates = [
             ...Array.from(document.querySelectorAll("button")),
             ...Array.from(
-              document.querySelectorAll('input[type="button"], input[type="submit"]'),
+              document.querySelectorAll(
+                'input[type="button"], input[type="submit"]',
+              ),
             ),
             ...Array.from(document.querySelectorAll("a")),
           ];
@@ -562,7 +579,11 @@ class ProcesosDuplicados {
       .waitForTarget(
         (t) => {
           try {
-            return t.type() === "page" && t.opener() && t.opener() === openerPage.target();
+            return (
+              t.type() === "page" &&
+              t.opener() &&
+              t.opener() === openerPage.target()
+            );
           } catch (_) {
             return false;
           }
@@ -612,7 +633,12 @@ class ProcesosDuplicados {
     return { frame: null, text: "" };
   }
 
-  async waitForDILAfterContinuar(page, prevText, timeoutMs = 15000, pollMs = 300) {
+  async waitForDILAfterContinuar(
+    page,
+    prevText,
+    timeoutMs = 15000,
+    pollMs = 300,
+  ) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const { text } = await this.readDILInAnyFrame(page);
@@ -627,7 +653,8 @@ class ProcesosDuplicados {
     const t = String(text || "").trim();
     if (!t) return null;
 
-    if (t.includes("3083*") || t.toUpperCase().includes("INTRODUZCA LOS DATOS")) return null;
+    if (t.includes("3083*") || t.toUpperCase().includes("INTRODUZCA LOS DATOS"))
+      return null;
 
     if (/^\d{4}\*/.test(t)) return t;
 
@@ -655,16 +682,26 @@ class ProcesosDuplicados {
         try {
           const ok = await fr.evaluate(() => {
             const bodyTxt = document.body?.innerText || "";
-            if (!bodyTxt.includes("Documento TA") || !bodyTxt.includes("Fecha Real")) return false;
+            if (
+              !bodyTxt.includes("Documento TA") ||
+              !bodyTxt.includes("Fecha Real")
+            )
+              return false;
 
             const tables = Array.from(document.querySelectorAll("table"));
             const candidates = tables
               .map((t) => {
                 const rows = Array.from(t.querySelectorAll("tr"));
-                const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
+                const dataRows = rows.filter(
+                  (tr) => tr.querySelectorAll("td").length >= 2,
+                );
                 return { dataCount: dataRows.length, txt: t.innerText || "" };
               })
-              .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
+              .filter(
+                (x) =>
+                  x.txt.includes("Documento TA") &&
+                  x.txt.includes("Fecha Real"),
+              )
               .sort((a, b) => b.dataCount - a.dataCount);
 
             return candidates.length && candidates[0].dataCount >= 1;
@@ -681,11 +718,16 @@ class ProcesosDuplicados {
   // ✅ TA2: seleccionar ALTA más reciente (clic en label/a/celda de Documento)
   async seleccionarAltaMasReciente(frameListado) {
     return await frameListado.evaluate(() => {
-      const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+      const norm = (s) =>
+        String(s || "")
+          .replace(/\s+/g, " ")
+          .trim();
 
       const parseFecha = (s) => {
         const txt = norm(s);
-        const m = txt.match(/(\d{2})\s*[\/\-. ]\s*(\d{2})\s*[\/\-. ]\s*(\d{4})/);
+        const m = txt.match(
+          /(\d{2})\s*[\/\-. ]\s*(\d{2})\s*[\/\-. ]\s*(\d{4})/,
+        );
         if (!m) return null;
         const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
         return isNaN(d.getTime()) ? null : d;
@@ -693,10 +735,24 @@ class ProcesosDuplicados {
 
       const fireClicksOldStyle = (el) => {
         if (!el) return false;
-        try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
-        try { el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window })); } catch (_) {}
-        try { el.click(); } catch (_) {}
-        try { el.click(); } catch (_) {}
+        try {
+          el.scrollIntoView({ block: "center", inline: "center" });
+        } catch (_) {}
+        try {
+          el.dispatchEvent(
+            new MouseEvent("dblclick", {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+            }),
+          );
+        } catch (_) {}
+        try {
+          el.click();
+        } catch (_) {}
+        try {
+          el.click();
+        } catch (_) {}
         return true;
       };
 
@@ -704,14 +760,23 @@ class ProcesosDuplicados {
         .map((t) => {
           const txt = t.innerText || "";
           const rows = Array.from(t.querySelectorAll("tr"));
-          const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
+          const dataRows = rows.filter(
+            (tr) => tr.querySelectorAll("td").length >= 2,
+          );
           return { t, txt, dataCount: dataRows.length };
         })
-        .filter((x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"))
+        .filter(
+          (x) => x.txt.includes("Documento TA") && x.txt.includes("Fecha Real"),
+        )
         .sort((a, b) => b.dataCount - a.dataCount);
 
       const target = tables[0]?.t || null;
-      if (!target) return { ok: false, reason: "No se encontró la tabla del listado (Documento TA / Fecha Real)." };
+      if (!target)
+        return {
+          ok: false,
+          reason:
+            "No se encontró la tabla del listado (Documento TA / Fecha Real).",
+        };
 
       const rows = Array.from(target.querySelectorAll("tr"));
 
@@ -721,7 +786,10 @@ class ProcesosDuplicados {
       const headerRow = rows.find((tr) => {
         const cells = Array.from(tr.querySelectorAll("th,td"));
         const txts = cells.map((c) => norm(c.innerText || ""));
-        return txts.some((x) => x.includes("Documento TA")) && txts.some((x) => x.includes("Fecha Real"));
+        return (
+          txts.some((x) => x.includes("Documento TA")) &&
+          txts.some((x) => x.includes("Fecha Real"))
+        );
       });
 
       if (headerRow) {
@@ -754,18 +822,30 @@ class ProcesosDuplicados {
         const anchor = docCell?.querySelector("a");
         const clickable = label || anchor || docCell;
 
-        candidates.push({ doc: docTxt, fechaTxt, fechaMs: fecha.getTime(), clickable });
+        candidates.push({
+          doc: docTxt,
+          fechaTxt,
+          fechaMs: fecha.getTime(),
+          clickable,
+        });
       }
 
       if (!candidates.length) {
-        return { ok: false, reason: "No se encontraron filas 'ALTA' con Fecha Real parseable." };
+        return {
+          ok: false,
+          reason: "No se encontraron filas 'ALTA' con Fecha Real parseable.",
+        };
       }
 
       candidates.sort((a, b) => b.fechaMs - a.fechaMs);
       const best = candidates[0];
 
       const did = fireClicksOldStyle(best.clickable);
-      if (!did) return { ok: false, reason: "No se pudo clicar el elemento en la fila ALTA seleccionada." };
+      if (!did)
+        return {
+          ok: false,
+          reason: "No se pudo clicar el elemento en la fila ALTA seleccionada.",
+        };
 
       return { ok: true, doc: best.doc, fecha: best.fechaTxt };
     });
@@ -788,9 +868,14 @@ class ProcesosDuplicados {
               .map((t) => ({
                 t,
                 txt: t.innerText || "",
-                dataRows: Array.from(t.querySelectorAll("tr")).filter((tr) => tr.querySelectorAll("td").length >= 2).length,
+                dataRows: Array.from(t.querySelectorAll("tr")).filter(
+                  (tr) => tr.querySelectorAll("td").length >= 2,
+                ).length,
               }))
-              .filter((x) => x.txt.includes("F. R. Alta") && x.txt.includes("F. R. Baja"))
+              .filter(
+                (x) =>
+                  x.txt.includes("F. R. Alta") && x.txt.includes("F. R. Baja"),
+              )
               .sort((a, b) => b.dataRows - a.dataRows);
 
             return candidates.length && candidates[0].dataRows >= 1;
@@ -807,7 +892,10 @@ class ProcesosDuplicados {
   // ✅ IDC: seleccionar F. R. Alta más reciente (dblclick en LABEL de la FECHA)
   async seleccionarAltaIDCMasReciente(frameListado) {
     return await frameListado.evaluate(() => {
-      const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+      const norm = (s) =>
+        String(s || "")
+          .replace(/\s+/g, " ")
+          .trim();
 
       const parseFechaIDC = (s) => {
         const txt = norm(s);
@@ -819,10 +907,24 @@ class ProcesosDuplicados {
 
       const fireClicksOldStyle = (el) => {
         if (!el) return false;
-        try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
-        try { el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window })); } catch (_) {}
-        try { el.click(); } catch (_) {}
-        try { el.click(); } catch (_) {}
+        try {
+          el.scrollIntoView({ block: "center", inline: "center" });
+        } catch (_) {}
+        try {
+          el.dispatchEvent(
+            new MouseEvent("dblclick", {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+            }),
+          );
+        } catch (_) {}
+        try {
+          el.click();
+        } catch (_) {}
+        try {
+          el.click();
+        } catch (_) {}
         return true;
       };
 
@@ -830,14 +932,22 @@ class ProcesosDuplicados {
         .map((t) => {
           const txt = t.innerText || "";
           const rows = Array.from(t.querySelectorAll("tr"));
-          const dataRows = rows.filter((tr) => tr.querySelectorAll("td").length >= 2);
+          const dataRows = rows.filter(
+            (tr) => tr.querySelectorAll("td").length >= 2,
+          );
           return { t, txt, dataCount: dataRows.length };
         })
-        .filter((x) => x.txt.includes("F. R. Alta") && x.txt.includes("F. R. Baja"))
+        .filter(
+          (x) => x.txt.includes("F. R. Alta") && x.txt.includes("F. R. Baja"),
+        )
         .sort((a, b) => b.dataCount - a.dataCount);
 
       const target = tables[0]?.t || null;
-      if (!target) return { ok: false, reason: "No se encontró la tabla IDC (F. R. Alta / F. R. Baja)." };
+      if (!target)
+        return {
+          ok: false,
+          reason: "No se encontró la tabla IDC (F. R. Alta / F. R. Baja).",
+        };
 
       const rows = Array.from(target.querySelectorAll("tr"));
 
@@ -877,19 +987,26 @@ class ProcesosDuplicados {
       }
 
       if (!candidates.length) {
-        return { ok: false, reason: "No hay filas con 'F. R. Alta' parseable (dd mm yyyy)." };
+        return {
+          ok: false,
+          reason: "No hay filas con 'F. R. Alta' parseable (dd mm yyyy).",
+        };
       }
 
       candidates.sort((a, b) => b.fechaMs - a.fechaMs);
       const best = candidates[0];
 
       const did = fireClicksOldStyle(best.clickable);
-      if (!did) return { ok: false, reason: "No se pudo hacer dblclick/click en el label de la fecha (F. R. Alta)." };
+      if (!did)
+        return {
+          ok: false,
+          reason:
+            "No se pudo hacer dblclick/click en el label de la fecha (F. R. Alta).",
+        };
 
       return { ok: true, fecha: best.altaTxt };
     });
   }
-
 
   // =========================
   // ✅ Descargar PDF RAW (Fetch CDP) - ROBUSTO (cleanup SIEMPRE)
@@ -900,7 +1017,11 @@ class ProcesosDuplicados {
 
     const urlMatch = (url) => {
       const u = String(url || "");
-      return u.includes("/ImprPDF/") || u.includes("InSeNaCoder") || u.toLowerCase().endsWith(".pdf");
+      return (
+        u.includes("/ImprPDF/") ||
+        u.includes("InSeNaCoder") ||
+        u.toLowerCase().endsWith(".pdf")
+      );
     };
 
     let done = false;
@@ -908,26 +1029,38 @@ class ProcesosDuplicados {
 
     try {
       await client.send("Network.enable").catch(() => {});
-      await client.send("Network.setCacheDisabled", { cacheDisabled: true }).catch(() => {});
+      await client
+        .send("Network.setCacheDisabled", { cacheDisabled: true })
+        .catch(() => {});
 
       await client
         .send("Fetch.enable", {
           patterns: [
-            { urlPattern: "*w2.seg-social.es/ImprPDF/*", requestStage: "Response" },
+            {
+              urlPattern: "*w2.seg-social.es/ImprPDF/*",
+              requestStage: "Response",
+            },
             { urlPattern: "*/ImprPDF/*", requestStage: "Response" },
           ],
         })
         .catch(() => {});
 
       const timer = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error("Timeout esperando el PDF (Fetch CDP).")), timeoutMs),
+        setTimeout(
+          () => rej(new Error("Timeout esperando el PDF (Fetch CDP).")),
+          timeoutMs,
+        ),
       );
 
       const pdfPromise = new Promise((resolve, reject) => {
         onPaused = async (ev) => {
           // Si ya resolvimos, no bloquees nada.
           if (done) {
-            try { await client.send("Fetch.continueRequest", { requestId: ev.requestId }).catch(() => {}); } catch (_) {}
+            try {
+              await client
+                .send("Fetch.continueRequest", { requestId: ev.requestId })
+                .catch(() => {});
+            } catch (_) {}
             return;
           }
 
@@ -938,17 +1071,25 @@ class ProcesosDuplicados {
 
             // No es el PDF -> continúa.
             if (!urlMatch(url) || !(status >= 200 && status < 300)) {
-              await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+              await client
+                .send("Fetch.continueRequest", { requestId: reqId })
+                .catch(() => {});
               return;
             }
 
-            const bodyResp = await client.send("Fetch.getResponseBody", { requestId: reqId });
+            const bodyResp = await client.send("Fetch.getResponseBody", {
+              requestId: reqId,
+            });
             const body = bodyResp?.body || "";
             const base64Encoded = !!bodyResp?.base64Encoded;
 
-            await client.send("Fetch.continueRequest", { requestId: reqId }).catch(() => {});
+            await client
+              .send("Fetch.continueRequest", { requestId: reqId })
+              .catch(() => {});
 
-            const buf = base64Encoded ? Buffer.from(body, "base64") : Buffer.from(body, "utf8");
+            const buf = base64Encoded
+              ? Buffer.from(body, "base64")
+              : Buffer.from(body, "utf8");
 
             if (!this._isPdfBuffer(buf)) {
               return reject(
@@ -970,7 +1111,9 @@ class ProcesosDuplicados {
 
       // A veces el visor carga “HTML wrapper” primero; el reload ayuda.
       await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-      await popupPage.waitForSelector("body", { timeout: 20000 }).catch(() => {});
+      await popupPage
+        .waitForSelector("body", { timeout: 20000 })
+        .catch(() => {});
       await this.esperarLog(800, "descargarPdfRawViaFetchCDP post_body");
 
       const { buf, url, status } = await Promise.race([pdfPromise, timer]);
@@ -993,8 +1136,12 @@ class ProcesosDuplicados {
         if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
       } catch (_) {}
 
-      try { await client.send("Fetch.disable").catch(() => {}); } catch (_) {}
-      try { await client.detach(); } catch (_) {}
+      try {
+        await client.send("Fetch.disable").catch(() => {});
+      } catch (_) {}
+      try {
+        await client.detach();
+      } catch (_) {}
     }
   }
 
@@ -1006,35 +1153,45 @@ class ProcesosDuplicados {
       msg.includes("timeout esperando el pdf")
     );
   }
-  
-  async descargarPdfCon1Reintento({ popupPage, outputPath, timeoutMs = 90000, label = "PDF" }) {
+
+  async descargarPdfCon1Reintento({
+    popupPage,
+    outputPath,
+    timeoutMs = 90000,
+    label = "PDF",
+  }) {
     try {
       await this.descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs);
       return;
     } catch (e) {
       // Si no es un fallo típico de “visor/tiempos”, no reintentes.
       if (!this._isPdfDownloadRetryableError(e)) throw e;
-    
-      console.warn(`[DUPLICADOS][${label}] Fallo descarga (1er intento). Reintentando 1 vez...`, e?.message || e);
-    
+
+      console.warn(
+        `[DUPLICADOS][${label}] Fallo descarga (1er intento). Reintentando 1 vez...`,
+        e?.message || e,
+      );
+
       // Cierra el popup “malo” antes de reintentar
-      try { await popupPage.close(); } catch (_) {}
-    
+      try {
+        await popupPage.close();
+      } catch (_) {}
+
       await this.esperarLog(1200, `retry_${label}_wait`);
-    
+
       // El reintento NO crea popup nuevo aquí: lo haremos desde el caller (TA2/IDC),
       // porque necesitas volver a hacer click/dblclick para abrir de nuevo el PDF.
       throw e; // el caller detectará y hará la reapertura + 2º intento
     }
   }
-  
-  
 
   // =========================
   // PROCESO ÚNICO: TA2 + IDC por empleado
   // =========================
   async duplicadosTa2(argumentos) {
-    console.log("[DUPLICADOS] Iniciando proceso DUPLICADOS TA2 + IDC (por empleado)");
+    console.log(
+      "[DUPLICADOS] Iniciando proceso DUPLICADOS TA2 + IDC (por empleado)",
+    );
 
     const nombreProceso = "DUPLICADOS TA2+IDC";
     let registrosProcesados = 0;
@@ -1054,20 +1211,33 @@ class ProcesosDuplicados {
           console.error("[DUPLICADOS][INPUT] Ruta a chrome.exe no válida.");
           return resolve(false);
         }
-        if (!pathExcel || typeof pathExcel !== "string" || !fs.existsSync(pathExcel)) {
+        if (
+          !pathExcel ||
+          typeof pathExcel !== "string" ||
+          !fs.existsSync(pathExcel)
+        ) {
           console.error("[DUPLICADOS][INPUT] Ruta a Excel no válida.");
           return resolve(false);
         }
-        if (!pathSalidaBase || typeof pathSalidaBase !== "string" || !pathSalidaBase.trim()) {
+        if (
+          !pathSalidaBase ||
+          typeof pathSalidaBase !== "string" ||
+          !pathSalidaBase.trim()
+        ) {
           console.error("[DUPLICADOS][INPUT] Ruta de salida no válida.");
           return resolve(false);
         }
         if (!/^\d{4}$/.test(regimen4)) {
-          console.error("[DUPLICADOS][INPUT] Régimen inválido. Debe ser 4 dígitos (ej: 0111).");
+          console.error(
+            "[DUPLICADOS][INPUT] Régimen inválido. Debe ser 4 dígitos (ej: 0111).",
+          );
           return resolve(false);
         }
 
-        const rootOut = path.join(path.normalize(pathSalidaBase), `Duplicados (${this.getCurrentDateString()})`);
+        const rootOut = path.join(
+          path.normalize(pathSalidaBase),
+          `Duplicados (${this.getCurrentDateString()})`,
+        );
         const dirLogs = path.join(rootOut, "LOGS");
         await this.ensureDir(rootOut);
         await this.ensureDir(dirLogs);
@@ -1094,15 +1264,26 @@ class ProcesosDuplicados {
 
         const flushLogs = (filePath, logsMap) => {
           try {
-            const lines = Array.from(logsMap.entries()).map(([k, v]) => `${k} -> ${v}`);
+            const lines = Array.from(logsMap.entries()).map(
+              ([k, v]) => `${k} -> ${v}`,
+            );
             fs.writeFileSync(filePath, lines.join("\n"), "utf8");
           } catch (e) {
-            console.warn("[DUPLICADOS][LOGS] No se pudo escribir log:", filePath, e?.message || e);
+            console.warn(
+              "[DUPLICADOS][LOGS] No se pudo escribir log:",
+              filePath,
+              e?.message || e,
+            );
           }
         };
 
-        console.log("[DUPLICADOS][INPUT] Leyendo Excel:", path.normalize(pathExcel));
-        const { rows } = await this.timeAsync("excel_leerExcelDuplicados", () => this.leerExcelDuplicados(pathExcel));
+        console.log(
+          "[DUPLICADOS][INPUT] Leyendo Excel:",
+          path.normalize(pathExcel),
+        );
+        const { rows } = await this.timeAsync("excel_leerExcelDuplicados", () =>
+          this.leerExcelDuplicados(pathExcel),
+        );
         for (const r of rows) r.regimen = regimen4;
 
         const logsTA2 = new Map();
@@ -1120,7 +1301,11 @@ class ProcesosDuplicados {
             const reason = `SKIP_FALTA_DATOS: ${missing.join(" | ")}`;
             logsTA2.set(key, reason);
             logsIDC.set(key, reason);
-            skippedMissing.push({ dni: this._dniNorm(r.dni), row: r._row, reason });
+            skippedMissing.push({
+              dni: this._dniNorm(r.dni),
+              row: r._row,
+              reason,
+            });
             continue;
           }
 
@@ -1129,7 +1314,11 @@ class ProcesosDuplicados {
             const reason = `SKIP_FORMATO_INVALIDO: ${invalid.join(" | ")}`;
             logsTA2.set(key, reason);
             logsIDC.set(key, reason);
-            skippedInvalid.push({ dni: this._dniNorm(r.dni), row: r._row, reason });
+            skippedInvalid.push({
+              dni: this._dniNorm(r.dni),
+              row: r._row,
+              reason,
+            });
             continue;
           }
 
@@ -1146,7 +1335,9 @@ class ProcesosDuplicados {
         console.log(`[DUPLICADOS][INPUT] A procesar (final): ${kept.length}`);
 
         if (!kept.length) {
-          console.warn("[DUPLICADOS][INPUT] No hay registros válidos para procesar.");
+          console.warn(
+            "[DUPLICADOS][INPUT] No hay registros válidos para procesar.",
+          );
           flushLogs(detalleTA2Path, logsTA2);
           flushLogs(detalleIDCPath, logsIDC);
           return resolve(false);
@@ -1187,14 +1378,19 @@ class ProcesosDuplicados {
         });
 
         await page.goto(urlFS, { waitUntil: "domcontentloaded" });
-        console.log("[DUPLICADOS][FS] FS abierto. Selecciona el certificado si aparece.");
+        console.log(
+          "[DUPLICADOS][FS] FS abierto. Selecciona el certificado si aparece.",
+        );
 
         const openAFIOnlineReal = async () => {
           const ok = await this.clickLinkInFrames(page, {
             hrefIncludes: "menuAFI-REMESAS.html",
             textIncludes: "Inscripción y Afiliación Online Real",
           });
-          if (!ok) throw new Error("No se pudo clicar 'Inscripción y Afiliación Online Real'");
+          if (!ok)
+            throw new Error(
+              "No se pudo clicar 'Inscripción y Afiliación Online Real'",
+            );
           await this.esperarLog(1200, "openAFIOnlineReal");
         };
 
@@ -1203,7 +1399,10 @@ class ProcesosDuplicados {
             hrefIncludes: "TRANSACCION=ATR65",
             textIncludes: "Duplicados de documentos trabajador",
           });
-          if (!ok) throw new Error("No se pudo clicar 'Duplicados de documentos trabajador' (ATR65)");
+          if (!ok)
+            throw new Error(
+              "No se pudo clicar 'Duplicados de documentos trabajador' (ATR65)",
+            );
           await this.esperarLog(1200, "openATR65Duplicados");
         };
 
@@ -1216,7 +1415,12 @@ class ProcesosDuplicados {
           await this.esperarLog(1200, "openATR37IDC");
         };
 
-        const fillInput = async (frame, selector, value, { timeout = 30000 } = {}) => {
+        const fillInput = async (
+          frame,
+          selector,
+          value,
+          { timeout = 30000 } = {},
+        ) => {
           await frame.waitForSelector(selector, { timeout });
           const el = await frame.$(selector);
           if (!el) throw new Error(`No se encontró el input ${selector}`);
@@ -1244,7 +1448,9 @@ class ProcesosDuplicados {
           const { dirDni } = await this.ensureClientDirFlat(rootOut, dni);
           const pngPath = path.join(dirDni, `Cuadro TA2 SS ${trabajador}.png`);
 
-          console.log(`[DUPLICADOS][TA2] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`);
+          console.log(
+            `[DUPLICADOS][TA2] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`,
+          );
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           await this.esperarLog(800);
@@ -1252,30 +1458,62 @@ class ProcesosDuplicados {
           await openAFIOnlineReal();
           await openATR65Duplicados();
 
-          const frameForm = await this.findFrameWithSelector(page, "#SDFTESNAF", 30000);
-          if (!frameForm) throw new Error("No se encontró el formulario ATR65 (selector #SDFTESNAF)");
+          const frameForm = await this.findFrameWithSelector(
+            page,
+            "#SDFTESNAF",
+            30000,
+          );
+          if (!frameForm)
+            throw new Error(
+              "No se encontró el formulario ATR65 (selector #SDFTESNAF)",
+            );
 
           const provNAF = this._padLeftDigits(r.provNAF, 2);
           const naf10 = this._padLeftDigits(r.naf, 10);
           const provCCC = this._padLeftDigits(r.provCCC, 2);
           const ccc9 = this._padLeftDigits(r.ccc, 9);
 
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESNAF", provNAF), { label: "TA2 fill PROV NAF" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFNAF", naf10), { label: "TA2 fill NAF" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFREGCTA_NH", regimen4), { label: "TA2 fill REGIMEN" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESCTA", provCCC), { label: "TA2 fill PROV CCC" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFCUENTA", ccc9), { label: "TA2 fill CCC" });
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFTESNAF", provNAF),
+            { label: "TA2 fill PROV NAF" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFNAF", naf10),
+            { label: "TA2 fill NAF" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFREGCTA_NH", regimen4),
+            { label: "TA2 fill REGIMEN" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFTESCTA", provCCC),
+            { label: "TA2 fill PROV CCC" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFCUENTA", ccc9),
+            { label: "TA2 fill CCC" },
+          );
 
-          await frameForm.waitForSelector("#ListaTipoImpresion", { timeout: 30000 });
+          await frameForm.waitForSelector("#ListaTipoImpresion", {
+            timeout: 30000,
+          });
           await frameForm.select("#ListaTipoImpresion", "OnLine");
 
           const { text: dilBefore } = await this.readDILInAnyFrame(page);
 
-          const clicked = await this.clickContinuarRobusta({ page, frameForm, timeoutMs: 35000 });
+          const clicked = await this.clickContinuarRobusta({
+            page,
+            frameForm,
+            timeoutMs: 35000,
+          });
           if (!clicked) throw new Error("TA2: no se pudo pulsar 'Continuar'.");
 
           const listadoPromise = this.findListadoTAFrame(page, 20000, 250);
-          const dilPromise = this.waitForDILAfterContinuar(page, dilBefore, 6000);
+          const dilPromise = this.waitForDILAfterContinuar(
+            page,
+            dilBefore,
+            6000,
+          );
 
           const winner = await Promise.race([
             listadoPromise.then((fr) => ({ type: "listado", fr })),
@@ -1288,77 +1526,113 @@ class ProcesosDuplicados {
           } else {
             const dilAfter = winner.text || "";
             const dilError = this.interpretarDIL(dilAfter);
-            if (dilError) throw new Error(`TA2: Validación FS (DIL): ${dilError}`);
+            if (dilError)
+              throw new Error(`TA2: Validación FS (DIL): ${dilError}`);
             frameListado = await this.findListadoTAFrame(page, 15000, 250);
           }
 
           if (!frameListado) {
             const maybeError = await this.detectPossibleErrorInFrames(page);
-            throw new Error(`TA2: no se detectó listado tras Continuar.${maybeError ? " " + maybeError : ""}`);
+            throw new Error(
+              `TA2: no se detectó listado tras Continuar.${maybeError ? " " + maybeError : ""}`,
+            );
           }
 
           await this.safeScreenshot(page, pngPath);
 
           const popupPromise = this.waitForPopup(browser, page, 45000);
 
-          const sel = await this.withDetachedFrameRetry(() => this.seleccionarAltaMasReciente(frameListado), {
-            label: "TA2 seleccionar ALTA",
-          });
+          const sel = await this.withDetachedFrameRetry(
+            () => this.seleccionarAltaMasReciente(frameListado),
+            {
+              label: "TA2 seleccionar ALTA",
+            },
+          );
 
-          if (!sel.ok) throw new Error(`TA2: no se ha encontrado ALTA: ${sel.reason}`);
+          if (!sel.ok)
+            throw new Error(`TA2: no se ha encontrado ALTA: ${sel.reason}`);
 
           const aFecha = this._fechaRealToA(sel.fecha);
           const pdfPath = path.join(dirDni, `TA2 ${aFecha} ${trabajador}.pdf`);
 
-          console.log(`[DUPLICADOS][TA2][SELECCION] ${dni} -> ${sel.doc} | Fecha Real: ${sel.fecha}`);
+          console.log(
+            `[DUPLICADOS][TA2][SELECCION] ${dni} -> ${sel.doc} | Fecha Real: ${sel.fecha}`,
+          );
 
           let popupPage = await popupPromise;
           if (!popupPage) {
-            console.warn(`[DUPLICADOS][TA2][POPUP] No abrió a la primera. Reintentando click...`);
+            console.warn(
+              `[DUPLICADOS][TA2][POPUP] No abrió a la primera. Reintentando click...`,
+            );
             const popupPromise2 = this.waitForPopup(browser, page, 25000);
-            const sel2 = await this.withDetachedFrameRetry(() => this.seleccionarAltaMasReciente(frameListado), {
-              label: "TA2 reintento seleccionar ALTA",
-            });
-            if (!sel2.ok) throw new Error(`TA2 reintento: no se ha encontrado ALTA: ${sel2.reason}`);
+            const sel2 = await this.withDetachedFrameRetry(
+              () => this.seleccionarAltaMasReciente(frameListado),
+              {
+                label: "TA2 reintento seleccionar ALTA",
+              },
+            );
+            if (!sel2.ok)
+              throw new Error(
+                `TA2 reintento: no se ha encontrado ALTA: ${sel2.reason}`,
+              );
             popupPage = await popupPromise2;
           }
 
-          if (!popupPage) throw new Error("TA2: no se abrió la pestaña del PDF tras reintento.");
+          if (!popupPage)
+            throw new Error(
+              "TA2: no se abrió la pestaña del PDF tras reintento.",
+            );
 
           // 1er intento
           try {
             await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
           } catch (e1) {
             if (!this._isPdfDownloadRetryableError(e1)) throw e1;
-          
-            console.warn(`[DUPLICADOS][TA2][PDF] Reintento por fallo de visor/PDF...`, e1?.message || e1);
-          
+
+            console.warn(
+              `[DUPLICADOS][TA2][PDF] Reintento por fallo de visor/PDF...`,
+              e1?.message || e1,
+            );
+
             // Cierra popup malo
-            try { await popupPage.close(); } catch (_) {}
-          
+            try {
+              await popupPage.close();
+            } catch (_) {}
+
             // Reabrir popup (click de nuevo sobre la fila)
             const popupPromiseR = this.waitForPopup(browser, page, 25000);
-          
-            const selR = await this.withDetachedFrameRetry(() => this.seleccionarAltaMasReciente(frameListado), {
-              label: "TA2 reintento seleccionar ALTA (para PDF)",
-            });
-            if (!selR.ok) throw new Error(`TA2 reintento: no se ha encontrado ALTA: ${selR.reason}`);
-          
+
+            const selR = await this.withDetachedFrameRetry(
+              () => this.seleccionarAltaMasReciente(frameListado),
+              {
+                label: "TA2 reintento seleccionar ALTA (para PDF)",
+              },
+            );
+            if (!selR.ok)
+              throw new Error(
+                `TA2 reintento: no se ha encontrado ALTA: ${selR.reason}`,
+              );
+
             const popupPageR = await popupPromiseR;
-            if (!popupPageR) throw new Error("TA2 reintento: no se abrió la pestaña del PDF.");
-          
+            if (!popupPageR)
+              throw new Error("TA2 reintento: no se abrió la pestaña del PDF.");
+
             // 2º intento (si falla aquí, se captura arriba y se pasa al siguiente registro)
             try {
               await this.descargarPdfRawViaFetchCDP(popupPageR, pdfPath, 90000);
             } finally {
-              try { await popupPageR.close(); } catch (_) {}
+              try {
+                await popupPageR.close();
+              } catch (_) {}
             }
           }
 
           logsTA2.set(dni, `OK: PDF guardado -> ${path.basename(pdfPath)}`);
           okSetTA2.add(dni);
 
-          try { await popupPage.close(); } catch (_) {}
+          try {
+            await popupPage.close();
+          } catch (_) {}
         };
 
         // -------------------------
@@ -1375,7 +1649,9 @@ class ProcesosDuplicados {
 
           const { dirDni } = await this.ensureClientDirFlat(rootOut, dni);
 
-          console.log(`[DUPLICADOS][IDC] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`);
+          console.log(
+            `[DUPLICADOS][IDC] ${idx + 1}/${total} | DNI: ${dni} | TRABAJADOR: ${r.trabajador}`,
+          );
 
           await page.goto(urlFS, { waitUntil: "domcontentloaded" });
           await this.esperarLog(800);
@@ -1383,100 +1659,168 @@ class ProcesosDuplicados {
           await openAFIOnlineReal();
           await openATR37IDC();
 
-          const frameForm = await this.findFrameWithSelector(page, "#SDFTESNAF", 30000);
-          if (!frameForm) throw new Error("IDC: no se encontró el formulario ATR37 (selector #SDFTESNAF)");
+          const frameForm = await this.findFrameWithSelector(
+            page,
+            "#SDFTESNAF",
+            30000,
+          );
+          if (!frameForm)
+            throw new Error(
+              "IDC: no se encontró el formulario ATR37 (selector #SDFTESNAF)",
+            );
 
           const provNAF = this._padLeftDigits(r.provNAF, 2);
           const naf10 = this._padLeftDigits(r.naf, 10);
           const provCCC = this._padLeftDigits(r.provCCC, 2);
           const ccc9 = this._padLeftDigits(r.ccc, 9);
 
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESNAF", provNAF), { label: "IDC fill PROV NAF" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFNAF", naf10), { label: "IDC fill NAF" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFREGCTA", regimen4), { label: "IDC fill REGIMEN" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFTESCTA", provCCC), { label: "IDC fill PROV CCC" });
-          await this.withDetachedFrameRetry(() => fillInput(frameForm, "#SDFCUENTA", ccc9), { label: "IDC fill CCC" });
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFTESNAF", provNAF),
+            { label: "IDC fill PROV NAF" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFNAF", naf10),
+            { label: "IDC fill NAF" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFREGCTA", regimen4),
+            { label: "IDC fill REGIMEN" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFTESCTA", provCCC),
+            { label: "IDC fill PROV CCC" },
+          );
+          await this.withDetachedFrameRetry(
+            () => fillInput(frameForm, "#SDFCUENTA", ccc9),
+            { label: "IDC fill CCC" },
+          );
 
-          await frameForm.waitForSelector("#ListaTipoImpresion", { timeout: 30000 });
+          await frameForm.waitForSelector("#ListaTipoImpresion", {
+            timeout: 30000,
+          });
           await frameForm.select("#ListaTipoImpresion", "OnLine");
 
           const { text: dilBefore } = await this.readDILInAnyFrame(page);
 
-          const clicked = await this.clickContinuarRobusta({ page, frameForm, timeoutMs: 35000 });
+          const clicked = await this.clickContinuarRobusta({
+            page,
+            frameForm,
+            timeoutMs: 35000,
+          });
           if (!clicked) throw new Error("IDC: no se pudo pulsar 'Continuar'.");
 
-          const dilAfter = await this.waitForDILAfterContinuar(page, dilBefore, 1000);
+          const dilAfter = await this.waitForDILAfterContinuar(
+            page,
+            dilBefore,
+            1000,
+          );
           const dilError = this.interpretarDIL(dilAfter);
-          if (dilError) throw new Error(`IDC: Validación FS (DIL): ${dilError}`);
+          if (dilError)
+            throw new Error(`IDC: Validación FS (DIL): ${dilError}`);
 
           const frameListado = await this.findListadoIDCFrame(page, 30000, 250);
-          if (!frameListado) throw new Error("IDC: no se detectó el listado tras Continuar.");
+          if (!frameListado)
+            throw new Error("IDC: no se detectó el listado tras Continuar.");
 
           const popupPromise = this.waitForPopup(browser, page, 45000);
 
-          const sel = await this.withDetachedFrameRetry(() => this.seleccionarAltaIDCMasReciente(frameListado), {
-            label: "IDC seleccionar F. R. Alta",
-          });
-          if (!sel.ok) throw new Error(`IDC: no se pudo seleccionar fila: ${sel.reason}`);
+          const sel = await this.withDetachedFrameRetry(
+            () => this.seleccionarAltaIDCMasReciente(frameListado),
+            {
+              label: "IDC seleccionar F. R. Alta",
+            },
+          );
+          if (!sel.ok)
+            throw new Error(`IDC: no se pudo seleccionar fila: ${sel.reason}`);
 
           const aFecha = this._fechaRealToA(sel.fecha); // "01 01 2012" -> A010112
           const pdfPath = path.join(dirDni, `IDC ${aFecha} ${trabajador}.pdf`);
 
-          console.log(`[DUPLICADOS][IDC][SELECCION] ${dni} -> F. R. Alta: ${sel.fecha}`);
+          console.log(
+            `[DUPLICADOS][IDC][SELECCION] ${dni} -> F. R. Alta: ${sel.fecha}`,
+          );
 
           let popupPage = await popupPromise;
           if (!popupPage) {
-            console.warn(`[DUPLICADOS][IDC][POPUP] No abrió a la primera. Reintentando doble click...`);
+            console.warn(
+              `[DUPLICADOS][IDC][POPUP] No abrió a la primera. Reintentando doble click...`,
+            );
             const popupPromise2 = this.waitForPopup(browser, page, 25000);
-            const sel2 = await this.withDetachedFrameRetry(() => this.seleccionarAltaIDCMasReciente(frameListado), {
-              label: "IDC reintento seleccionar fila",
-            });
-            if (!sel2.ok) throw new Error(`IDC reintento: no se pudo seleccionar fila: ${sel2.reason}`);
+            const sel2 = await this.withDetachedFrameRetry(
+              () => this.seleccionarAltaIDCMasReciente(frameListado),
+              {
+                label: "IDC reintento seleccionar fila",
+              },
+            );
+            if (!sel2.ok)
+              throw new Error(
+                `IDC reintento: no se pudo seleccionar fila: ${sel2.reason}`,
+              );
             popupPage = await popupPromise2;
           }
 
-          if (!popupPage) throw new Error("IDC: no se abrió la pestaña del PDF tras reintento.");
+          if (!popupPage)
+            throw new Error(
+              "IDC: no se abrió la pestaña del PDF tras reintento.",
+            );
 
           // 1er intento
-    try {
-      await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
-    } catch (e1) {
-      if (!this._isPdfDownloadRetryableError(e1)) throw e1;
-    
-      console.warn(`[DUPLICADOS][IDC][PDF] Reintento por fallo de visor/PDF...`, e1?.message || e1);
-    
-      try { await popupPage.close(); } catch (_) {}
-    
-      // Reabrir popup (doble click de nuevo)
-      const popupPromiseR = this.waitForPopup(browser, page, 25000);
-    
-      const selR = await this.withDetachedFrameRetry(() => this.seleccionarAltaIDCMasReciente(frameListado), {
-        label: "IDC reintento seleccionar F. R. Alta (para PDF)",
-      });
-      if (!selR.ok) throw new Error(`IDC reintento: no se pudo seleccionar fila: ${selR.reason}`);
-    
-      const popupPageR = await popupPromiseR;
-      if (!popupPageR) throw new Error("IDC reintento: no se abrió la pestaña del PDF.");
-    
-      try {
-        await this.descargarPdfRawViaFetchCDP(popupPageR, pdfPath, 90000);
-      } finally {
-        try { await popupPageR.close(); } catch (_) {}
-      }
-    }
-    
+          try {
+            await this.descargarPdfRawViaFetchCDP(popupPage, pdfPath, 90000);
+          } catch (e1) {
+            if (!this._isPdfDownloadRetryableError(e1)) throw e1;
+
+            console.warn(
+              `[DUPLICADOS][IDC][PDF] Reintento por fallo de visor/PDF...`,
+              e1?.message || e1,
+            );
+
+            try {
+              await popupPage.close();
+            } catch (_) {}
+
+            // Reabrir popup (doble click de nuevo)
+            const popupPromiseR = this.waitForPopup(browser, page, 25000);
+
+            const selR = await this.withDetachedFrameRetry(
+              () => this.seleccionarAltaIDCMasReciente(frameListado),
+              {
+                label: "IDC reintento seleccionar F. R. Alta (para PDF)",
+              },
+            );
+            if (!selR.ok)
+              throw new Error(
+                `IDC reintento: no se pudo seleccionar fila: ${selR.reason}`,
+              );
+
+            const popupPageR = await popupPromiseR;
+            if (!popupPageR)
+              throw new Error("IDC reintento: no se abrió la pestaña del PDF.");
+
+            try {
+              await this.descargarPdfRawViaFetchCDP(popupPageR, pdfPath, 90000);
+            } finally {
+              try {
+                await popupPageR.close();
+              } catch (_) {}
+            }
+          }
 
           logsIDC.set(dni, `OK: PDF guardado -> ${path.basename(pdfPath)}`);
           okSetIDC.add(dni);
 
-          try { await popupPage.close(); } catch (_) {}
+          try {
+            await popupPage.close();
+          } catch (_) {}
         };
 
         // -------------------------
         // ✅ LOOP principal: por empleado -> TA2 y luego IDC
         // -------------------------
-        let okTA2 = 0, errTA2 = 0;
-        let okIDC = 0, errIDC = 0;
+        let okTA2 = 0,
+          errTA2 = 0;
+        let okIDC = 0,
+          errIDC = 0;
 
         for (let i = 0; i < kept.length; i++) {
           registrosProcesados++;
@@ -1523,7 +1867,9 @@ class ProcesosDuplicados {
 
         registrarEjecucion({ nombreProceso, registrosProcesados });
 
-        try { if (browser) await browser.close(); } catch (_) {}
+        try {
+          if (browser) await browser.close();
+        } catch (_) {}
 
         return resolve(true);
       } catch (err) {
@@ -1536,7 +1882,9 @@ class ProcesosDuplicados {
             );
           }
         } catch (_) {}
-        try { if (browser) await browser.close(); } catch (_) {}
+        try {
+          if (browser) await browser.close();
+        } catch (_) {}
 
         return resolve(false);
       }
@@ -1545,7 +1893,9 @@ class ProcesosDuplicados {
 
   // ✅ Alias que AppService ya llama: ahora hace TA2+IDC
   async ["dUPLICADOSTA2+IDC"](argumentos) {
-    console.warn("[DUPLICADOS] Alias dUPLICADOSTA2+IDC() llamado. Ejecuta TA2+IDC (por empleado).");
+    console.warn(
+      "[DUPLICADOS] Alias dUPLICADOSTA2+IDC() llamado. Ejecuta TA2+IDC (por empleado).",
+    );
     return this.duplicadosTa2(argumentos);
   }
 }

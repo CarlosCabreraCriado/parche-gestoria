@@ -13,9 +13,10 @@ interface LibreriaProcesos {
     | "Documentos"
     | "Asesoria"
     | "Prueba"
-    | "Asesoria"
     | "Fie"
-    | "Duplicados";
+    | "Duplicados"
+    | "Autonomos";
+
   descripcion: string;
   autor?: string;
   opciones?: any;
@@ -866,10 +867,11 @@ var libreriaProcesos: LibreriaProcesos[] = [
     subCategoria: [
       {
         // OJO: este "nombre" es el que se intenta ejecutar según tus logs
-        nombre: "dUPLICADOSTA2+IDC",
+        nombre: "DUPLICADOS TA2+IDC",
         categoria: "Duplicados",
         tipo: "proceso",
-        descripcion: "Por cada trabajador: descarga TA2 y a continuación IDC (mismo Excel).",
+        descripcion:
+          "Por cada trabajador: descarga TA2 y a continuación IDC (mismo Excel).",
         autor: "Gonzalo Martín",
         argumentos: [
           {
@@ -892,7 +894,8 @@ var libreriaProcesos: LibreriaProcesos[] = [
               titulo: "Excel de clientes",
               tipo: "archivo",
               accept: ".xlsm, .xlsx, .XLSX",
-              placeholder: "Introduzca la ruta del archivo de datos de clientes.",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
               valorDefault: "",
             },
           },
@@ -924,7 +927,62 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   },
-
+  {
+    nombre: "Bases y recibos al cobro autónomos",
+    categoria: "Autonomos",
+    tipo: "directorio",
+    descripcion: "Procesos de asesoría",
+    subCategoria: [
+      {
+        // OJO: este "nombre" es el que se intenta ejecutar según tus logs
+        nombre: "Bases y recibos al cobro autónomos",
+        categoria: "Autonomos",
+        tipo: "proceso",
+        descripcion: "Bases y recibos al cobro autónomos",
+        autor: "Gonzalo Martín",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de PDFs:",
+              tipo: "ruta",
+              placeholder: "Carpeta con los PDFs",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
 ];
 
 export { LibreriaProcesos, libreriaProcesos };
