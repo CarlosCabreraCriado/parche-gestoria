@@ -45,6 +45,31 @@ class ProcesosBasesRecibosAutonomos {
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  _injectBaseTag(html, baseHref) {
+    // Inserta <base> dentro de <head> para que /GestionDomiciliacionCuenta/... resuelva bien
+    if (!html) return html;
+    if (/<base\s/i.test(html)) return html;
+
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(
+        /<head[^>]*>/i,
+        (m) => `${m}\n<base href="${baseHref}">`,
+      );
+    }
+    // fallback raro si no hay <head>
+    return `<base href="${baseHref}">\n${html}`;
+  }
+
+  _stripHeavyScripts(html) {
+    // Quita scripts (gtm, analytics, prosa.js) para que setContent no se quede “esperando”
+    // Mantiene los <link rel="stylesheet"...> (que es lo que nos interesa)
+    if (!html) return html;
+    return html.replace(
+      /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+      "",
+    );
+  }
+
   _safeFileName(str) {
     return String(str ?? "")
       .trim()
@@ -1054,158 +1079,6 @@ class ProcesosBasesRecibosAutonomos {
           }
 
           try {
-            const self = this;
-            async function expandirScrollParaImpresion(frame) {
-              // 1) Convertir TODOS los contenedores con scroll interno en “no-scroll” (se expanden)
-              await frame.evaluate(() => {
-                const candidatos = [
-                  document.documentElement,
-                  document.body,
-                  ...document.querySelectorAll("*"),
-                ];
-
-                for (const el of candidatos) {
-                  const cs = window.getComputedStyle(el);
-                  const oy = cs.overflowY;
-
-                  const tieneScroll =
-                    (oy === "auto" || oy === "scroll") &&
-                    el.scrollHeight > el.clientHeight + 20;
-
-                  if (tieneScroll) {
-                    // Guardar estado para restaurar después
-                    el.setAttribute(
-                      "data-print-old-oy",
-                      el.style.overflowY || "",
-                    );
-                    el.setAttribute("data-print-old-h", el.style.height || "");
-                    el.setAttribute(
-                      "data-print-old-mh",
-                      el.style.maxHeight || "",
-                    );
-
-                    // Expandir
-                    el.style.overflowY = "visible";
-                    el.style.height = "auto";
-                    el.style.maxHeight = "none";
-                  }
-                }
-              });
-
-              // 2) Asegurar que en print no se vuelvan a forzar alturas/overflow
-              await frame.addStyleTag({
-                content: `
-      @media print {
-        html, body { height: auto !important; overflow: visible !important; }
-        /* Oculta las barras (por si quedan) */
-        ::-webkit-scrollbar { display: none !important; }
-      }
-    `,
-              });
-            }
-
-            async function restaurarScrollTrasImpresion(frame) {
-              await frame.evaluate(() => {
-                const els = Array.from(
-                  document.querySelectorAll("[data-print-old-oy]"),
-                );
-                for (const el of els) {
-                  el.style.overflowY =
-                    el.getAttribute("data-print-old-oy") || "";
-                  el.style.height = el.getAttribute("data-print-old-h") || "";
-                  el.style.maxHeight =
-                    el.getAttribute("data-print-old-mh") || "";
-
-                  el.removeAttribute("data-print-old-oy");
-                  el.removeAttribute("data-print-old-h");
-                  el.removeAttribute("data-print-old-mh");
-                }
-              });
-            }
-
-            async function generarPdfDetalleReciboComoChrome(page, outPath) {
-              const frDetalle =
-                (await self.findFrameWithSelector(page, "#TABLA_3", 30000)) ||
-                (await self.findFrameWithSelector(page, "#TABLA_5", 30000)) ||
-                (await self.findFrameWithSelector(
-                  page,
-                  "#botonImprimir",
-                  30000,
-                ));
-
-              if (!frDetalle) {
-                throw new Error(
-                  "No se detectó el detalle del recibo (TABLA_3/TABLA_5/botonImprimir).",
-                );
-              }
-
-              // ✅ CLAVE: expandir scroll interno antes de imprimir
-              await expandirScrollParaImpresion(frDetalle);
-
-              await page
-                .waitForNetworkIdle({ idleTime: 800, timeout: 25000 })
-                .catch(() => {});
-              await self.esperar(500);
-
-              await page.emulateMediaType("print");
-
-              const title = (await page.title().catch(() => "")) || "";
-
-              await page.pdf({
-                path: outPath,
-                format: "A4",
-                printBackground: true,
-                preferCSSPageSize: true,
-                displayHeaderFooter: true,
-                headerTemplate: `
-      <div style="width:100%; height:18mm; font-size:8px; padding:0 10mm; color:#666; line-height:1.2;">
-        <div style="float:left;"><span class="date"></span>, <span class="time"></span></div>
-        <div style="text-align:center;">${escapeHtml(title)}</div>
-      </div>`,
-                footerTemplate: `
-      <div style="width:100%; height:18mm; font-size:8px; padding:0 10mm; color:#666; line-height:1.2;">
-        <div style="float:left;"><span class="url"></span></div>
-        <div style="float:right;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>
-      </div>`,
-                margin: {
-                  top: "22mm",
-                  bottom: "22mm",
-                  left: "10mm",
-                  right: "10mm",
-                },
-                // Si siguiera “apretado”, prueba 0.95 o 0.9
-                // scale: 0.95,
-              });
-
-              await page.emulateMediaType("screen");
-
-              // (opcional) restaurar para no “romper” la UI si sigues navegando en esa misma vista
-              await restaurarScrollTrasImpresion(frDetalle);
-
-              // Validación rápida
-              const stat = fs.existsSync(outPath) ? fs.statSync(outPath) : null;
-              if (!stat || stat.size < 10_000)
-                throw new Error(
-                  `PDF pequeño/inexistente: ${stat?.size ?? 0} bytes`,
-                );
-              const head = fs
-                .readFileSync(outPath)
-                .subarray(0, 5)
-                .toString("utf8");
-              if (head !== "%PDF-")
-                throw new Error("No es PDF válido (%PDF-).");
-            }
-
-            // helper mínimo para evitar romper el template con caracteres raros
-            function escapeHtml(s) {
-              return String(s)
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#039;");
-            }
-
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
 
             await openCotizacionRETA();
@@ -1277,48 +1150,101 @@ class ProcesosBasesRecibosAutonomos {
             console.log("Realizado click detalle");
 
             // -------------
-            // ✅ NUEVO: Generar PDF del detalle SIN chrome://print
+            // Generar PDF del detalle (SIN chrome://print, SIN recortes)
             // -------------
-            console.log(
-              "Generando PDF B desde el detalle (sin chrome://print)...",
+
+            // 1) Encuentra el frame que realmente tiene el detalle
+            const frDetalle = await this.findFrameWithSelector(
+              page,
+              "#TABLA_5",
+              60000,
             );
-            let ok = false;
-            let lastErr = null;
+            if (!frDetalle)
+              throw new Error("No encontré #TABLA_5 tras abrir el detalle.");
 
-            for (let intento = 1; intento <= 2; intento++) {
-              try {
-                await generarPdfDetalleReciboComoChrome(page, pdfB);
-                ok = true;
-                break;
-              } catch (e) {
-                lastErr = e;
-                console.warn(
-                  `[PARTE_B_PDF] Fallo intento ${intento}:`,
-                  e?.message || e,
-                );
-                if (intento < 2) {
-                  // mini “reset” suave (sin romper sesión)
-                  await this.esperar(1200);
-                  if (typeof page.waitForNetworkIdle === "function") {
-                    await page
-                      .waitForNetworkIdle({ idleTime: 800, timeout: 25000 })
-                      .catch(() => {});
-                  } else {
-                    await self.esperar(800);
-                  }
-                  await self.esperar(500);
-                }
-              }
-            }
+            // 2) Saca el HTML completo de ese documento (el que tú has pegado)
+            let htmlDetalle = await frDetalle.content(); // devuelve <!DOCTYPE html><html>...
+            if (!htmlDetalle || htmlDetalle.length < 500)
+              throw new Error(
+                "El HTML del detalle está vacío o es demasiado corto.",
+              );
 
-            if (!ok) throw lastErr;
+            // 3) Limpieza mínima + base href para que carguen CSS relativos
+            const baseHref = "https://w2.seg-social.es";
+            htmlDetalle = this._stripHeavyScripts(htmlDetalle);
+            htmlDetalle = this._injectBaseTag(htmlDetalle, baseHref);
+
+            // (Opcional) si quieres forzar modo claro en impresión:
+            htmlDetalle = htmlDetalle.replace(/class="dark"/i, 'class=""');
+
+            // 4) Render en una pestaña nueva “limpia”
+            const pdfPage = await browser.newPage();
+            await pdfPage.setViewport({
+              width: 1280,
+              height: 720,
+              deviceScaleFactor: 1,
+            });
+
+            // Importante: setContent con waitUntil "load" para que carguen los CSS
+            await pdfPage.setContent(htmlDetalle, { waitUntil: "load" });
+
+            // Marca de que el contenido clave está
+            await pdfPage.waitForSelector("#TABLA_5", { timeout: 60000 });
+            // --- Forzar modo claro / evitar PDF "negro" (html tiene class="dark") ---
+            await page
+              .emulateMediaFeatures([
+                { name: "prefers-color-scheme", value: "light" },
+              ])
+              .catch(() => {});
+
+            await page.evaluate(() => {
+              // quitar clase dark si existe
+              document.documentElement.classList.remove("dark");
+              document.documentElement.classList.add("light");
+
+              // asegurar fondo blanco y texto negro
+              document.body.style.background = "#fff";
+              document.body.style.color = "#000";
+            });
+
+            // CSS extra por si hay contenedores/estilos que fuerzan fondos oscuros en print
+            await page.addStyleTag({
+              content: `
+    @media print {
+      html, body { background: #fff !important; color: #000 !important; }
+      * { background: transparent !important; box-shadow: none !important; }
+      a, span, p, div, td, th, h1, h2, h3, h4 { color: #000 !important; }
+    }
+  `,
+            });
+
+            // 5) PDF con estilos de impresión (ya existe estilosImpresion.min.css media="print")
+            await pdfPage.emulateMediaType("print");
+            await pdfPage.pdf({
+              path: pdfB,
+              format: "A4",
+              printBackground: true,
+              preferCSSPageSize: true,
+              margin: {
+                top: "10mm",
+                right: "10mm",
+                bottom: "10mm",
+                left: "10mm",
+              },
+            });
+
+            await pdfPage.close().catch(() => {});
 
             okB++;
+            const prev = logMap.get(dniKey) || "";
             logMap.set(
               dniKey,
-              `${logMap.get(dniKey) || ""} | OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
+              prev
+                ? `${prev} | OK_B: PDF B guardado -> ${path.basename(pdfB)}`
+                : `OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
             );
-            console.log("PDF B guardado correctamente.");
+
+            console.log("PDF guardado:", pdfB);
           } catch (e) {
             errB++;
             const prev = logMap.get(dniKey) || "";
