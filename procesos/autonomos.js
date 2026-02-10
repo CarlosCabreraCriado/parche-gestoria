@@ -328,6 +328,233 @@ class ProcesosBasesRecibosAutonomos {
     return false;
   }
 
+  async waitForPopup(browser, openerPage, timeoutMs = 45000) {
+    const target = await browser
+      .waitForTarget(
+        (t) => {
+          try {
+            return (
+              t.type() === "page" &&
+              t.opener() &&
+              t.opener() === openerPage.target()
+            );
+          } catch (_) {
+            return false;
+          }
+        },
+        { timeout: timeoutMs },
+      )
+      .catch(() => null);
+
+    if (!target) return null;
+    return target.page();
+  }
+
+  async waitForPrintPreviewAny(browser, openerPage, timeoutMs = 45000) {
+    const start = Date.now();
+
+    // A) Caso 1: misma pestaña navega a chrome://print
+    const waitSameTab = (async () => {
+      while (Date.now() - start < timeoutMs) {
+        try {
+          const u = openerPage.url();
+          if (u && u.startsWith("chrome://print")) return openerPage;
+        } catch (_) {}
+        await this.esperar(200);
+      }
+      return null;
+    })();
+
+    // B) Caso 2: se abre como popup/target nuevo chrome://print
+    const waitNewTarget = browser
+      .waitForTarget(
+        (t) =>
+          t.type() === "page" && (t.url() || "").startsWith("chrome://print"),
+        { timeout: timeoutMs },
+      )
+      .then((t) => t.page().catch(() => null))
+      .catch(() => null);
+
+    const printPage = await Promise.race([waitSameTab, waitNewTarget]);
+
+    if (!printPage)
+      throw new Error("Timeout esperando vista de impresión (chrome://print).");
+
+    try {
+      await printPage.bringToFront();
+    } catch (_) {}
+
+    return printPage;
+  }
+
+  _isPdfBuffer(buf) {
+    if (!buf || !Buffer.isBuffer(buf) || buf.length < 5) return false;
+    return buf.subarray(0, 5).toString("utf8") === "%PDF-";
+  }
+
+  _isPdfDownloadRetryableError(err) {
+    const msg = String(err?.message || err).toLowerCase();
+    return (
+      msg.includes("no es un pdf") ||
+      msg.includes("timeout") ||
+      msg.includes("pdf")
+    );
+  }
+
+  /**
+   * Descarga un PDF real capturando la respuesta con CDP Fetch.
+   * Muy robusto en visores que devuelven HTML si no se captura el request.
+   */
+  async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
+    await popupPage.bringToFront().catch(() => {});
+    const client = await popupPage.target().createCDPSession();
+
+    let done = false;
+    let onPaused = null;
+
+    try {
+      await client.send("Network.enable").catch(() => {});
+      await client
+        .send("Network.setCacheDisabled", { cacheDisabled: true })
+        .catch(() => {});
+
+      await client
+        .send("Fetch.enable", {
+          patterns: [{ urlPattern: "*", requestStage: "Response" }],
+        })
+        .catch(() => {});
+
+      const timer = new Promise((_, rej) =>
+        setTimeout(
+          () => rej(new Error("Timeout esperando el PDF (Fetch CDP).")),
+          timeoutMs,
+        ),
+      );
+
+      const pdfPromise = new Promise((resolve, reject) => {
+        onPaused = async (ev) => {
+          if (done) {
+            try {
+              await client
+                .send("Fetch.continueRequest", { requestId: ev.requestId })
+                .catch(() => {});
+            } catch (_) {}
+            return;
+          }
+
+          try {
+            const reqId = ev.requestId;
+            const status = ev.responseStatusCode || 0;
+            const headers = {};
+            for (const h of ev.responseHeaders || []) {
+              headers[String(h.name || "").toLowerCase()] = String(
+                h.value || "",
+              );
+            }
+            const ctype = (headers["content-type"] || "").toLowerCase();
+
+            const maybePdf =
+              status >= 200 &&
+              status < 300 &&
+              (ctype.includes("application/pdf") ||
+                ctype.includes("octet-stream") ||
+                ctype.includes("binary") ||
+                true);
+
+            if (!maybePdf) {
+              await client
+                .send("Fetch.continueRequest", { requestId: reqId })
+                .catch(() => {});
+              return;
+            }
+
+            const bodyResp = await client.send("Fetch.getResponseBody", {
+              requestId: reqId,
+            });
+            const buf = bodyResp?.base64Encoded
+              ? Buffer.from(bodyResp.body || "", "base64")
+              : Buffer.from(bodyResp.body || "", "utf8");
+
+            await client
+              .send("Fetch.continueRequest", { requestId: reqId })
+              .catch(() => {});
+
+            if (!this._isPdfBuffer(buf)) {
+              // No era un PDF real -> seguir escuchando
+              return;
+            }
+
+            done = true;
+            fs.writeFileSync(outputPath, buf);
+            resolve(true);
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        client.on("Fetch.requestPaused", onPaused);
+      });
+
+      // Forzar reload para disparar el request del PDF
+      await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      await popupPage
+        .waitForSelector("body", { timeout: 20000 })
+        .catch(() => {});
+      await this.esperar(800);
+
+      await Promise.race([pdfPromise, timer]);
+      return true;
+    } finally {
+      try {
+        if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
+      } catch (_) {}
+      try {
+        await client.send("Fetch.disable").catch(() => {});
+      } catch (_) {}
+      try {
+        await client.detach();
+      } catch (_) {}
+    }
+  }
+
+  /**
+   * Descarga PDF con 1 reintento.
+   */
+  async descargarPdfConReintento({ openPopupFn, outputPath, label }) {
+    let lastErr = null;
+
+    for (let intento = 1; intento <= 2; intento++) {
+      let popup = null;
+      try {
+        popup = await openPopupFn();
+        if (!popup) throw new Error("No se abrió el popup/pestaña del PDF.");
+
+        await this.descargarPdfRawViaFetchCDP(popup, outputPath, 90000);
+
+        try {
+          await popup.close();
+        } catch (_) {}
+        return true;
+      } catch (e) {
+        lastErr = e;
+
+        try {
+          if (popup) await popup.close();
+        } catch (_) {}
+
+        if (!this._isPdfDownloadRetryableError(e) || intento === 2) break;
+
+        console.warn(
+          `[${label}] Fallo de descarga (intento ${intento}). Reintentando 1 vez...`,
+          e?.message || e,
+        );
+        await this.esperar(1200);
+      }
+    }
+
+    throw lastErr;
+  }
+
   // -------------------------
   // Selección “recibo más reciente”
   // -------------------------
@@ -760,7 +987,7 @@ class ProcesosBasesRecibosAutonomos {
                     "No se encontró el botón Imprimir (parte A).",
                   );
 
-                const popupPromise = waitForPopup(browser, page, 30000);
+                const popupPromise = this.waitForPopup(browser, page, 30000);
                 const b = await frBtn.$("#Sub2204801005_67");
                 await b.click({ delay: 40 });
 
@@ -768,45 +995,10 @@ class ProcesosBasesRecibosAutonomos {
                 return popup;
               };
 
-              await descargarPdfConReintento({
+              await this.descargarPdfConReintento({
+                openPopupFn,
+                outputPath: pdfA,
                 label: "PARTE_A_PDF",
-                reintentos: 2,
-                esperaEntre: 1200,
-
-                openPdfFn: async () => {
-                  const frBtn = await this.findFrameWithSelector(
-                    page,
-                    "#Sub2204801005_67",
-                    30000,
-                  );
-                  if (!frBtn)
-                    throw new Error(
-                      "No se encontró el botón Imprimir (parte A).",
-                    );
-
-                  await frBtn.waitForSelector("#Sub2204801005_67", {
-                    timeout: 25000,
-                  });
-                  try {
-                    await frBtn.click("#Sub2204801005_67", { delay: 40 });
-                  } catch {
-                    await frBtn.$eval("#Sub2204801005_67", (el) => el.click());
-                  }
-                },
-
-                getPopupFn: async () => {
-                  return await waitForPopup(browser, page, 30000);
-                },
-
-                downloadFn: async (popup) => {
-                  await descargarPdfRawViaFetchCDP(popup, pdfA, 90000);
-                },
-
-                closePopupFn: async (popup) => {
-                  try {
-                    await popup.close();
-                  } catch (_) {}
-                },
               });
 
               okA++;
@@ -821,9 +1013,12 @@ class ProcesosBasesRecibosAutonomos {
             logMap.set(dniKey, msg);
             console.warn("[BASES/RECIBOS][A]", msg);
           }
+
           // ==========
           // PARTE B
           // ==========
+          const self = this;
+
           async function clickAnywhere(page, selector, timeoutMs = 60000) {
             const start = Date.now();
 
@@ -852,13 +1047,165 @@ class ProcesosBasesRecibosAutonomos {
                 return;
               }
 
-              await page.waitForTimeout(300);
+              await self.esperar(300);
             }
 
             throw new Error(`No se encontró ${selector} en ningún frame`);
           }
 
           try {
+            const self = this;
+            async function expandirScrollParaImpresion(frame) {
+              // 1) Convertir TODOS los contenedores con scroll interno en “no-scroll” (se expanden)
+              await frame.evaluate(() => {
+                const candidatos = [
+                  document.documentElement,
+                  document.body,
+                  ...document.querySelectorAll("*"),
+                ];
+
+                for (const el of candidatos) {
+                  const cs = window.getComputedStyle(el);
+                  const oy = cs.overflowY;
+
+                  const tieneScroll =
+                    (oy === "auto" || oy === "scroll") &&
+                    el.scrollHeight > el.clientHeight + 20;
+
+                  if (tieneScroll) {
+                    // Guardar estado para restaurar después
+                    el.setAttribute(
+                      "data-print-old-oy",
+                      el.style.overflowY || "",
+                    );
+                    el.setAttribute("data-print-old-h", el.style.height || "");
+                    el.setAttribute(
+                      "data-print-old-mh",
+                      el.style.maxHeight || "",
+                    );
+
+                    // Expandir
+                    el.style.overflowY = "visible";
+                    el.style.height = "auto";
+                    el.style.maxHeight = "none";
+                  }
+                }
+              });
+
+              // 2) Asegurar que en print no se vuelvan a forzar alturas/overflow
+              await frame.addStyleTag({
+                content: `
+      @media print {
+        html, body { height: auto !important; overflow: visible !important; }
+        /* Oculta las barras (por si quedan) */
+        ::-webkit-scrollbar { display: none !important; }
+      }
+    `,
+              });
+            }
+
+            async function restaurarScrollTrasImpresion(frame) {
+              await frame.evaluate(() => {
+                const els = Array.from(
+                  document.querySelectorAll("[data-print-old-oy]"),
+                );
+                for (const el of els) {
+                  el.style.overflowY =
+                    el.getAttribute("data-print-old-oy") || "";
+                  el.style.height = el.getAttribute("data-print-old-h") || "";
+                  el.style.maxHeight =
+                    el.getAttribute("data-print-old-mh") || "";
+
+                  el.removeAttribute("data-print-old-oy");
+                  el.removeAttribute("data-print-old-h");
+                  el.removeAttribute("data-print-old-mh");
+                }
+              });
+            }
+
+            async function generarPdfDetalleReciboComoChrome(page, outPath) {
+              const frDetalle =
+                (await self.findFrameWithSelector(page, "#TABLA_3", 30000)) ||
+                (await self.findFrameWithSelector(page, "#TABLA_5", 30000)) ||
+                (await self.findFrameWithSelector(
+                  page,
+                  "#botonImprimir",
+                  30000,
+                ));
+
+              if (!frDetalle) {
+                throw new Error(
+                  "No se detectó el detalle del recibo (TABLA_3/TABLA_5/botonImprimir).",
+                );
+              }
+
+              // ✅ CLAVE: expandir scroll interno antes de imprimir
+              await expandirScrollParaImpresion(frDetalle);
+
+              await page
+                .waitForNetworkIdle({ idleTime: 800, timeout: 25000 })
+                .catch(() => {});
+              await self.esperar(500);
+
+              await page.emulateMediaType("print");
+
+              const title = (await page.title().catch(() => "")) || "";
+
+              await page.pdf({
+                path: outPath,
+                format: "A4",
+                printBackground: true,
+                preferCSSPageSize: true,
+                displayHeaderFooter: true,
+                headerTemplate: `
+      <div style="width:100%; height:18mm; font-size:8px; padding:0 10mm; color:#666; line-height:1.2;">
+        <div style="float:left;"><span class="date"></span>, <span class="time"></span></div>
+        <div style="text-align:center;">${escapeHtml(title)}</div>
+      </div>`,
+                footerTemplate: `
+      <div style="width:100%; height:18mm; font-size:8px; padding:0 10mm; color:#666; line-height:1.2;">
+        <div style="float:left;"><span class="url"></span></div>
+        <div style="float:right;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>
+      </div>`,
+                margin: {
+                  top: "22mm",
+                  bottom: "22mm",
+                  left: "10mm",
+                  right: "10mm",
+                },
+                // Si siguiera “apretado”, prueba 0.95 o 0.9
+                // scale: 0.95,
+              });
+
+              await page.emulateMediaType("screen");
+
+              // (opcional) restaurar para no “romper” la UI si sigues navegando en esa misma vista
+              await restaurarScrollTrasImpresion(frDetalle);
+
+              // Validación rápida
+              const stat = fs.existsSync(outPath) ? fs.statSync(outPath) : null;
+              if (!stat || stat.size < 10_000)
+                throw new Error(
+                  `PDF pequeño/inexistente: ${stat?.size ?? 0} bytes`,
+                );
+              const head = fs
+                .readFileSync(outPath)
+                .subarray(0, 5)
+                .toString("utf8");
+              if (head !== "%PDF-")
+                throw new Error("No es PDF válido (%PDF-).");
+            }
+
+            // helper mínimo para evitar romper el template con caracteres raros
+            function escapeHtml(s) {
+              return String(s)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+            }
+
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
 
             await openCotizacionRETA();
@@ -925,36 +1272,22 @@ class ProcesosBasesRecibosAutonomos {
             // LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
             // -------------
             console.log("Esperando click detalle");
-            await this.esperar(5000);
+            await this.esperar(1000);
             await clickAnywhere(page, "a.enlaceFuncDetalle", 60000);
             console.log("Realizado click detalle");
 
             // -------------
-            // Imprimir recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
+            // ✅ NUEVO: Generar PDF del detalle SIN chrome://print
             // -------------
-            console.log("Esperando click imprimir...");
-            await this.esperar(5000);
-
-            const popupPromise = waitForPrintPreviewPopup(
-              browser,
-              page,
-              30000,
-            ).catch((e) => {
-              throw e;
-            });
-
-            await clickAnywhere(page, "#botonImprimir");
-            const popup = await popupPromise;
-
-            // 3) Descarga PDF desde el popup (con reintento)
+            console.log(
+              "Generando PDF B desde el detalle (sin chrome://print)...",
+            );
             let ok = false;
             let lastErr = null;
 
             for (let intento = 1; intento <= 2; intento++) {
               try {
-                await descargarPdfDesdePrintPreview(popup, pdfB, {
-                  timeoutMs: 20000,
-                });
+                await generarPdfDetalleReciboComoChrome(page, pdfB);
                 ok = true;
                 break;
               } catch (e) {
@@ -963,13 +1296,20 @@ class ProcesosBasesRecibosAutonomos {
                   `[PARTE_B_PDF] Fallo intento ${intento}:`,
                   e?.message || e,
                 );
-                if (intento < 2) await this.esperar(1200);
+                if (intento < 2) {
+                  // mini “reset” suave (sin romper sesión)
+                  await this.esperar(1200);
+                  if (typeof page.waitForNetworkIdle === "function") {
+                    await page
+                      .waitForNetworkIdle({ idleTime: 800, timeout: 25000 })
+                      .catch(() => {});
+                  } else {
+                    await self.esperar(800);
+                  }
+                  await self.esperar(500);
+                }
               }
             }
-
-            try {
-              await popup.close();
-            } catch (_) {}
 
             if (!ok) throw lastErr;
 
@@ -978,7 +1318,7 @@ class ProcesosBasesRecibosAutonomos {
               dniKey,
               `${logMap.get(dniKey) || ""} | OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
             );
-            console.log("Realizado click imprimir...");
+            console.log("PDF B guardado correctamente.");
           } catch (e) {
             errB++;
             const prev = logMap.get(dniKey) || "";

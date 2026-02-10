@@ -343,6 +343,8 @@ async function descargarPdfDesdePrintPreview(popupPage, outputPath, opts = {}) {
     );
 }
 
+
+
 module.exports = {
   waitForPopup,
   descargarPdfRawViaFetchCDP,
