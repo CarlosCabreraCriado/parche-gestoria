@@ -2,6 +2,13 @@ const path = require("path");
 const fs = require("fs");
 const XlsxPopulate = require("xlsx-populate");
 const puppeteer = require("puppeteer");
+const {
+  waitForPopup,
+  descargarPdfRawViaFetchCDP,
+  descargarPdfConReintento,
+  waitForPrintPreviewPopup,
+  descargarPdfDesdePrintPreview,
+} = require("./utils/pdfNuevaPestanaCdp");
 
 /**
  * Procesos Bases y Recibos Autónomos
@@ -321,196 +328,6 @@ class ProcesosBasesRecibosAutonomos {
     return false;
   }
 
-  async waitForPopup(browser, openerPage, timeoutMs = 45000) {
-    const target = await browser
-      .waitForTarget(
-        (t) => {
-          try {
-            return (
-              t.type() === "page" &&
-              t.opener() &&
-              t.opener() === openerPage.target()
-            );
-          } catch (_) {
-            return false;
-          }
-        },
-        { timeout: timeoutMs },
-      )
-      .catch(() => null);
-
-    if (!target) return null;
-    return target.page();
-  }
-
-  _isPdfBuffer(buf) {
-    if (!buf || !Buffer.isBuffer(buf) || buf.length < 5) return false;
-    return buf.subarray(0, 5).toString("utf8") === "%PDF-";
-  }
-
-  _isPdfDownloadRetryableError(err) {
-    const msg = String(err?.message || err).toLowerCase();
-    return (
-      msg.includes("no es un pdf") ||
-      msg.includes("timeout") ||
-      msg.includes("pdf")
-    );
-  }
-
-  /**
-   * Descarga un PDF real capturando la respuesta con CDP Fetch.
-   * Muy robusto en visores que devuelven HTML si no se captura el request.
-   */
-  async descargarPdfRawViaFetchCDP(popupPage, outputPath, timeoutMs = 90000) {
-    await popupPage.bringToFront().catch(() => {});
-    const client = await popupPage.target().createCDPSession();
-
-    let done = false;
-    let onPaused = null;
-
-    try {
-      await client.send("Network.enable").catch(() => {});
-      await client
-        .send("Network.setCacheDisabled", { cacheDisabled: true })
-        .catch(() => {});
-
-      await client
-        .send("Fetch.enable", {
-          patterns: [{ urlPattern: "*", requestStage: "Response" }],
-        })
-        .catch(() => {});
-
-      const timer = new Promise((_, rej) =>
-        setTimeout(
-          () => rej(new Error("Timeout esperando el PDF (Fetch CDP).")),
-          timeoutMs,
-        ),
-      );
-
-      const pdfPromise = new Promise((resolve, reject) => {
-        onPaused = async (ev) => {
-          if (done) {
-            try {
-              await client
-                .send("Fetch.continueRequest", { requestId: ev.requestId })
-                .catch(() => {});
-            } catch (_) {}
-            return;
-          }
-
-          try {
-            const reqId = ev.requestId;
-            const status = ev.responseStatusCode || 0;
-            const headers = {};
-            for (const h of ev.responseHeaders || []) {
-              headers[String(h.name || "").toLowerCase()] = String(
-                h.value || "",
-              );
-            }
-            const ctype = (headers["content-type"] || "").toLowerCase();
-
-            const maybePdf =
-              status >= 200 &&
-              status < 300 &&
-              (ctype.includes("application/pdf") ||
-                ctype.includes("octet-stream") ||
-                ctype.includes("binary") ||
-                true);
-
-            if (!maybePdf) {
-              await client
-                .send("Fetch.continueRequest", { requestId: reqId })
-                .catch(() => {});
-              return;
-            }
-
-            const bodyResp = await client.send("Fetch.getResponseBody", {
-              requestId: reqId,
-            });
-            const buf = bodyResp?.base64Encoded
-              ? Buffer.from(bodyResp.body || "", "base64")
-              : Buffer.from(bodyResp.body || "", "utf8");
-
-            await client
-              .send("Fetch.continueRequest", { requestId: reqId })
-              .catch(() => {});
-
-            if (!this._isPdfBuffer(buf)) {
-              // No era un PDF real -> seguir escuchando
-              return;
-            }
-
-            done = true;
-            fs.writeFileSync(outputPath, buf);
-            resolve(true);
-          } catch (e) {
-            reject(e);
-          }
-        };
-
-        client.on("Fetch.requestPaused", onPaused);
-      });
-
-      // Forzar reload para disparar el request del PDF
-      await popupPage.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-      await popupPage
-        .waitForSelector("body", { timeout: 20000 })
-        .catch(() => {});
-      await this.esperar(800);
-
-      await Promise.race([pdfPromise, timer]);
-      return true;
-    } finally {
-      try {
-        if (onPaused) client.removeListener("Fetch.requestPaused", onPaused);
-      } catch (_) {}
-      try {
-        await client.send("Fetch.disable").catch(() => {});
-      } catch (_) {}
-      try {
-        await client.detach();
-      } catch (_) {}
-    }
-  }
-
-  /**
-   * Descarga PDF con 1 reintento.
-   */
-  async descargarPdfConReintento({ openPopupFn, outputPath, label }) {
-    let lastErr = null;
-
-    for (let intento = 1; intento <= 2; intento++) {
-      let popup = null;
-      try {
-        popup = await openPopupFn();
-        if (!popup) throw new Error("No se abrió el popup/pestaña del PDF.");
-
-        await this.descargarPdfRawViaFetchCDP(popup, outputPath, 90000);
-
-        try {
-          await popup.close();
-        } catch (_) {}
-        return true;
-      } catch (e) {
-        lastErr = e;
-
-        try {
-          if (popup) await popup.close();
-        } catch (_) {}
-
-        if (!this._isPdfDownloadRetryableError(e) || intento === 2) break;
-
-        console.warn(
-          `[${label}] Fallo de descarga (intento ${intento}). Reintentando 1 vez...`,
-          e?.message || e,
-        );
-        await this.esperar(1200);
-      }
-    }
-
-    throw lastErr;
-  }
-
   // -------------------------
   // Selección “recibo más reciente”
   // -------------------------
@@ -754,6 +571,7 @@ class ProcesosBasesRecibosAutonomos {
           headless: false,
           defaultViewport: null,
           executablePath: chromeExePath,
+          protocolTimeout: 120000,
           args: [
             "--start-maximized",
             "--no-sandbox",
@@ -942,7 +760,7 @@ class ProcesosBasesRecibosAutonomos {
                     "No se encontró el botón Imprimir (parte A).",
                   );
 
-                const popupPromise = this.waitForPopup(browser, page, 30000);
+                const popupPromise = waitForPopup(browser, page, 30000);
                 const b = await frBtn.$("#Sub2204801005_67");
                 await b.click({ delay: 40 });
 
@@ -950,10 +768,45 @@ class ProcesosBasesRecibosAutonomos {
                 return popup;
               };
 
-              await this.descargarPdfConReintento({
-                openPopupFn,
-                outputPath: pdfA,
+              await descargarPdfConReintento({
                 label: "PARTE_A_PDF",
+                reintentos: 2,
+                esperaEntre: 1200,
+
+                openPdfFn: async () => {
+                  const frBtn = await this.findFrameWithSelector(
+                    page,
+                    "#Sub2204801005_67",
+                    30000,
+                  );
+                  if (!frBtn)
+                    throw new Error(
+                      "No se encontró el botón Imprimir (parte A).",
+                    );
+
+                  await frBtn.waitForSelector("#Sub2204801005_67", {
+                    timeout: 25000,
+                  });
+                  try {
+                    await frBtn.click("#Sub2204801005_67", { delay: 40 });
+                  } catch {
+                    await frBtn.$eval("#Sub2204801005_67", (el) => el.click());
+                  }
+                },
+
+                getPopupFn: async () => {
+                  return await waitForPopup(browser, page, 30000);
+                },
+
+                downloadFn: async (popup) => {
+                  await descargarPdfRawViaFetchCDP(popup, pdfA, 90000);
+                },
+
+                closePopupFn: async (popup) => {
+                  try {
+                    await popup.close();
+                  } catch (_) {}
+                },
               });
 
               okA++;
@@ -968,61 +821,68 @@ class ProcesosBasesRecibosAutonomos {
             logMap.set(dniKey, msg);
             console.warn("[BASES/RECIBOS][A]", msg);
           }
-
           // ==========
           // PARTE B
           // ==========
+          async function clickAnywhere(page, selector, timeoutMs = 60000) {
+            const start = Date.now();
+
+            while (Date.now() - start < timeoutMs) {
+              for (const f of page.frames()) {
+                const el = await f.$(selector);
+                if (!el) continue;
+
+                // intenta scroll (no siempre hace falta, pero ayuda)
+                try {
+                  await f.$eval(selector, (e) =>
+                    e.scrollIntoView({ block: "center", inline: "center" }),
+                  );
+                } catch (_) {}
+
+                // click normal + fallback
+                try {
+                  await f.click(selector, { delay: 50 });
+                } catch (e) {
+                  console.warn(
+                    `[clickAnywhere] click normal falló en ${f.name()} | ${f.url()} -> ${e.message}`,
+                  );
+                  await f.$eval(selector, (e) => e.click());
+                }
+
+                return;
+              }
+
+              await page.waitForTimeout(300);
+            }
+
+            throw new Error(`No se encontró ${selector} en ningún frame`);
+          }
+
           try {
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+
             await openCotizacionRETA();
             await openConsultaRecibosEmitidos();
 
-            // Clave: localizar dónde está PROSA (frame o pestaña)
-            const { pageB, frameB } = await this.getProsaContext(
-              browser,
-              page,
-              60000,
-            );
-
-            // Si Prosa está en otra pestaña, trabajamos ahí
-            if (pageB !== page) {
-              try {
-                await pageB.bringToFront();
-              } catch (_) {}
-            }
-
             // 1) Si estamos en pantalla de autorizados -> clicar 316077
-            const enlace316 = await frameB
-              .$("#enlace_316077")
-              .catch(() => null);
-            if (enlace316) {
-              console.log(
-                "[BASES/RECIBOS][B] Seleccionando autorizado 316077...",
-              );
-              await enlace316.click({ delay: 40 });
-
-              // Esperar a que aparezca el formulario de régimen en algún frame del pageB
-              const next = await this.findAnyFrameWithAnySelector(
-                pageB,
-                ["#seleccion_1"],
-                60000,
-              );
-              if (!next)
-                throw new Error("Tras clicar 316077 no aparece #seleccion_1.");
-            }
+            console.log("Esperando click 316077...");
+            await clickAnywhere(page, "#enlace_316077");
+            console.log("click detalle realizado");
+            await this.esperar(2000);
 
             // 2) Ya en formulario: obtener el frame que contiene #seleccion_1 (puede haber cambiado)
-            const frm = await this.findAnyFrameWithAnySelector(
-              pageB,
-              ["#seleccion_1"],
+            console.log("Esperando formulario...");
+            const frForm = await this.findFrameWithSelector(
+              page,
+              "#seleccion_1",
               60000,
             );
-            if (!frm)
-              throw new Error(
-                "No se encontró #seleccion_1 (formulario de régimen).",
-              );
 
-            const frForm = frm.frame;
+            if (!frForm) {
+              throw new Error(
+                "No se encontró el frame del formulario (#seleccion_1) tras clicar 316077",
+              );
+            }
 
             await frForm.select("#seleccion_1", "0521");
             await frForm.select("#seleccion_3", "07");
@@ -1037,39 +897,15 @@ class ProcesosBasesRecibosAutonomos {
 
             await frForm.waitForSelector("#botConRegIde", { timeout: 60000 });
             await frForm.click("#botConRegIde", { delay: 40 });
-            await this.esperar(900);
-
-            // 🔁 Tras continuar, PROSA navega (a veces) a "Aviso importante" o directamente a la lista.
-            // Re-localizamos el contexto PROSA.
-            const { pageB: pageAviso } = await this.getProsaContext(
-              browser,
-              pageB,
-              60000,
-            );
-
-            // Bring to front la pestaña PROSA real
-            try {
-              await pageAviso.bringToFront();
-            } catch (_) {}
-
-            // ✅ Asegurar DOM antes de buscar nada (evita falsos negativos)
-            await pageAviso
-              .waitForSelector("body", { timeout: 20000 })
-              .catch(() => {});
-            await this.esperar(400);
-
-            // -------------
-            // 1) AVISO IMPORTANTE (OPCIONAL)
-            // -------------
-            const foundAviso = await this.findAnyFrameWithAnySelector(
-              pageAviso,
-              ["#cheAviImport", "#botContAviso"],
-              8000, // 👈 corto: si no está, seguimos
-            );
-
-            const frAviso = foundAviso.frame;
+            await this.esperar(1000);
+            console.log("Formulario completo");
 
             // ✅ Tick
+            const frAviso = await this.findFrameWithSelector(
+              page,
+              "#cheAviImport",
+              60000,
+            );
             await frAviso.waitForSelector("#cheAviImport", {
               timeout: 20000,
             });
@@ -1083,118 +919,66 @@ class ProcesosBasesRecibosAutonomos {
               timeout: 20000,
             });
             await frAviso.click("#botContAviso", { delay: 40 });
-            await this.esperar(900);
-
-            // ✅ Tras continuar, esperar “asentado” (a veces actualiza por JS)
-            await pageAviso
-              .waitForSelector("body", { timeout: 20000 })
-              .catch(() => {});
-            await this.esperar(400);
+            await this.esperar(1000);
 
             // -------------
-            // 2) LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
+            // LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
             // -------------
-            const listado = await this.findAnyFrameWithAnySelector(
-              pageProsa,
-              [
-                "#TABLA_2",
-                'a[href*="AC_VER_RECIBO"]',
-                "#enlace_0",
-                "a.enlaceFuncDetalle",
-                "a.pr_enlaceLocal",
-              ],
-              60000,
-            );
-            if (!listado)
-              throw new Error(
-                "No se encontró la lista de recibos (TABLA_2 / AC_VER_RECIBO).",
-              );
-
-            const frListado = listado.frame;
-
-            // 🔥 TU CASO: con esto basta. Coge enlace_0 si existe, si no el primero que matchee AC_VER_RECIBO.
-            let verDetalle = await frListado.$("#enlace_0").catch(() => null);
-            if (!verDetalle)
-              verDetalle = await frListado
-                .$('a[href*="AC_VER_RECIBO"]')
-                .catch(() => null);
-            if (!verDetalle)
-              verDetalle = await frListado
-                .$("a.enlaceFuncDetalle.pr_enlaceLocal")
-                .catch(() => null);
-
-            if (!verDetalle) {
-              throw new Error(
-                "No se encontró el enlace 'Ver detalle del recibo' dentro del frame listado.",
-              );
-            }
-
-            console.log(
-              "[BASES/RECIBOS][B] Click en 'Ver detalle del recibo'...",
-            );
+            console.log("Esperando click detalle");
+            await this.esperar(5000);
+            await clickAnywhere(page, "a.enlaceFuncDetalle", 60000);
+            console.log("Realizado click detalle");
 
             // -------------
-            // 3) Abrir detalle: POPUP o SAME TAB (fallback mejorado con race)
+            // Imprimir recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
             // -------------
-            const openPopupFnB = async () => {
-              const popupPromise = this.waitForPopup(
-                browser,
-                pageAviso,
-                8000,
-              ).catch(() => null);
-              const navPromise = pageAviso
-                .waitForNavigation({
-                  waitUntil: "domcontentloaded",
-                  timeout: 8000,
-                })
-                .then(() => pageAviso)
-                .catch(() => null);
+            console.log("Esperando click imprimir...");
+            await this.esperar(5000);
 
-              // Forzar _blank (si lo respeta)
-              try {
-                await verDetalle.evaluate((el) => (el.target = "_blank"));
-              } catch (_) {}
-
-              // Click robusto
-              await verDetalle
-                .click({ delay: 40 })
-                .catch(() => verDetalle.evaluate((el) => el.click()));
-
-              // Gana el primero: popup o navegación
-              const winner = await Promise.race([popupPromise, navPromise]);
-              if (winner) return winner;
-
-              // Fallback: cambio de DOM por JS (sin navigation)
-              const changed = await this.findAnyFrameWithAnySelector(
-                pageAviso,
-                [
-                  'a[href*="AC_IMPRIMIR"]',
-                  "#botonImprimir",
-                  "#botonImprimirMovil",
-                  'embed[type="application/pdf"]',
-                  'iframe[src*=".pdf"]',
-                ],
-                8000,
-              );
-              if (changed) return pageAviso;
-
-              throw new Error(
-                "No se abrió popup ni se detectó navegación al detalle del recibo.",
-              );
-            };
-
-            await this.descargarPdfConReintento({
-              openPopupFn: openPopupFnB,
-              outputPath: pdfB,
-              label: "PARTE_B_PDF",
+            const popupPromise = waitForPrintPreviewPopup(
+              browser,
+              page,
+              30000,
+            ).catch((e) => {
+              throw e;
             });
 
+            await clickAnywhere(page, "#botonImprimir");
+            const popup = await popupPromise;
+
+            // 3) Descarga PDF desde el popup (con reintento)
+            let ok = false;
+            let lastErr = null;
+
+            for (let intento = 1; intento <= 2; intento++) {
+              try {
+                await descargarPdfDesdePrintPreview(popup, pdfB, {
+                  timeoutMs: 20000,
+                });
+                ok = true;
+                break;
+              } catch (e) {
+                lastErr = e;
+                console.warn(
+                  `[PARTE_B_PDF] Fallo intento ${intento}:`,
+                  e?.message || e,
+                );
+                if (intento < 2) await this.esperar(1200);
+              }
+            }
+
+            try {
+              await popup.close();
+            } catch (_) {}
+
+            if (!ok) throw lastErr;
+
             okB++;
-            const prev = logMap.get(dniKey) || "";
             logMap.set(
               dniKey,
-              `${prev}${prev ? " | " : ""}OK_B(${strategy}): PDF B guardado -> ${path.basename(pdfB)}`,
+              `${logMap.get(dniKey) || ""} | OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
             );
+            console.log("Realizado click imprimir...");
           } catch (e) {
             errB++;
             const prev = logMap.get(dniKey) || "";
