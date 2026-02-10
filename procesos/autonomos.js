@@ -1175,7 +1175,7 @@ class ProcesosBasesRecibosAutonomos {
             htmlDetalle = this._injectBaseTag(htmlDetalle, baseHref);
 
             // (Opcional) si quieres forzar modo claro en impresión:
-            htmlDetalle = htmlDetalle.replace(/class="dark"/i, 'class=""');
+            //htmlDetalle = htmlDetalle.replace(/class="dark"/i, 'class=""');
 
             // 4) Render en una pestaña nueva “limpia”
             const pdfPage = await browser.newPage();
@@ -1190,33 +1190,6 @@ class ProcesosBasesRecibosAutonomos {
 
             // Marca de que el contenido clave está
             await pdfPage.waitForSelector("#TABLA_5", { timeout: 60000 });
-            // --- Forzar modo claro / evitar PDF "negro" (html tiene class="dark") ---
-            await page
-              .emulateMediaFeatures([
-                { name: "prefers-color-scheme", value: "light" },
-              ])
-              .catch(() => {});
-
-            await page.evaluate(() => {
-              // quitar clase dark si existe
-              document.documentElement.classList.remove("dark");
-              document.documentElement.classList.add("light");
-
-              // asegurar fondo blanco y texto negro
-              document.body.style.background = "#fff";
-              document.body.style.color = "#000";
-            });
-
-            // CSS extra por si hay contenedores/estilos que fuerzan fondos oscuros en print
-            await page.addStyleTag({
-              content: `
-    @media print {
-      html, body { background: #fff !important; color: #000 !important; }
-      * { background: transparent !important; box-shadow: none !important; }
-      a, span, p, div, td, th, h1, h2, h3, h4 { color: #000 !important; }
-    }
-  `,
-            });
 
             // 5) PDF con estilos de impresión (ya existe estilosImpresion.min.css media="print")
             await pdfPage.emulateMediaType("print");
