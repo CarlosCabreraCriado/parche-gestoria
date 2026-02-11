@@ -535,7 +535,7 @@ class ProcesosBasesRecibosAutonomos {
         try {
           await popup.close();
         } catch (_) {}
-        return true;
+        return { ok: true, intento };
       } catch (e) {
         lastErr = e;
 
@@ -755,14 +755,36 @@ class ProcesosBasesRecibosAutonomos {
         await this.ensureDir(dirA);
         await this.ensureDir(dirB);
 
-        const logPath = path.join(rootOut, "log.txt");
-        const logMap = new Map();
+        const logPath = path.join(rootOut, "log.tsv"); // tabla tipo Excel
+        const logRows = []; // array de filas (objetos)
+
+        // Columnas fijas de la tabla (ordenadas)
+        const LOG_COLS = [
+          "fila_excel",
+          "administrador",
+          "naf",
+          "estado_a",
+          "intento_a",
+          "pdf_a",
+          "dil_a",
+          "estado_b",
+          "b_registros",
+          "pdfs_b",
+          "error_a",
+          "error_b",
+        ];
+
+        const esc = (v) =>
+          String(v ?? "")
+            .replace(/\r?\n/g, " ")
+            .trim();
 
         const flushLog = () => {
-          const lines = Array.from(logMap.entries()).map(
-            ([k, v]) => `${k} -> ${v}`,
+          const header = LOG_COLS.join("\t");
+          const lines = logRows.map((row) =>
+            LOG_COLS.map((c) => esc(row[c])).join("\t"),
           );
-          fs.writeFileSync(logPath, lines.join("\n"), "utf8");
+          fs.writeFileSync(logPath, [header, ...lines].join("\n"), "utf8");
         };
 
         console.log(
@@ -787,18 +809,25 @@ class ProcesosBasesRecibosAutonomos {
 
           const { missing, invalid } = this.validarRegistro(r);
 
-          if (missing.length) {
-            logMap.set(
-              logKey,
-              `SKIP_FALTA_DATOS: ${missing.join(" | ")} (fila ${r._row})`,
-            );
-            continue;
-          }
-          if (invalid.length) {
-            logMap.set(
-              logKey,
-              `SKIP_FORMATO_INVALIDO: ${invalid.join(" | ")} (fila ${r._row})`,
-            );
+          if (missing.length || invalid.length) {
+            logRows.push({
+              fila_excel: r._row,
+              administrador: admin,
+              naf: `${r.naf1}-${r.naf2}`,
+              estado_a: "SKIP",
+              estado_b: "SKIP",
+              error_a: missing.length
+                ? `SKIP_FALTA_DATOS: ${missing.join(" | ")}`
+                : "",
+              error_b: invalid.length
+                ? `SKIP_FORMATO_INVALIDO: ${invalid.join(" | ")}`
+                : "",
+              intento_a: "",
+              pdf_a: "",
+              dil_a: "",
+              b_registros: "",
+              pdfs_b: "",
+            });
             continue;
           }
 
@@ -920,12 +949,26 @@ class ProcesosBasesRecibosAutonomos {
           registrosProcesados++;
           const r = toProcess[i];
 
-          const logKey =
-            r._logKey ||
-            this._safeFileName(
-              `FILA_${r._row} | ${admin} | ${r.naf1}-${r.naf2}`,
-            );
           const admin = this._safeFileName(r.administrador || "SIN_ADMIN");
+
+          const naf = `${r.naf1}-${r.naf2}`;
+
+          const rowLog = {
+            fila_excel: r._row,
+            administrador: admin,
+            naf,
+            estado_a: "",
+            intento_a: "",
+            pdf_a: "",
+            dil_a: "",
+            estado_b: "",
+            b_registros: "",
+            pdfs_b: "",
+            error_a: "",
+            error_b: "",
+          };
+
+          logRows.push(rowLog);
 
           const pdfA = path.join(
             dirA,
@@ -979,7 +1022,9 @@ class ProcesosBasesRecibosAutonomos {
             const dil = await readDIL();
             if (dil) {
               errA++;
-              logMap.set(logKey, `PARTE_A_ERROR_DIL: ${dil}`);
+              rowLog.estado_a = "DIL";
+              rowLog.dil_a = dil;
+              rowLog.error_a = "";
               console.warn("[BASES/RECIBOS][A] DIL:", dil);
             } else {
               // Imprimir -> nueva pestaña
@@ -1007,23 +1052,22 @@ class ProcesosBasesRecibosAutonomos {
                 return popup;
               };
 
-              await this.descargarPdfConReintento({
+              const rtaA = await this.descargarPdfConReintento({
                 openPopupFn,
                 outputPath: pdfA,
                 label: "PARTE_A_PDF",
               });
 
               okA++;
-              logMap.set(
-                logKey,
-                `OK_A: PDF A guardado -> ${path.basename(pdfA)}`,
-              );
+              rowLog.estado_a = "OK";
+              rowLog.intento_a = rtaA?.intento || 1;
+              rowLog.pdf_a = path.basename(pdfA);
             }
           } catch (e) {
             errA++;
-            const msg = `ERROR_A: ${e?.message || e}`;
-            logMap.set(logKey, msg);
-            console.warn("[BASES/RECIBOS][A]", msg);
+            rowLog.estado_a = "ERROR";
+            rowLog.error_a = String(e?.message || e);
+            console.warn("[BASES/RECIBOS][A] ERROR_A:", rowLog.error_a);
           }
 
           // ==========
@@ -1036,27 +1080,31 @@ class ProcesosBasesRecibosAutonomos {
 
             while (Date.now() - start < timeoutMs) {
               for (const f of page.frames()) {
-                const el = await f.$(selector);
-                if (!el) continue;
-
-                // intenta scroll (no siempre hace falta, pero ayuda)
                 try {
-                  await f.$eval(selector, (e) =>
-                    e.scrollIntoView({ block: "center", inline: "center" }),
-                  );
-                } catch (_) {}
+                  const el = await f.$(selector);
+                  if (!el) continue;
 
-                // click normal + fallback
-                try {
-                  await f.click(selector, { delay: 50 });
-                } catch (e) {
-                  console.warn(
-                    `[clickAnywhere] click normal falló en ${f.name()} | ${f.url()} -> ${e.message}`,
-                  );
-                  await f.$eval(selector, (e) => e.click());
+                  // intenta scroll (no siempre hace falta, pero ayuda)
+                  try {
+                    await f.$eval(selector, (e) =>
+                      e.scrollIntoView({ block: "center", inline: "center" }),
+                    );
+                  } catch (_) {}
+
+                  // click normal + fallback
+                  try {
+                    await f.click(selector, { delay: 50 });
+                  } catch (e) {
+                    console.warn(
+                      `[clickAnywhere] click normal falló en ${f.name()} | ${f.url()} -> ${e.message}`,
+                    );
+                    await f.$eval(selector, (e) => e.click());
+                  }
+
+                  return;
+                } catch (_) {
+                  // sigue con otros frames
                 }
-
-                return;
               }
 
               await self.esperar(300);
@@ -1192,15 +1240,7 @@ class ProcesosBasesRecibosAutonomos {
             console.log(
               `[BASES/RECIBOS][B] Registros encontrados en TABLA_2: ${items.length}`,
             );
-            {
-              const prev = logMap.get(logKey) || "";
-              logMap.set(
-                logKey,
-                prev
-                  ? `${prev} | B_REGISTROS_TABLA_2=${items.length}`
-                  : `B_REGISTROS_TABLA_2=${items.length}`,
-              );
-            }
+            rowLog.b_registros = items.length;
 
             if (!items.length)
               throw new Error("TABLA_2 no contiene registros de recibos.");
@@ -1278,17 +1318,7 @@ class ProcesosBasesRecibosAutonomos {
               console.log("[BASES/RECIBOS][B] PDF guardado:", pdfPath);
 
               pdfsGeneradosB++;
-
-              // Log por recibo
-              {
-                const prev = logMap.get(logKey) || "";
-                logMap.set(
-                  logKey,
-                  prev
-                    ? `${prev} | OK_B_${j + 1}: ${path.basename(pdfPath)}`
-                    : `OK_B_${j + 1}: ${path.basename(pdfPath)}`,
-                );
-              }
+              rowLog.pdfs_b = pdfsGeneradosB;
 
               // Volver al listado SOLO si quedan más recibos por procesar
               if (j < items.length - 1) {
@@ -1381,28 +1411,18 @@ class ProcesosBasesRecibosAutonomos {
               }
             }
           } catch (e) {
-            // Si ya se generó algún PDF, no contamos como error total
-            // (si quieres, puedes llevar un contador aparte de "WARN_B")
-            if (!String(logMap.get(logKey) || "").includes("OK_B_"));
-
-            const prev = logMap.get(logKey) || "";
             const msg = `ERROR_B: ${e?.message || e}`;
-            logMap.set(logKey, prev ? `${prev} | ${msg}` : msg);
+            rowLog.error_b = String(e?.message || e);
             console.warn("[BASES/RECIBOS][B]", msg);
           }
           if (pdfsGeneradosB > 0) {
             okB++;
+            rowLog.estado_b = "OK";
           } else {
             errB++;
-            const prev = logMap.get(logKey) || "";
-            logMap.set(
-              logKey,
-              prev
-                ? `${prev} | ERROR_B: No se generó ningún PDF`
-                : `ERROR_B: No se generó ningún PDF`,
-            );
+            rowLog.estado_b = "ERROR";
+            rowLog.error_b = rowLog.error_b || "No se generó ningún PDF";
           }
-
           if ((i + 1) % 5 === 0) flushLog();
         }
 
