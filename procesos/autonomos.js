@@ -281,8 +281,7 @@ class ProcesosBasesRecibosAutonomos {
     req(r.naf2, "NAF2 vacío (columna H)");
 
     if (r.naf1 && !/^\d{2}$/.test(r.naf1)) invalid.push("NAF1 no es 2 dígitos");
-    if (r.naf2 && !/^\d{10}$/.test(r.naf2))
-      invalid.push("NAF2 no es 10 dígitos");
+    if (r.naf2 && !/^\d{10}$/.test(r.naf2)) invalid.push("NAF2 no es 10 dígitos");
 
     return { missing, invalid };
   }
