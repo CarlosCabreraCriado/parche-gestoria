@@ -89,21 +89,6 @@ class ProcesosBasesRecibosAutonomos {
     return s.padStart(len, "0");
   }
 
-  _dniNorm(dni) {
-    return String(dni ?? "")
-      .toUpperCase()
-      .replace(/\s+/g, "")
-      .trim();
-  }
-
-  _dniFolderKey(dni) {
-    const s = this._dniNorm(dni);
-    if (!s) return "SIN_DNI";
-    // Quitar última letra si existe (DNI/NIE)
-    if (/[A-Z]$/.test(s)) return s.slice(0, -1);
-    return s;
-  }
-
   async ensureDir(dir) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
@@ -132,7 +117,6 @@ class ProcesosBasesRecibosAutonomos {
 
     const getCell = (r, c) => sh.cell(r, c).value();
 
-    // 1) Encontrar fila cabecera buscando “EXPTE.”, “DNI” y “ADMINISTRADOR”
     const maxScan = Math.min(30, numRows);
     let headerRow = null;
     let headerMap = null;
@@ -153,16 +137,14 @@ class ProcesosBasesRecibosAutonomos {
       if (!rowHeaders.length) continue;
 
       const colExpte = findInRow(rowHeaders, "EXPTE.");
-      const colDni = findInRow(rowHeaders, "DNI");
       const colAdmin = findInRow(rowHeaders, "ADMINISTRADOR");
 
-      if (colExpte && colDni && colAdmin) {
+      if (colExpte && colAdmin) {
         headerRow = r;
         headerMap = {
           EXPTE: colExpte,
           EMPRESA: findInRow(rowHeaders, "EMPRESA"),
           NAF: findInRow(rowHeaders, "NAF"),
-          DNI: colDni,
           CLAVE: findInRow(rowHeaders, "CLAVE"),
           FALTA_BAJA: findInRow(rowHeaders, "F.ALTA/BAJA"),
           ADMIN: colAdmin,
@@ -174,9 +156,9 @@ class ProcesosBasesRecibosAutonomos {
       }
     }
 
-    if (!headerRow || !headerMap?.DNI) {
+    if (!headerRow || !headerMap?.ADMIN) {
       throw new Error(
-        "No se encontró la fila de cabecera. Necesito al menos 'EXPTE.', 'DNI' y 'ADMINISTRADOR'.",
+        "No se encontró la fila de cabecera. Necesito al menos 'EXPTE.' y 'ADMINISTRADOR'.",
       );
     }
 
@@ -197,30 +179,41 @@ class ProcesosBasesRecibosAutonomos {
       });
     }
 
-    // 4) Parsear registros hasta primer DNI vacío
+    // 4) Parsear registros: procesar filas con NAF1/NAF2/ADMIN
+    // Criterio de fin: fila vacía real (sin NAF1, NAF2 y ADMIN)
     const rows = [];
     for (let r = headerRow + 1; r <= numRows; r++) {
-      const dni = getCell(r, headerMap.DNI);
-      if (dni === null || dni === undefined || String(dni).trim() === "") break;
+      const naf1Cell = getCell(r, colNAF1);
+      const naf2Cell = getCell(r, colNAF2);
+      const adminCell = headerMap.ADMIN ? getCell(r, headerMap.ADMIN) : "";
+
+      const isEmptyRow =
+        (naf1Cell === null ||
+          naf1Cell === undefined ||
+          String(naf1Cell).trim() === "") &&
+        (naf2Cell === null ||
+          naf2Cell === undefined ||
+          String(naf2Cell).trim() === "") &&
+        (adminCell === null ||
+          adminCell === undefined ||
+          String(adminCell).trim() === "");
+
+      if (isEmptyRow) break;
 
       const rec = {
         EXPTE: headerMap.EXPTE ? getCell(r, headerMap.EXPTE) : "",
         EMPRESA: headerMap.EMPRESA ? getCell(r, headerMap.EMPRESA) : "",
         NAF: headerMap.NAF ? getCell(r, headerMap.NAF) : "",
-        DNI: dni,
         CLAVE: headerMap.CLAVE ? getCell(r, headerMap.CLAVE) : "",
         FALTA_BAJA: headerMap.FALTA_BAJA
           ? getCell(r, headerMap.FALTA_BAJA)
           : "",
-        ADMIN: headerMap.ADMIN ? getCell(r, headerMap.ADMIN) : "",
+        ADMIN: adminCell,
         BASE: headerMap.BASE ? getCell(r, headerMap.BASE) : "",
         TOTAL: headerMap.TOTAL ? getCell(r, headerMap.TOTAL) : "",
         PREV_ANO: headerMap.PREV_ANO ? getCell(r, headerMap.PREV_ANO) : "",
-
-        // NAF1/NAF2 “forzados” desde G/H
-        NAF1: getCell(r, colNAF1),
-        NAF2: getCell(r, colNAF2),
-
+        NAF1: naf1Cell,
+        NAF2: naf2Cell,
         _row: r,
       };
 
@@ -231,8 +224,6 @@ class ProcesosBasesRecibosAutonomos {
   }
 
   normalizarRegistro(r) {
-    const dni = this._dniNorm(r.DNI);
-
     const naf1 = this._padLeftDigitsOrEmpty(r.NAF1, 2);
     const naf2 = this._padLeftDigitsOrEmpty(r.NAF2, 10);
 
@@ -240,7 +231,6 @@ class ProcesosBasesRecibosAutonomos {
       expte: String(r.EXPTE ?? "").trim(),
       empresa: String(r.EMPRESA ?? "").trim(),
       nafRaw: String(r.NAF ?? "").trim(),
-      dni,
       clave: String(r.CLAVE ?? "").trim(),
       fechaAltaBaja: String(r.FALTA_BAJA ?? "").trim(),
       administrador: String(r.ADMIN ?? "").trim(),
@@ -262,7 +252,6 @@ class ProcesosBasesRecibosAutonomos {
         missing.push(msg);
     };
 
-    req(r.dni, "DNI vacío");
     req(r.administrador, "ADMINISTRADOR vacío");
     req(r.naf1, "NAF1 vacío (columna G)");
     req(r.naf2, "NAF2 vacío (columna H)");
@@ -760,8 +749,14 @@ class ProcesosBasesRecibosAutonomos {
         );
         await this.ensureDir(rootOut);
 
+        const dirA = path.join(rootOut, "CUOTAS Y BASES INGRESADAS");
+        const dirB = path.join(rootOut, "RECIBOS AL COBRO");
+
+        await this.ensureDir(dirA);
+        await this.ensureDir(dirB);
+
         const logPath = path.join(rootOut, "log.txt");
-        const logMap = new Map(); // key: dniKey, value: texto
+        const logMap = new Map();
 
         const flushLog = () => {
           const lines = Array.from(logMap.entries()).map(
@@ -785,25 +780,29 @@ class ProcesosBasesRecibosAutonomos {
         // Validación
         const toProcess = [];
         for (const r of rows) {
-          const dniKey = this._dniFolderKey(r.dni);
+          const admin = this._safeFileName(r.administrador || "SIN_ADMIN");
+          const logKey = this._safeFileName(
+            `FILA_${r._row} | ${admin} | ${r.naf1}-${r.naf2}`,
+          );
+
           const { missing, invalid } = this.validarRegistro(r);
 
           if (missing.length) {
             logMap.set(
-              dniKey,
+              logKey,
               `SKIP_FALTA_DATOS: ${missing.join(" | ")} (fila ${r._row})`,
             );
             continue;
           }
           if (invalid.length) {
             logMap.set(
-              dniKey,
+              logKey,
               `SKIP_FORMATO_INVALIDO: ${invalid.join(" | ")} (fila ${r._row})`,
             );
             continue;
           }
 
-          toProcess.push(r);
+          toProcess.push({ ...r, _logKey: logKey });
         }
 
         if (!toProcess.length) {
@@ -921,21 +920,20 @@ class ProcesosBasesRecibosAutonomos {
           registrosProcesados++;
           const r = toProcess[i];
 
-          const dniKey = this._dniFolderKey(r.dni);
+          const logKey =
+            r._logKey ||
+            this._safeFileName(
+              `FILA_${r._row} | ${admin} | ${r.naf1}-${r.naf2}`,
+            );
           const admin = this._safeFileName(r.administrador || "SIN_ADMIN");
 
-          const dirDni = path.join(rootOut, this._safeFileName(dniKey));
-          await this.ensureDir(dirDni);
-
           const pdfA = path.join(
-            dirDni,
-            this._safeFileName(
-              `CUOTAS Y BASES INGRESADAS - ${admin} - ${tagMesAno}.pdf`,
-            ),
+            dirA,
+            this._safeFileName(`${admin} - ${ejercicioEconomico}.pdf`),
           );
 
           console.log(
-            `[BASES/RECIBOS] ${i + 1}/${toProcess.length} | DNI: ${r.dni} | NAF: ${r.naf1}-${r.naf2}`,
+            `[BASES/RECIBOS] ${i + 1}/${toProcess.length} | NAF: ${r.naf1}-${r.naf2}`,
           );
 
           // ==========
@@ -981,7 +979,7 @@ class ProcesosBasesRecibosAutonomos {
             const dil = await readDIL();
             if (dil) {
               errA++;
-              logMap.set(dniKey, `PARTE_A_ERROR_DIL: ${dil}`);
+              logMap.set(logKey, `PARTE_A_ERROR_DIL: ${dil}`);
               console.warn("[BASES/RECIBOS][A] DIL:", dil);
             } else {
               // Imprimir -> nueva pestaña
@@ -1017,14 +1015,14 @@ class ProcesosBasesRecibosAutonomos {
 
               okA++;
               logMap.set(
-                dniKey,
+                logKey,
                 `OK_A: PDF A guardado -> ${path.basename(pdfA)}`,
               );
             }
           } catch (e) {
             errA++;
             const msg = `ERROR_A: ${e?.message || e}`;
-            logMap.set(dniKey, msg);
+            logMap.set(logKey, msg);
             console.warn("[BASES/RECIBOS][A]", msg);
           }
 
@@ -1195,9 +1193,9 @@ class ProcesosBasesRecibosAutonomos {
               `[BASES/RECIBOS][B] Registros encontrados en TABLA_2: ${items.length}`,
             );
             {
-              const prev = logMap.get(dniKey) || "";
+              const prev = logMap.get(logKey) || "";
               logMap.set(
-                dniKey,
+                logKey,
                 prev
                   ? `${prev} | B_REGISTROS_TABLA_2=${items.length}`
                   : `B_REGISTROS_TABLA_2=${items.length}`,
@@ -1250,7 +1248,7 @@ class ProcesosBasesRecibosAutonomos {
 
               // Nombre PDF dinámico: Concepto + Admin + Periodo
               const pdfName = buildPdfBName(it.concepto, admin, it.periodo);
-              const pdfPath = path.join(dirDni, pdfName);
+              const pdfPath = path.join(dirB, pdfName);
 
               const pdfPage = await browser.newPage();
               await pdfPage.setViewport({
@@ -1283,9 +1281,9 @@ class ProcesosBasesRecibosAutonomos {
 
               // Log por recibo
               {
-                const prev = logMap.get(dniKey) || "";
+                const prev = logMap.get(logKey) || "";
                 logMap.set(
-                  dniKey,
+                  logKey,
                   prev
                     ? `${prev} | OK_B_${j + 1}: ${path.basename(pdfPath)}`
                     : `OK_B_${j + 1}: ${path.basename(pdfPath)}`,
@@ -1385,20 +1383,20 @@ class ProcesosBasesRecibosAutonomos {
           } catch (e) {
             // Si ya se generó algún PDF, no contamos como error total
             // (si quieres, puedes llevar un contador aparte de "WARN_B")
-            if (!String(logMap.get(dniKey) || "").includes("OK_B_"));
+            if (!String(logMap.get(logKey) || "").includes("OK_B_"));
 
-            const prev = logMap.get(dniKey) || "";
+            const prev = logMap.get(logKey) || "";
             const msg = `ERROR_B: ${e?.message || e}`;
-            logMap.set(dniKey, prev ? `${prev} | ${msg}` : msg);
+            logMap.set(logKey, prev ? `${prev} | ${msg}` : msg);
             console.warn("[BASES/RECIBOS][B]", msg);
           }
           if (pdfsGeneradosB > 0) {
             okB++;
           } else {
             errB++;
-            const prev = logMap.get(dniKey) || "";
+            const prev = logMap.get(logKey) || "";
             logMap.set(
-              dniKey,
+              logKey,
               prev
                 ? `${prev} | ERROR_B: No se generó ningún PDF`
                 : `ERROR_B: No se generó ningún PDF`,
