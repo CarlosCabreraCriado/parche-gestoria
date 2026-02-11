@@ -10,19 +10,6 @@ const {
   descargarPdfDesdePrintPreview,
 } = require("./utils/pdfNuevaPestanaCdp");
 
-/**
- * Procesos Bases y Recibos Autónomos
- *
- * Inputs (argumentos.formularioControl):
- *  [0] chromeExePath  (ruta chrome.exe)
- *  [1] pathExcelInput (fichero input)
- *  [2] pathSalidaBase (carpeta destino)
- *
- * Notas:
- * - Mes y año del nombre: MES y AÑO actual (sistema).
- * - Recibos emitidos: descargar el más reciente.
- * - Robusto: timeouts razonables, 1 reintento en descarga PDF, si falla un registro se loggea y se continúa.
- */
 class ProcesosBasesRecibosAutonomos {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
     this.pathToDbFolder = pathToDbFolder;
@@ -281,7 +268,8 @@ class ProcesosBasesRecibosAutonomos {
     req(r.naf2, "NAF2 vacío (columna H)");
 
     if (r.naf1 && !/^\d{2}$/.test(r.naf1)) invalid.push("NAF1 no es 2 dígitos");
-    if (r.naf2 && !/^\d{10}$/.test(r.naf2)) invalid.push("NAF2 no es 10 dígitos");
+    if (r.naf2 && !/^\d{10}$/.test(r.naf2))
+      invalid.push("NAF2 no es 10 dígitos");
 
     return { missing, invalid };
   }
@@ -737,7 +725,8 @@ class ProcesosBasesRecibosAutonomos {
       try {
         const chromeExePath = argumentos?.formularioControl?.[0];
         const pathExcel = argumentos?.formularioControl?.[1];
-        const pathSalidaBase = argumentos?.formularioControl?.[2];
+        const ejercicioEconomicoRaw = argumentos?.formularioControl?.[2];
+        const pathSalidaBase = argumentos?.formularioControl?.[3];
 
         if (!chromeExePath || !fs.existsSync(chromeExePath)) {
           console.error("[BASES/RECIBOS][INPUT] Ruta a chrome.exe no válida.");
@@ -749,6 +738,13 @@ class ProcesosBasesRecibosAutonomos {
         }
         if (!pathSalidaBase || !String(pathSalidaBase).trim()) {
           console.error("[BASES/RECIBOS][INPUT] Ruta de salida no válida.");
+          return resolve(false);
+        }
+        const ejercicioEconomico = String(ejercicioEconomicoRaw ?? "").trim();
+        if (!/^\d{4}$/.test(ejercicioEconomico)) {
+          console.error(
+            "[BASES/RECIBOS][INPUT] Ejercicio económico inválido. Debe ser AAAA (ej: 2025).",
+          );
           return resolve(false);
         }
 
@@ -937,12 +933,6 @@ class ProcesosBasesRecibosAutonomos {
               `CUOTAS Y BASES INGRESADAS - ${admin} - ${tagMesAno}.pdf`,
             ),
           );
-          const pdfB = path.join(
-            dirDni,
-            this._safeFileName(
-              `RECIBOS AL COBRO - ${admin} - ${tagMesAno}.pdf`,
-            ),
-          );
 
           console.log(
             `[BASES/RECIBOS] ${i + 1}/${toProcess.length} | DNI: ${r.dni} | NAF: ${r.naf1}-${r.naf2}`,
@@ -972,7 +962,7 @@ class ProcesosBasesRecibosAutonomos {
 
             await fillInFrame(frameForm, "#SDFWPROVNAF", r.naf1);
             await fillInFrame(frameForm, "#SDFWRESTONAF", r.naf2);
-            await fillInFrame(frameForm, "#SDFWAOMAPA", "2025");
+            await fillInFrame(frameForm, "#SDFWAOMAPA", ejercicioEconomico);
 
             // Continuar
             await frameForm
@@ -1076,6 +1066,57 @@ class ProcesosBasesRecibosAutonomos {
 
             throw new Error(`No se encontró ${selector} en ningún frame`);
           }
+          async function getFrameTabla2(page, timeoutMs = 60000) {
+            const fr = await self.findFrameWithSelector(
+              page,
+              "#TABLA_2",
+              timeoutMs,
+            );
+            return fr;
+          }
+
+          async function extraerFilasTabla2(fr) {
+            return await fr.evaluate(() => {
+              const table = document.querySelector("#TABLA_2");
+              if (!table) return [];
+
+              const rows = Array.from(table.querySelectorAll("tbody tr"));
+              const out = [];
+
+              for (const tr of rows) {
+                const tds = Array.from(tr.querySelectorAll("td"));
+                const concepto = (tds[0]?.textContent || "")
+                  .trim()
+                  .replace(/\s+/g, " ");
+                const periodo = (tds[1]?.textContent || "")
+                  .trim()
+                  .replace(/\s+/g, " ");
+
+                const a = tr.querySelector(
+                  "a.enlaceFuncDetalle, a[href*='AC_VER_RECIBO']",
+                );
+                const href = a ? a.getAttribute("href") || "" : "";
+
+                let paramRecibo = null;
+                const m = href.match(/paramRecibo=(\d+)/);
+                if (m) paramRecibo = Number(m[1]);
+
+                if (concepto && periodo && href)
+                  out.push({ concepto, periodo, href, paramRecibo });
+              }
+
+              return out;
+            });
+          }
+
+          function buildPdfBName(concepto, admin, periodo) {
+            const c = self._safeFileName(concepto || "RECIBO");
+            const a = self._safeFileName(admin || "SIN_ADMIN");
+            const p = self._safeFileName(periodo || "SIN_PERIODO");
+            return `${c} - ${a} - ${p}.pdf`;
+          }
+
+          let pdfsGeneradosB = 0;
 
           try {
             await page.goto(urlFS, { waitUntil: "domcontentloaded" });
@@ -1141,88 +1182,227 @@ class ProcesosBasesRecibosAutonomos {
             await this.esperar(1000);
 
             // -------------
-            // LISTA recibos: ENCUENTRA EL LINK Y CLICK (sin “más recientes”)
+            // LISTA recibos: leer TABLA_2 + log + loop por cada recibo
             // -------------
-            console.log("Esperando click detalle");
-            await this.esperar(1000);
-            await clickAnywhere(page, "a.enlaceFuncDetalle", 60000);
-            console.log("Realizado click detalle");
+            console.log("[BASES/RECIBOS][B] Esperando tabla TABLA_2...");
+            const frTabla2 = await getFrameTabla2(page, 60000);
+            if (!frTabla2)
+              throw new Error("No se encontró #TABLA_2 (listado de recibos).");
 
-            // -------------
-            // Generar PDF del detalle (SIN chrome://print, SIN recortes)
-            // -------------
+            const items = await extraerFilasTabla2(frTabla2);
 
-            // 1) Encuentra el frame que realmente tiene el detalle
-            const frDetalle = await this.findFrameWithSelector(
-              page,
-              "#TABLA_5",
-              60000,
+            console.log(
+              `[BASES/RECIBOS][B] Registros encontrados en TABLA_2: ${items.length}`,
             );
-            if (!frDetalle)
-              throw new Error("No encontré #TABLA_5 tras abrir el detalle.");
+            {
+              const prev = logMap.get(dniKey) || "";
+              logMap.set(
+                dniKey,
+                prev
+                  ? `${prev} | B_REGISTROS_TABLA_2=${items.length}`
+                  : `B_REGISTROS_TABLA_2=${items.length}`,
+              );
+            }
 
-            // 2) Saca el HTML completo de ese documento (el que tú has pegado)
-            let htmlDetalle = await frDetalle.content(); // devuelve <!DOCTYPE html><html>...
-            if (!htmlDetalle || htmlDetalle.length < 500)
-              throw new Error(
-                "El HTML del detalle está vacío o es demasiado corto.",
+            if (!items.length)
+              throw new Error("TABLA_2 no contiene registros de recibos.");
+
+            // Loop: un PDF por fila de TABLA_2
+            for (let j = 0; j < items.length; j++) {
+              const it = items[j];
+
+              console.log(
+                `[BASES/RECIBOS][B] (${j + 1}/${items.length}) Click detalle -> ${it.concepto} | ${it.periodo} | paramRecibo=${it.paramRecibo}`,
               );
 
-            // 3) Limpieza mínima + base href para que carguen CSS relativos
-            const baseHref = "https://w2.seg-social.es";
-            htmlDetalle = this._stripHeavyScripts(htmlDetalle);
-            htmlDetalle = this._injectBaseTag(htmlDetalle, baseHref);
+              // Click del enlace concreto (si hay paramRecibo, lo usamos)
+              if (it.paramRecibo !== null && it.paramRecibo !== undefined) {
+                await clickAnywhere(
+                  page,
+                  `a[href*="AC_VER_RECIBO"][href*="paramRecibo=${it.paramRecibo}"]`,
+                  60000,
+                );
+              } else {
+                await clickAnywhere(page, "a.enlaceFuncDetalle", 60000);
+              }
 
-            // (Opcional) si quieres forzar modo claro en impresión:
-            //htmlDetalle = htmlDetalle.replace(/class="dark"/i, 'class=""');
+              // -------------
+              // Generar PDF del detalle (1 por recibo)
+              // -------------
 
-            // 4) Render en una pestaña nueva “limpia”
-            const pdfPage = await browser.newPage();
-            await pdfPage.setViewport({
-              width: 1280,
-              height: 720,
-              deviceScaleFactor: 1,
-            });
+              const frDetalle = await this.findFrameWithSelector(
+                page,
+                "#TABLA_5",
+                60000,
+              );
+              if (!frDetalle)
+                throw new Error("No encontré #TABLA_5 tras abrir el detalle.");
 
-            // Importante: setContent con waitUntil "load" para que carguen los CSS
-            await pdfPage.setContent(htmlDetalle, { waitUntil: "load" });
+              let htmlDetalle = await frDetalle.content();
+              if (!htmlDetalle || htmlDetalle.length < 500)
+                throw new Error(
+                  "El HTML del detalle está vacío o es demasiado corto.",
+                );
 
-            // Marca de que el contenido clave está
-            await pdfPage.waitForSelector("#TABLA_5", { timeout: 60000 });
+              const baseHref = "https://w2.seg-social.es";
+              htmlDetalle = this._stripHeavyScripts(htmlDetalle);
+              htmlDetalle = this._injectBaseTag(htmlDetalle, baseHref);
 
-            // 5) PDF con estilos de impresión (ya existe estilosImpresion.min.css media="print")
-            await pdfPage.emulateMediaType("print");
-            await pdfPage.pdf({
-              path: pdfB,
-              format: "A4",
-              printBackground: true,
-              preferCSSPageSize: true,
-              margin: {
-                top: "10mm",
-                right: "10mm",
-                bottom: "10mm",
-                left: "10mm",
-              },
-            });
+              // Nombre PDF dinámico: Concepto + Admin + Periodo
+              const pdfName = buildPdfBName(it.concepto, admin, it.periodo);
+              const pdfPath = path.join(dirDni, pdfName);
 
-            await pdfPage.close().catch(() => {});
+              const pdfPage = await browser.newPage();
+              await pdfPage.setViewport({
+                width: 1280,
+                height: 720,
+                deviceScaleFactor: 1,
+              });
+              await pdfPage.setContent(htmlDetalle, { waitUntil: "load" });
+              await pdfPage.waitForSelector("#TABLA_5", { timeout: 60000 });
 
-            okB++;
-            const prev = logMap.get(dniKey) || "";
-            logMap.set(
-              dniKey,
-              prev
-                ? `${prev} | OK_B: PDF B guardado -> ${path.basename(pdfB)}`
-                : `OK_B: PDF B guardado -> ${path.basename(pdfB)}`,
-            );
+              await pdfPage.emulateMediaType("print");
+              await pdfPage.pdf({
+                path: pdfPath,
+                format: "A4",
+                printBackground: true,
+                preferCSSPageSize: true,
+                margin: {
+                  top: "10mm",
+                  right: "10mm",
+                  bottom: "10mm",
+                  left: "10mm",
+                },
+              });
 
-            console.log("PDF guardado:", pdfB);
+              await pdfPage.close().catch(() => {});
+
+              console.log("[BASES/RECIBOS][B] PDF guardado:", pdfPath);
+
+              pdfsGeneradosB++;
+
+              // Log por recibo
+              {
+                const prev = logMap.get(dniKey) || "";
+                logMap.set(
+                  dniKey,
+                  prev
+                    ? `${prev} | OK_B_${j + 1}: ${path.basename(pdfPath)}`
+                    : `OK_B_${j + 1}: ${path.basename(pdfPath)}`,
+                );
+              }
+
+              // Volver al listado SOLO si quedan más recibos por procesar
+              if (j < items.length - 1) {
+                console.log(
+                  `[BASES/RECIBOS][B] Volviendo al listado para siguiente recibo...`,
+                );
+
+                const volverOk = await (async () => {
+                  // Intento 1: back rápido
+                  try {
+                    await this.esperar(500);
+                    await page.goBack({
+                      waitUntil: "domcontentloaded",
+                      timeout: 15000,
+                    });
+                    return true;
+                  } catch (_) {}
+
+                  // Intento 2: back sin esperar carga (a veces PROSA nunca dispara load)
+                  try {
+                    await this.esperar(500);
+                    await page
+                      .goBack({ waitUntil: "networkidle2", timeout: 15000 })
+                      .catch(() =>
+                        page.goBack({
+                          waitUntil: "domcontentloaded",
+                          timeout: 15000,
+                        }),
+                      );
+                    return true;
+                  } catch (_) {}
+
+                  // Intento 3: fallback seguro -> re-ejecutar navegación hasta llegar al listado otra vez
+                  try {
+                    console.warn(
+                      "[BASES/RECIBOS][B] goBack falló. Re-navegando al listado...",
+                    );
+                    await page.goto(urlFS, { waitUntil: "domcontentloaded" });
+                    await openCotizacionRETA();
+                    await openConsultaRecibosEmitidos();
+
+                    // autorizado 316077
+                    await clickAnywhere(page, "#enlace_316077");
+                    await this.esperar(1200);
+
+                    // NOTA: aquí ya estamos en formulario, pero NO hace falta rellenarlo otra vez si PROSA mantiene contexto.
+                    // Sin embargo, si en tu caso te obliga, descomenta rellenado y consulta igual que al inicio:
+                    //
+                    // const frFormAgain = await this.findFrameWithSelector(page, "#seleccion_1", 60000);
+                    // await frFormAgain.select("#seleccion_1", "0521");
+                    // await frFormAgain.select("#seleccion_3", "07");
+                    // await frFormAgain.click("#idTexto1", { clickCount: 3 }); await frFormAgain.type("#idTexto1", r.naf1, { delay: 10 });
+                    // await frFormAgain.click("#idTexto2", { clickCount: 3 }); await frFormAgain.type("#idTexto2", r.naf2, { delay: 10 });
+                    // await frFormAgain.click("#botConRegIde", { delay: 40 });
+                    // await this.esperar(900);
+                    // const frAvisoAgain = await this.findFrameWithSelector(page, "#cheAviImport", 60000);
+                    // const isChecked2 = await frAvisoAgain.$eval("#cheAviImport", el => el.checked).catch(()=>false);
+                    // if (!isChecked2) await frAvisoAgain.click("#cheAviImport", { delay: 30 });
+                    // await frAvisoAgain.click("#botContAviso", { delay: 40 });
+                    // await this.esperar(900);
+
+                    return true;
+                  } catch (e) {
+                    console.warn(
+                      "[BASES/RECIBOS][B] Fallback re-navegación falló:",
+                      e?.message || e,
+                    );
+                    return false;
+                  }
+                })();
+
+                if (!volverOk) {
+                  // En vez de petar el proceso, registramos y seguimos (ya tenemos PDFs generados hasta aquí)
+                  console.warn(
+                    "[BASES/RECIBOS][B] No pude volver al listado, pero continúo (fin loop).",
+                  );
+                  break;
+                }
+
+                // Asegurar que el listado está otra vez (mejor: esperar selector)
+                const frTabla2Again = await getFrameTabla2(page, 20000).catch(
+                  () => null,
+                );
+                if (!frTabla2Again) {
+                  console.warn(
+                    "[BASES/RECIBOS][B] No aparece #TABLA_2 tras volver. Continúo (fin loop).",
+                  );
+                  break;
+                }
+              }
+            }
           } catch (e) {
-            errB++;
+            // Si ya se generó algún PDF, no contamos como error total
+            // (si quieres, puedes llevar un contador aparte de "WARN_B")
+            if (!String(logMap.get(dniKey) || "").includes("OK_B_"));
+
             const prev = logMap.get(dniKey) || "";
             const msg = `ERROR_B: ${e?.message || e}`;
             logMap.set(dniKey, prev ? `${prev} | ${msg}` : msg);
             console.warn("[BASES/RECIBOS][B]", msg);
+          }
+          if (pdfsGeneradosB > 0) {
+            okB++;
+          } else {
+            errB++;
+            const prev = logMap.get(dniKey) || "";
+            logMap.set(
+              dniKey,
+              prev
+                ? `${prev} | ERROR_B: No se generó ningún PDF`
+                : `ERROR_B: No se generó ningún PDF`,
+            );
           }
 
           if ((i + 1) % 5 === 0) flushLog();

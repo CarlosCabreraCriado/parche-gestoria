@@ -969,6 +969,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "texto",
             obligado: true,
+            identificador: "ejercicio_economico",
+            formulario: {
+              titulo: "Ejercicio económico (AAAA)",
+              tipo: "texto",
+              placeholder: "",
+              valorDefault: "2025",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
             identificador: "rutaSalida",
             formulario: {
               titulo: "Directorio de PDFs:",
