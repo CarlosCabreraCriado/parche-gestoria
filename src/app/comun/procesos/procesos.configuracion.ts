@@ -499,7 +499,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             obligado: true,
             identificador: "codigoEmpresa",
             formulario: {
-              titulo: "Código de empresa",
+              titulo: "OBLIGATORIO - Código de empresa",
               tipo: "texto",
               placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
