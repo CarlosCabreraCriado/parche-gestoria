@@ -4753,6 +4753,7 @@ class ProcesosAsesoria {
             archivoITA = workbook;
             var columnas = archivoITA.sheet(0).usedRange()._numColumns;
             var filas = archivoITA.sheet(0).usedRange()._numRows;
+            var columnaLog = columnas + 1;
             var objetoCliente = {};
 
             var cabeceras = [];
@@ -4992,12 +4993,12 @@ class ProcesosAsesoria {
                 console.log("ERROR EN DESCARGA");
                 archivoITA
                   .sheet(0)
-                  .cell(clientes[i].filaExcel, 3)
+                  .cell(clientes[i].filaExcel, columnaLog)
                   .value("ERROR: No se ha podido descargar el informe.");
               } else {
                 archivoITA
                   .sheet(0)
-                  .cell(clientes[i].filaExcel, 3)
+                  .cell(clientes[i].filaExcel, columnaLog)
                   .value("OK");
                 if (nuevaPagina && typeof nuevaPagina.close === "function") {
                   await nuevaPagina.close();
