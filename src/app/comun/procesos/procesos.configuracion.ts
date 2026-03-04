@@ -497,6 +497,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "texto",
             obligado: true,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
             identificador: "rutaSalida",
             formulario: {
               titulo: "Directorio de salida:",

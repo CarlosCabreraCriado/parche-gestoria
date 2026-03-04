@@ -4688,15 +4688,55 @@ class ProcesosAsesoria {
       var archivoITA = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
+      var codigosEmpresaInput = argumentos.formularioControl[2];
+      var rutaSalidaInput = argumentos.formularioControl[3];
+      const parsearCodigosEmpresa = (input) =>
+        new Set(
+          String(input || "")
+            .split(/[,;\-\s]+/)
+            .map((token) => token.replace(/\D/g, ""))
+            .filter((token) => token !== "")
+            .map((token) => token.padStart(4, "0")),
+        );
+
+      // Compatibilidad: si el formulario envía ruta/código en orden antiguo, se corrige.
+      const esDirectorio = (valor) => {
+        try {
+          return (
+            typeof valor === "string" &&
+            fs.existsSync(path.normalize(valor)) &&
+            fs.lstatSync(path.normalize(valor)).isDirectory()
+          );
+        } catch (e) {
+          return false;
+        }
+      };
+      if (
+        esDirectorio(argumentos.formularioControl[2]) &&
+        !esDirectorio(argumentos.formularioControl[3])
+      ) {
+        rutaSalidaInput = argumentos.formularioControl[2];
+        codigosEmpresaInput = argumentos.formularioControl[3];
+      }
+
       var pathSalidaExcel = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(rutaSalidaInput),
         "ITA-Informes-Procesados",
       );
       var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(rutaSalidaInput),
         "ITA-Informes-Procesados",
         "Resultados",
       );
+      var codigosEmpresaObjetivo = parsearCodigosEmpresa(codigosEmpresaInput);
+
+      if (codigosEmpresaObjetivo.size === 0) {
+        var mensajeError =
+          "Debe indicar al menos un código de empresa válido en el campo 'Código de empresa'.";
+        console.log(mensajeError);
+        resolve(false);
+        return;
+      }
 
       // Verificar si la carpeta "Resultados" existe y crearla si no
       if (!fs.existsSync(pathSalida)) {
@@ -4723,6 +4763,7 @@ class ProcesosAsesoria {
             console.log("Cabeceras: " + cabeceras);
             for (var i = 2; i <= filas; i++) {
               objetoCliente = {};
+              objetoCliente["filaExcel"] = i;
               for (var j = 1; j <= columnas; j++) {
                 if (archivoITA.sheet(0).cell(i, j).value() !== undefined) {
                   switch (cabeceras[j - 1]) {
@@ -4753,8 +4794,17 @@ class ProcesosAsesoria {
               }
 
               objetoCliente["errores"] = [];
+              var expedienteNormalizado = String(
+                objetoCliente["expediente"] || "",
+              )
+                .replace(/\D/g, "")
+                .padStart(4, "0");
+              var debeProcesarse =
+                expedienteNormalizado !== "" &&
+                codigosEmpresaObjetivo.has(expedienteNormalizado);
 
               if (
+                debeProcesarse &&
                 objetoCliente.ccc !== "" &&
                 objetoCliente.ccc !== null &&
                 objetoCliente.ccc !== undefined
@@ -4867,45 +4917,73 @@ class ProcesosAsesoria {
               // Generar Documento de ingreso
               //*************
               let nuevaPagina;
+              const filePath = path.join(
+                pathSalida,
+                clientes[i]["nombreArchivo"],
+              );
               try {
-                [nuevaPagina] = await Promise.all([
-                  new Promise((resolvePromise) => {
-                    setTimeout(() => {
-                      resolvePromise(false);
-                    }, 5000);
+                nuevaPagina = await new Promise(async (resolvePromise) => {
+                  let resuelto = false;
+                  let timeoutId = null;
 
-                    browser.once("targetcreated", async (target) => {
+                  const finalizar = (resultado) => {
+                    if (resuelto) {
+                      return;
+                    }
+                    resuelto = true;
+                    if (timeoutId) {
+                      clearTimeout(timeoutId);
+                    }
+                    browser.off("targetcreated", onTargetCreated);
+                    resolvePromise(resultado);
+                  };
+
+                  const onTargetCreated = async (target) => {
+                    if (resuelto) {
+                      return;
+                    }
+                    try {
                       const newPage = await target.page();
+                      if (!newPage) {
+                        return;
+                      }
                       newPage.on("response", async (response) => {
-                        // Verificar si el contenido es un PDF
+                        if (resuelto) {
+                          return;
+                        }
                         if (
                           !response.url().endsWith(".js") &&
                           !response.url().endsWith(".css") &&
                           response.url().startsWith("chrome-extension://")
                         ) {
                           console.log("PDF detectado:", response.url());
-
-                          // Intercepta el PDF:
                           const pdfBuffer = await response.buffer();
-
-                          // Guardar el PDF en el sistema de archivos
-                          const filePath = path.join(
-                            pathSalida,
-                            clientes[i]["nombreArchivo"],
-                          );
                           fs.writeFileSync(filePath, pdfBuffer);
                           console.log("PDF descargado en:", filePath);
-                          resolvePromise(newPage);
+                          finalizar(newPage);
                         }
                       });
-                    });
-                  }),
+                    } catch (e) {
+                      // Ignorar target no válido y esperar otro.
+                    }
+                  };
 
-                  await page.locator('input[name="btn_Sub2207601004"]').wait(),
-                  await page.locator('input[name="btn_Sub2207601004"]').click(),
-                ]);
+                  browser.on("targetcreated", onTargetCreated);
+                  timeoutId = setTimeout(() => {
+                    finalizar(false);
+                  }, 15000);
+
+                  await page.locator('input[name="btn_Sub2207601004"]').wait();
+                  await page.locator('input[name="btn_Sub2207601004"]').click();
+                });
               } catch (e) {
-                console.log("Error en catch");
+                console.log("Error en descarga de PDF:");
+                console.log(e);
+              }
+
+              // Fallback defensivo: si el fichero existe, consideramos descarga OK.
+              if (!nuevaPagina && fs.existsSync(filePath)) {
+                nuevaPagina = true;
               }
 
               await this.esperar(1000);
@@ -4914,14 +4992,16 @@ class ProcesosAsesoria {
                 console.log("ERROR EN DESCARGA");
                 archivoITA
                   .sheet(0)
-                  .cell(i + 2, 3)
+                  .cell(clientes[i].filaExcel, 3)
                   .value("ERROR: No se ha podido descargar el informe.");
               } else {
                 archivoITA
                   .sheet(0)
-                  .cell(i + 2, 3)
+                  .cell(clientes[i].filaExcel, 3)
                   .value("OK");
-                await nuevaPagina.close();
+                if (nuevaPagina && typeof nuevaPagina.close === "function") {
+                  await nuevaPagina.close();
+                }
               }
               console.log("Nuevo cliente");
               await this.esperar(1000);
@@ -4963,22 +5043,18 @@ class ProcesosAsesoria {
             throw err;
           });
       } catch (err) {
-        var tituloError = "No se ha podido cargar el archivo";
         var mensajeError =
           "Se ha producido un error interno cargando los archivos.";
-        mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
-          resolve(false);
-        });
+        console.log(mensajeError);
+        resolve(false);
       }
     }).catch((err) => {
       console.log("Se ha producido un error interno: ");
       console.log(err);
-      var tituloError = "No se ha podido cargar el archivo";
       var mensajeError =
         "Se ha producido un error interno cargando los archivos.";
-      mainProcess.mostrarError(tituloError, mensajeError).then((result) => {
-        resolve(false);
-      });
+      console.log(mensajeError);
+      return false;
     });
   }
 
