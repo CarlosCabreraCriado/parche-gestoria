@@ -7,7 +7,7 @@ Lanzar un despliegue .exe
 
 1. Actualizar versiones en (src/app/app.service.ts) y (package.json)
 2. Desde powersheel administrador(ir a la ruta del repositorio)
-3. cd /d "C:\Users\gonza\OneDrive\Nodus\Proyectos\Nodus-app\parche-gestoria"
+3. cd C:\Users\gonza\OneDrive\Nodus\Proyectos\Nodus-app\parche-gestoria
 
 Powershell administrador
 
