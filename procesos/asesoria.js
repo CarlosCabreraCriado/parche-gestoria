@@ -113,110 +113,59 @@ class ProcesosAsesoria {
             console.log("Archivo Cargado: Liquidacion");
             archivoLiquidacion = workbook;
 
-            //Procesamiento de HOJA DATOS:
-            const columnasEmpresas = archivoLiquidacion
-              .sheet("DATOS")
-              .usedRange()._numColumns;
-            const filasEmpresas = archivoLiquidacion
-              .sheet("DATOS")
-              .usedRange()._numRows;
+            //Procesamiento de primera hoja (empresas):
+            const sheet = archivoLiquidacion.sheets()[0];
+            const columnasEmpresas = sheet.usedRange()._numColumns;
+            const filasEmpresas = sheet.usedRange()._numRows;
 
-            var objetoEmpresa = {};
+            // Leer headers tal cual están en el Excel
             var cabecerasEmpresas = [];
             for (var i = 1; i <= columnasEmpresas; i++) {
-              cabecerasEmpresas.push(
-                archivoLiquidacion.sheet("DATOS").cell(1, i).value(),
-              );
+              cabecerasEmpresas.push(sheet.cell(1, i).value());
             }
+            console.log("Headers detectados:", cabecerasEmpresas);
 
-            console.log("Cabeceras EMPRESAS: " + cabecerasEmpresas);
+            // Leer todas las filas como objetos con TODOS los campos
             for (var i = 2; i <= filasEmpresas; i++) {
-              objetoEmpresa = {};
+              var objetoEmpresa = {};
               for (var j = 1; j <= columnasEmpresas; j++) {
-                if (
-                  archivoLiquidacion.sheet("DATOS").cell(i, j).value() !==
-                  undefined
-                ) {
-                  switch (cabecerasEmpresas[j - 1]) {
-                    case "CÓDIGO":
-                      objetoEmpresa["codigo"] = archivoLiquidacion
-                        .sheet("DATOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                    case "EMPRESA":
-                      objetoEmpresa["empresa"] = archivoLiquidacion
-                        .sheet("DATOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                    case "CCC":
-                      objetoEmpresa["ccc"] = archivoLiquidacion
-                        .sheet("DATOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                  }
+                const val = sheet.cell(i, j).value();
+                if (val !== undefined) {
+                  objetoEmpresa[cabecerasEmpresas[j - 1]] = val;
                 }
               }
+              // El código siempre es la primera columna (col A)
+              objetoEmpresa["codigo"] = sheet.cell(i, 1).value();
               objetoEmpresa["errores"] = [];
               empresas.push(Object.assign({}, objetoEmpresa));
             }
 
-            //Procesamiento de HOJA AUTONOMOS:
-            const columnasAutonomos = archivoLiquidacion
-              .sheet("AUTONOMOS")
-              .usedRange()._numColumns;
-            const filasAutonomos = archivoLiquidacion
-              .sheet("DATOS")
-              .usedRange()._numRows;
+            //Procesamiento de HOJA AUTONOMOS (opcional):
+            const sheetAutonomos = archivoLiquidacion.sheet("AUTONOMOS");
+            if (sheetAutonomos) {
+              const columnasAutonomos = sheetAutonomos.usedRange()._numColumns;
+              const filasAutonomos = sheetAutonomos.usedRange()._numRows;
 
-            var objetoAutonomos = {};
-            var cabecerasAutonomos = [];
-            for (var i = 1; i <= columnasAutonomos; i++) {
-              cabecerasAutonomos.push(
-                archivoLiquidacion.sheet("AUTONOMOS").cell(1, i).value(),
-              );
-            }
+              var cabecerasAutonomos = [];
+              for (var i = 1; i <= columnasAutonomos; i++) {
+                cabecerasAutonomos.push(sheetAutonomos.cell(1, i).value());
+              }
+              console.log("Headers AUTONOMOS detectados:", cabecerasAutonomos);
 
-            console.log("Cabeceras AUTONOMOS: " + cabecerasAutonomos);
-            for (var i = 2; i <= filasAutonomos; i++) {
-              objetoAutonomos = {};
-              for (var j = 1; j <= columnasAutonomos; j++) {
-                if (
-                  archivoLiquidacion.sheet("AUTONOMOS").cell(i, j).value() !==
-                  undefined
-                ) {
-                  switch (cabecerasAutonomos[j - 1]) {
-                    case "CÓDIGO":
-                      objetoAutonomos["codigo"] = archivoLiquidacion
-                        .sheet("AUTONOMOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                    case "AUTONOMOS":
-                      objetoAutonomos["autonomo"] = archivoLiquidacion
-                        .sheet("AUTONOMOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                    case "DNI":
-                      objetoAutonomos["dni"] = archivoLiquidacion
-                        .sheet("AUTONOMOS")
-                        .cell(i, j)
-                        .value();
-                      break;
-                    case "CCC":
-                      objetoAutonomos["ccc"] = archivoLiquidacion
-                        .sheet("AUTONOMOS")
-                        .cell(i, j)
-                        .value();
-                      break;
+              for (var i = 2; i <= filasAutonomos; i++) {
+                var objetoAutonomos = {};
+                for (var j = 1; j <= columnasAutonomos; j++) {
+                  const val = sheetAutonomos.cell(i, j).value();
+                  if (val !== undefined) {
+                    objetoAutonomos[cabecerasAutonomos[j - 1]] = val;
                   }
                 }
+                objetoAutonomos["codigo"] = sheetAutonomos.cell(i, 1).value();
+                objetoAutonomos["errores"] = [];
+                autonomos.push(Object.assign({}, objetoAutonomos));
               }
-              objetoAutonomos["errores"] = [];
-              autonomos.push(Object.assign({}, objetoAutonomos));
+            } else {
+              console.log("Hoja AUTONOMOS no encontrada, se omite.");
             }
 
             console.log("Empresas: ", empresas);
@@ -331,10 +280,15 @@ class ProcesosAsesoria {
             }
 
             function obtenerCodigoEmpresaPorCCC(ccc, empresas, autonomos) {
-              const empresa = empresas.find((e) => e.ccc === Number(ccc));
+              const cccNum = Number(ccc);
+              const empresa = empresas.find((e) =>
+                Object.values(e).some((val) => Number(val) === cccNum),
+              );
               if (empresa) return empresa.codigo;
 
-              const autonomo = autonomos.find((a) => a.ccc === Number(ccc));
+              const autonomo = autonomos.find((a) =>
+                Object.values(a).some((val) => Number(val) === cccNum),
+              );
               if (autonomo) return autonomo.codigo;
 
               return null;
