@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -lh /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)"
+    ]
+  }
+}
