@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const XlsxPopulate = require("xlsx-populate");
 const puppeteer = require("puppeteer");
+const { registrarEjecucion } = require("../metricas");
 
 /**
  * Bases y recibos al cobro autónomos
@@ -1000,6 +1001,7 @@ class ProcesosBasesRecibosAutonomos {
   // ==========================================================
   async basesYRecibosAutonomos(argumentos) {
     this.log("Inicio del proceso");
+    const nombreProceso = "Bases y Recibos Autónomos";
 
     let browser = null;
     let registrosProcesados = 0;
@@ -1158,6 +1160,7 @@ class ProcesosBasesRecibosAutonomos {
         if (browser) await browser.close();
       } catch (_) {}
 
+      await registrarEjecucion({ nombreProceso, registrosProcesados });
       return true;
     } catch (err) {
       this.logErr("Error general:", err?.message || err);
