@@ -4685,11 +4685,7 @@ class ProcesosAsesoria {
       var codigosEmpresaObjetivo = parsearCodigosEmpresa(codigosEmpresaInput);
 
       if (codigosEmpresaObjetivo.size === 0) {
-        var mensajeError =
-          "Debe indicar al menos un código de empresa válido en el campo 'Código de empresa'.";
-        console.log(mensajeError);
-        resolve(false);
-        return;
+        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
       }
 
       // Verificar si la carpeta "Resultados" existe y crearla si no
@@ -4756,7 +4752,8 @@ class ProcesosAsesoria {
                 .padStart(4, "0");
               var debeProcesarse =
                 expedienteNormalizado !== "" &&
-                codigosEmpresaObjetivo.has(expedienteNormalizado);
+                (codigosEmpresaObjetivo.size === 0 ||
+                  codigosEmpresaObjetivo.has(expedienteNormalizado));
 
               if (
                 debeProcesarse &&
