@@ -5022,17 +5022,33 @@ class ProcesosAsesoria {
       var archivoSS = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
+
+      const parsearCodigosEmpresaSS = (input) =>
+        new Set(
+          String(input || "")
+            .split(/[,;\-\s]+/)
+            .map((token) => token.replace(/\D/g, ""))
+            .filter((token) => token !== "")
+            .map((token) => token.padStart(4, "0")),
+        );
+      var codigosEmpresaObjetivoSS = parsearCodigosEmpresaSS(
+        argumentos.formularioControl[2],
+      );
+      if (codigosEmpresaObjetivoSS.size === 0) {
+        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+      }
+
       var pathSalidaExcel = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "SS-Certificados-Procesados",
       );
       var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "SS-Certificados-Procesados",
         "Resultados",
       );
       var pathSalidaFacturacion = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "SS-Certificados-Procesados",
         "FACTURACIÓN",
       );
@@ -5099,7 +5115,16 @@ class ProcesosAsesoria {
 
               objetoCliente["errores"] = [];
 
+              var codigoNormalizadoSS = String(objetoCliente["codigo"] || "")
+                .replace(/\D/g, "")
+                .padStart(4, "0");
+              var debeProcesarseSS =
+                codigoNormalizadoSS !== "" &&
+                (codigosEmpresaObjetivoSS.size === 0 ||
+                  codigosEmpresaObjetivoSS.has(codigoNormalizadoSS));
+
               if (
+                debeProcesarseSS &&
                 objetoCliente.ccc !== "" &&
                 objetoCliente.ccc !== null &&
                 objetoCliente.ccc !== undefined
@@ -5401,17 +5426,33 @@ class ProcesosAsesoria {
       var archivoTributario = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
+
+      const parsearCodigosEmpresaTrib = (input) =>
+        new Set(
+          String(input || "")
+            .split(/[,;\-\s]+/)
+            .map((token) => token.replace(/\D/g, ""))
+            .filter((token) => token !== "")
+            .map((token) => token.padStart(4, "0")),
+        );
+      var codigosEmpresaObjetivoTrib = parsearCodigosEmpresaTrib(
+        argumentos.formularioControl[2],
+      );
+      if (codigosEmpresaObjetivoTrib.size === 0) {
+        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+      }
+
       var pathSalidaExcel = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_Tributarios-Procesados",
       );
       var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_Tributarios-Procesados",
         "Resultados",
       );
       var pathSalidaFacturacion = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_Tributarios-Procesados",
         "FACTURACIÓN",
       );
@@ -5493,7 +5534,16 @@ class ProcesosAsesoria {
               objetoCliente["errores"] = [];
               objetoCliente["flagEvitarDuplicado"] = false;
 
+              var codigoNormalizadoTrib = String(objetoCliente["codigo"] || "")
+                .replace(/\D/g, "")
+                .padStart(4, "0");
+              var debeProcesarseTrib =
+                codigoNormalizadoTrib !== "" &&
+                (codigosEmpresaObjetivoTrib.size === 0 ||
+                  codigosEmpresaObjetivoTrib.has(codigoNormalizadoTrib));
+
               if (
+                debeProcesarseTrib &&
                 objetoCliente.ccc !== "" &&
                 objetoCliente.ccc !== null &&
                 objetoCliente.ccc !== undefined
@@ -5841,17 +5891,33 @@ class ProcesosAsesoria {
       var archivoSubvencionesATC = {};
       var clientes = [];
       var pathArchivoEtiquetas = argumentos.formularioControl[1];
+
+      const parsearCodigosEmpresaATC = (input) =>
+        new Set(
+          String(input || "")
+            .split(/[,;\-\s]+/)
+            .map((token) => token.replace(/\D/g, ""))
+            .filter((token) => token !== "")
+            .map((token) => token.padStart(4, "0")),
+        );
+      var codigosEmpresaObjetivoATC = parsearCodigosEmpresaATC(
+        argumentos.formularioControl[2],
+      );
+      if (codigosEmpresaObjetivoATC.size === 0) {
+        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+      }
+
       var pathSalidaExcel = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_SubvencionesATC-Procesados",
       );
       var pathSalida = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_SubvencionesATC-Procesados",
         "Resultados",
       );
       var pathSalidaFacturacion = path.join(
-        path.normalize(argumentos.formularioControl[2]),
+        path.normalize(argumentos.formularioControl[3]),
         "Certificados_SubvencionesATC-Procesados",
         "FACTURACIÓN",
       );
@@ -5935,7 +6001,16 @@ class ProcesosAsesoria {
               objetoCliente["errores"] = [];
               objetoCliente["flagEvitarDuplicado"] = false;
 
+              var codigoNormalizadoATC = String(objetoCliente["codigo"] || "")
+                .replace(/\D/g, "")
+                .padStart(4, "0");
+              var debeProcesarseATC =
+                codigoNormalizadoATC !== "" &&
+                (codigosEmpresaObjetivoATC.size === 0 ||
+                  codigosEmpresaObjetivoATC.has(codigoNormalizadoATC));
+
               if (
+                debeProcesarseATC &&
                 objetoCliente.ccc !== "" &&
                 objetoCliente.ccc !== null &&
                 objetoCliente.ccc !== undefined

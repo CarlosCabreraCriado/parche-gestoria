@@ -554,6 +554,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           },
           {
             tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
             obligado: true,
             identificador: "rutaSalida",
             formulario: {
@@ -601,6 +612,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           },
           {
             tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
             obligado: true,
             identificador: "rutaSalida",
             formulario: {
@@ -643,6 +665,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
               accept: ".xlsm, .xlsx, .XLSX",
               placeholder:
                 "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
             },
           },
