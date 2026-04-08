@@ -5074,38 +5074,38 @@ class ProcesosAsesoria {
           .then(async (workbook) => {
             console.log("Archivo Cargado: SS");
             archivoSS = workbook;
-            var columnas = archivoSS.sheet("DATOS").usedRange()._numColumns;
-            var filas = archivoSS.sheet("DATOS").usedRange()._numRows;
+            var columnas = archivoSS.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numColumns;
+            var filas = archivoSS.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numRows;
             var objetoCliente = {};
 
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
-              cabeceras.push(archivoSS.sheet("DATOS").cell(1, i).value());
+              cabeceras.push(archivoSS.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value());
             }
 
             console.log("Cabeceras: " + cabeceras);
             for (var i = 2; i <= filas; i++) {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
-                if (archivoSS.sheet("DATOS").cell(i, j).value() !== undefined) {
+                if (archivoSS.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !== undefined) {
                   switch (cabeceras[j - 1]) {
-                    case "CCC COMPLETO":
+                    case "Código Cuenta Cotización (CCC)":
                       objetoCliente["ccc"] = archivoSS
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
                     case "EMPRESA":
                       objetoCliente["empresa"] = archivoSS
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
-                    case "CÓDIGO":
+                    case "Expediente":
                       objetoCliente["codigo"] = archivoSS
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
@@ -5346,12 +5346,12 @@ class ProcesosAsesoria {
               if (!nuevaPagina) {
                 console.log("ERROR EN DESCARGA");
                 archivoSS
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("ERROR: No se ha podido descargar el certificado.");
               } else {
                 archivoSS
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("OK, certificado descargado.");
                 await nuevaPagina.close();
@@ -5479,15 +5479,15 @@ class ProcesosAsesoria {
             console.log("Archivo Cargado: Tributario");
             archivoTributario = workbook;
             var columnas = archivoTributario
-              .sheet("DATOS")
+              .sheet("BASE DE DATOS (NO TOCAR)")
               .usedRange()._numColumns;
-            var filas = archivoTributario.sheet("DATOS").usedRange()._numRows;
+            var filas = archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numRows;
             var objetoCliente = {};
 
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
               cabeceras.push(
-                archivoTributario.sheet("DATOS").cell(1, i).value(),
+                archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value(),
               );
             }
 
@@ -5496,34 +5496,34 @@ class ProcesosAsesoria {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
                 if (
-                  archivoTributario.sheet("DATOS").cell(i, j).value() !==
+                  archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !==
                   undefined
                 ) {
                   switch (cabeceras[j - 1]) {
-                    case "CCC COMPLETO":
+                    case "Código Cuenta Cotización (CCC)":
                       objetoCliente["ccc"] = archivoTributario
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
                     case "EMPRESA":
                       objetoCliente["empresa"] = archivoTributario
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
-                    case "CÓDIGO":
+                    case "Expediente":
                       objetoCliente["codigo"] = archivoTributario
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
                     case "NIF":
                       objetoCliente["nif"] = archivoTributario
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
@@ -5617,7 +5617,7 @@ class ProcesosAsesoria {
               registrosProcesados += 1;
               if (clientes[i].flagEvitarDuplicado) {
                 archivoTributario
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("WARNING: Solicitud evitada por duplicidad en NIF.");
                 continue;
@@ -5808,14 +5808,14 @@ class ProcesosAsesoria {
               if (!nuevaPagina) {
                 console.log("ERROR EN FIRMA DE CONSENTIMIENTO");
                 archivoTributario
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value(
                     "ERROR: No se ha podido generar el resguardo de la solicitud.",
                   );
               } else {
                 archivoTributario
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("OK, resguardo de solicitud descargado.");
                 await nuevaPagina.close();
@@ -5944,17 +5944,17 @@ class ProcesosAsesoria {
             console.log("Archivo Cargado: CCC");
             archivoSubvencionesATC = workbook;
             var columnas = archivoSubvencionesATC
-              .sheet("DATOS")
+              .sheet("BASE DE DATOS (NO TOCAR)")
               .usedRange()._numColumns;
             var filas = archivoSubvencionesATC
-              .sheet("DATOS")
+              .sheet("BASE DE DATOS (NO TOCAR)")
               .usedRange()._numRows;
             var objetoCliente = {};
 
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
               cabeceras.push(
-                archivoSubvencionesATC.sheet("DATOS").cell(1, i).value(),
+                archivoSubvencionesATC.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value(),
               );
             }
 
@@ -5963,34 +5963,34 @@ class ProcesosAsesoria {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
                 if (
-                  archivoSubvencionesATC.sheet("DATOS").cell(i, j).value() !==
+                  archivoSubvencionesATC.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !==
                   undefined
                 ) {
                   switch (cabeceras[j - 1]) {
-                    case "CCC COMPLETO":
+                    case "Código Cuenta Cotización (CCC)":
                       objetoCliente["ccc"] = archivoSubvencionesATC
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
                     case "EMPRESA":
                       objetoCliente["empresa"] = archivoSubvencionesATC
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
-                    case "CÓDIGO":
+                    case "Expediente":
                       objetoCliente["codigo"] = archivoSubvencionesATC
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
 
                     case "NIF":
                       objetoCliente["nif"] = archivoSubvencionesATC
-                        .sheet("DATOS")
+                        .sheet("BASE DE DATOS (NO TOCAR)")
                         .cell(i, j)
                         .value();
                       break;
@@ -6084,7 +6084,7 @@ class ProcesosAsesoria {
               registrosProcesados += 1;
               if (clientes[i].flagEvitarDuplicado) {
                 archivoSubvencionesATC
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("WARNING: Solicitud evitada por duplicidad en NIF.");
                 continue;
@@ -6234,7 +6234,7 @@ class ProcesosAsesoria {
                   "ERROR: No se ha podido generar la solicitud.",
                 ];
                 archivoSubvencionesATC
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("ERROR: No se ha podido generar la solicitud.");
                 console.log(
@@ -6295,14 +6295,14 @@ class ProcesosAsesoria {
               if (!nuevaPagina) {
                 console.log("ERROR ABRIENDO DESCARGA");
                 archivoSubvencionesATC
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value(
                     "ERROR: No se ha podido generar el resguardo de la solicitud.",
                   );
               } else {
                 archivoSubvencionesATC
-                  .sheet("DATOS")
+                  .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
                   .value("OK, resguardo de solicitud descargado.");
                 await nuevaPagina.close();

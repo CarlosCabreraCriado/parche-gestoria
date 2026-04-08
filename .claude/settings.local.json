@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls -lh /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)"
+      "Bash(ls -lh /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"const XlsxPopulate = require\\('xlsx-populate'\\); XlsxPopulate.fromFileAsync\\('procesos/inputs/Excel CCC Empresas.xlsx'\\).then\\(wb => { wb.sheets\\(\\).forEach\\(s => { console.log\\('Sheet:', s.name\\(\\)\\); const r = s.usedRange\\(\\); if\\(r\\) { const rows = r.value\\(\\); console.log\\('Headers:', rows[0]\\); } }\\); }\\);\")"
     ]
   }
 }
