@@ -5296,11 +5296,13 @@ class ProcesosAsesoria {
                 //********
                 // Pulsar opcion encontrada
                 //********
-                await page
-                  .locator(
-                    'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]',
-                  )
-                  .click();
+                const selectorResultado = 'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]';
+                const enlaceResultado = await page.waitForSelector(selectorResultado, { timeout: 10000 })
+                  .catch(() => null);
+                if (!enlaceResultado) {
+                  throw new Error("CCC no encontrado en el sistema ARED: " + clientes[i].ccc);
+                }
+                await enlaceResultado.click();
 
                 //********
                 // Pulsar boton "Continuar"
