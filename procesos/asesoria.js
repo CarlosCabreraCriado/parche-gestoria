@@ -5210,6 +5210,7 @@ class ProcesosAsesoria {
             });
 
             await page.setViewport({ width: 1080, height: 1024 });
+            page.setDefaultTimeout(60000);
 
             //Iniciando descarga de informes:
             for (var i = 0; i < clientes.length; i++) {
@@ -5227,6 +5228,7 @@ class ProcesosAsesoria {
                 });
                 await page.setViewport({ width: 1080, height: 1024 });
               }
+                page.setDefaultTimeout(60000);
 
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
