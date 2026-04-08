@@ -6110,6 +6110,7 @@ class ProcesosAsesoria {
             console.log("Clientes: ");
             console.log(clientes);
 
+
             var chromiumExecutablePath = path.normalize(
               argumentos.formularioControl[0],
             );
@@ -6120,7 +6121,6 @@ class ProcesosAsesoria {
               headless: false,
             });
             console.log(browser.executablePath);
-
             var page = await browser.newPage();
 
             //Confirma el cambio de pagina:

@@ -3,7 +3,16 @@
     "allow": [
       "Bash(ls -lh /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
       "Bash(node -e ':*)",
-      "Bash(node -e \"const XlsxPopulate = require\\('xlsx-populate'\\); XlsxPopulate.fromFileAsync\\('procesos/inputs/Excel CCC Empresas.xlsx'\\).then\\(wb => { wb.sheets\\(\\).forEach\\(s => { console.log\\('Sheet:', s.name\\(\\)\\); const r = s.usedRange\\(\\); if\\(r\\) { const rows = r.value\\(\\); console.log\\('Headers:', rows[0]\\); } }\\); }\\);\")"
+      "Bash(node -e \"const XlsxPopulate = require\\('xlsx-populate'\\); XlsxPopulate.fromFileAsync\\('procesos/inputs/Excel CCC Empresas.xlsx'\\).then\\(wb => { wb.sheets\\(\\).forEach\\(s => { console.log\\('Sheet:', s.name\\(\\)\\); const r = s.usedRange\\(\\); if\\(r\\) { const rows = r.value\\(\\); console.log\\('Headers:', rows[0]\\); } }\\); }\\);\")",
+      "Bash(grep -r \"pfx\\\\|\\\\.p12\\\\|\\\\.pem\\\\|cert\\\\|key\\\\|rejectUnauthorized\\\\|https\\\\.Agent\\\\|http\\\\.Agent\" /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(grep -r \"https\" /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(grep -r \"require.*https\\\\|require.*http\\\\|require.*axios\\\\|require.*got\\\\|require.*fetch\" /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(grep -r \"firma\\\\|firma\\\\|signature\\\\|firmar\\\\|sign\" /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(grep -r \"Agent\\\\|rejectUnauthorized\\\\|ca:\\\\|cert:\\\\|key:\" /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
+      "Bash(where msedge.exe)",
+      "Read(//c/Program Files/Microsoft/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/**)",
+      "Read(//c/Users/gonza/AppData/Local/Microsoft/Edge/**)"
     ]
   }
 }
