@@ -1684,26 +1684,33 @@ class ProcesosAsesoria {
                   .filter((f) => f.toLowerCase().endsWith(".pdf"))
                   .map((f) => ({
                     nombre: f,
-                    tiempo: fs.statSync(path.join(pathSalida, f)).mtime.getTime(),
+                    tiempo: fs
+                      .statSync(path.join(pathSalida, f))
+                      .mtime.getTime(),
                   }));
-                
+
                 if (archivos.length > 0) {
                   // 2) Nos quedamos con el PDF más reciente (el último descargado)
-                  const ultimoPdf = archivos.sort((a, b) => b.tiempo - a.tiempo)[0];
-                
+                  const ultimoPdf = archivos.sort(
+                    (a, b) => b.tiempo - a.tiempo,
+                  )[0];
+
                   // 3) Construimos el nombre con el formato: cod_empresa - dni_trabajador.pdf
                   const codEmpresa = String(clientes[i].cod_empresa);
                   const dniTrabajador = String(clientes[i].dni_trabajador);
-                
+
                   // Opcional: saneamos caracteres raros por si acaso
                   const codLimpio = codEmpresa.replace(/[\\\/:*?"<>|]/g, "_");
-                  const dniLimpio = dniTrabajador.replace(/[\\\/:*?"<>|]/g, "_");
-                
+                  const dniLimpio = dniTrabajador.replace(
+                    /[\\\/:*?"<>|]/g,
+                    "_",
+                  );
+
                   const nuevoNombre = `${codLimpio}-${dniLimpio}.pdf`;
-                
+
                   const rutaAntigua = path.join(pathSalida, ultimoPdf.nombre);
                   const rutaNueva = path.join(pathSalida, nuevoNombre);
-                
+
                   try {
                     // Si ya existe un archivo con ese nombre, podrías decidir sobreescribirlo
                     // o añadir un sufijo; ahora mismo simplemente lo sobreescribe:
@@ -1713,7 +1720,9 @@ class ProcesosAsesoria {
                     );
                   } catch (err) {
                     console.log("Error renombrando el PDF:", err);
-                    clientes[i].errores.push("WARN: No se pudo renombrar el PDF.");
+                    clientes[i].errores.push(
+                      "WARN: No se pudo renombrar el PDF.",
+                    );
                   }
                 } else {
                   clientes[i].errores.push(
@@ -2467,26 +2476,33 @@ class ProcesosAsesoria {
                   .filter((f) => f.toLowerCase().endsWith(".pdf"))
                   .map((f) => ({
                     nombre: f,
-                    tiempo: fs.statSync(path.join(pathSalida, f)).mtime.getTime(),
+                    tiempo: fs
+                      .statSync(path.join(pathSalida, f))
+                      .mtime.getTime(),
                   }));
-                
+
                 if (archivos.length > 0) {
                   // 2) Nos quedamos con el PDF más reciente (el último descargado)
-                  const ultimoPdf = archivos.sort((a, b) => b.tiempo - a.tiempo)[0];
-                
+                  const ultimoPdf = archivos.sort(
+                    (a, b) => b.tiempo - a.tiempo,
+                  )[0];
+
                   // 3) Construimos el nombre con el formato: cod_empresa - dni_trabajador.pdf
                   const codEmpresa = String(clientes[i].cod_empresa);
                   const dniTrabajador = String(clientes[i].dni_trabajador);
-                
+
                   // Opcional: saneamos caracteres raros por si acaso
                   const codLimpio = codEmpresa.replace(/[\\\/:*?"<>|]/g, "_");
-                  const dniLimpio = dniTrabajador.replace(/[\\\/:*?"<>|]/g, "_");
-                
+                  const dniLimpio = dniTrabajador.replace(
+                    /[\\\/:*?"<>|]/g,
+                    "_",
+                  );
+
                   const nuevoNombre = `${codLimpio}-${dniLimpio}.pdf`;
-                
+
                   const rutaAntigua = path.join(pathSalida, ultimoPdf.nombre);
                   const rutaNueva = path.join(pathSalida, nuevoNombre);
-                
+
                   try {
                     // Si ya existe un archivo con ese nombre, podrías decidir sobreescribirlo
                     // o añadir un sufijo; ahora mismo simplemente lo sobreescribe:
@@ -2496,7 +2512,9 @@ class ProcesosAsesoria {
                     );
                   } catch (err) {
                     console.log("Error renombrando el PDF:", err);
-                    clientes[i].errores.push("WARN: No se pudo renombrar el PDF.");
+                    clientes[i].errores.push(
+                      "WARN: No se pudo renombrar el PDF.",
+                    );
                   }
                 } else {
                   clientes[i].errores.push(
@@ -4685,7 +4703,9 @@ class ProcesosAsesoria {
       var codigosEmpresaObjetivo = parsearCodigosEmpresa(codigosEmpresaInput);
 
       if (codigosEmpresaObjetivo.size === 0) {
-        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+        console.log(
+          "No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.",
+        );
       }
 
       // Verificar si la carpeta "Resultados" existe y crearla si no
@@ -5035,7 +5055,9 @@ class ProcesosAsesoria {
         argumentos.formularioControl[2],
       );
       if (codigosEmpresaObjetivoSS.size === 0) {
-        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+        console.log(
+          "No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.",
+        );
       }
 
       var pathSalidaExcel = path.join(
@@ -5074,20 +5096,31 @@ class ProcesosAsesoria {
           .then(async (workbook) => {
             console.log("Archivo Cargado: SS");
             archivoSS = workbook;
-            var columnas = archivoSS.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numColumns;
-            var filas = archivoSS.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numRows;
+            var columnas = archivoSS
+              .sheet("BASE DE DATOS (NO TOCAR)")
+              .usedRange()._numColumns;
+            var filas = archivoSS
+              .sheet("BASE DE DATOS (NO TOCAR)")
+              .usedRange()._numRows;
             var objetoCliente = {};
 
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
-              cabeceras.push(archivoSS.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value());
+              cabeceras.push(
+                archivoSS.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value(),
+              );
             }
 
             console.log("Cabeceras: " + cabeceras);
             for (var i = 2; i <= filas; i++) {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
-                if (archivoSS.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !== undefined) {
+                if (
+                  archivoSS
+                    .sheet("BASE DE DATOS (NO TOCAR)")
+                    .cell(i, j)
+                    .value() !== undefined
+                ) {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
                       objetoCliente["ccc"] = archivoSS
@@ -5207,154 +5240,162 @@ class ProcesosAsesoria {
                 continue;
               }
 
-              await page.goto(
-                "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
-                { waitUntil: "networkidle0" },
-              );
-
-              //********
-              // Pulsar CODIGO ARED
-              //********
-              await page.locator('a[id="enlace_316077"]').click();
-
-              //********
-              // Pulsar Buscar
-              //********
-              await page
-                .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
-                .click();
-
-              //********
-              // Pulsar opcion CCC/NAF
-              //********
-              await page.locator(`input[title="Buscar por CCC o NAF"]`).wait();
-              var radioButton = await page.$(
-                `input[title="Buscar por CCC o NAF"]`,
-              );
-
-              if (radioButton) {
-                await radioButton.click(); // Hacer clic en el radio button
-                console.log("Radio button seleccionado.");
-              } else {
-                console.log("No se encontró el radio button.");
-              }
-
-              //********
-              // Introducir CCC
-              //********
-              await page
-                .locator('input[name="criteriosBusquedaCccNaf"]')
-                .wait();
-              await page.type(
-                'input[name="criteriosBusquedaCccNaf"]',
-                String(clientes[i].ccc),
-              );
-
-              await this.esperar(1000);
-
-              //********
-              // Pulsar Buscar
-              //********
-              await page
-                .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
-                .click();
-
-              //********
-              // Pulsar opcion encontrada
-              //********
-              await page
-                .locator(
-                  'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]',
-                )
-                .click();
-
-              //********
-              // Pulsar boton "Continuar"
-              //********
-              await page.locator('button[name="SPM.ACC.CONTINUAR"]').click();
-
-              //********
-              // Pulsar boton "Imprimir"
-              //********
-              await page.locator('button[name="SPM.ACC.IMPRIMIR"]').click();
-              await page.waitForNavigation({ waitUntil: "load" });
-
-              //*************
-              // Generar Documento de certificado
-              //*************
-              const enlaces = await page.$$("a");
-              let enlaceEncontrado = null;
-
-              for (const enlace of enlaces) {
-                const texto = await page.evaluate((el) => el.innerText, enlace);
-                if (texto.includes("Certificado genérico")) {
-                  enlaceEncontrado = enlace;
-                  break;
-                }
-              }
-
-              let nuevaPagina;
               try {
-                [nuevaPagina] = await Promise.all([
-                  new Promise((resolvePromise) => {
-                    setTimeout(() => {
-                      resolvePromise(false);
-                    }, 10000);
+                await page.goto(
+                  "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+                  { waitUntil: "networkidle0" },
+                );
 
-                    browser.once("targetcreated", async (target) => {
-                      const newPage = await target.page();
-                      newPage.on("response", async (response) => {
-                        // Verificar si el contenido es un PDF
-                        if (
-                          !response.url().endsWith(".js") &&
-                          !response.url().endsWith(".css") &&
-                          response.url().startsWith("chrome-extension://")
-                        ) {
-                          console.log("PDF detectado:", response.url());
+                //********
+                // Pulsar CODIGO ARED
+                //********
+                await page.locator('a[id="enlace_316077"]').click();
 
-                          // Intercepta el PDF:
-                          const pdfBuffer = await response.buffer();
+                //********
+                // Pulsar Buscar
+                //********
+                await page
+                  .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
+                  .click();
 
-                          // Guardar el PDF en el sistema de archivos
-                          const filePath = path.join(
-                            pathSalida,
-                            clientes[i]["nombreArchivo"],
-                          );
-                          const filePathFacturacion = path.join(
-                            pathSalidaFacturacion,
-                            clientes[i]["nombreArchivoFacturacion"],
-                          );
+                //********
+                // Pulsar opcion CCC/NAF
+                //********
+                await page.waitForSelector(`input[title="Buscar por CCC o NAF"]`, { timeout: 60000 });
+                var radioButton = await page.$(
+                  `input[title="Buscar por CCC o NAF"]`,
+                );
 
-                          fs.writeFileSync(filePath, pdfBuffer);
-                          fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                if (radioButton) {
+                  await radioButton.click(); // Hacer clic en el radio button
+                  console.log("Radio button seleccionado.");
+                } else {
+                  console.log("No se encontró el radio button.");
+                }
 
-                          console.log("PDF descargado en:", filePath);
-                          resolvePromise(newPage);
-                        }
+                //********
+                // Introducir CCC
+                //********
+                await page.waitForSelector('input[name="criteriosBusquedaCccNaf"]', { timeout: 60000 });
+                await page.type(
+                  'input[name="criteriosBusquedaCccNaf"]',
+                  String(clientes[i].ccc),
+                );
+
+                await this.esperar(1000);
+
+                //********
+                // Pulsar Buscar
+                //********
+                await page
+                  .locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]')
+                  .click();
+
+                //********
+                // Pulsar opcion encontrada
+                //********
+                await page
+                  .locator(
+                    'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]',
+                  )
+                  .click();
+
+                //********
+                // Pulsar boton "Continuar"
+                //********
+                await page.locator('button[name="SPM.ACC.CONTINUAR"]').click();
+
+                //********
+                // Pulsar boton "Imprimir"
+                //********
+                await page.locator('button[name="SPM.ACC.IMPRIMIR"]').click();
+                await page.waitForNavigation({ waitUntil: "load" });
+
+                //*************
+                // Generar Documento de certificado
+                //*************
+                const enlaces = await page.$$("a");
+                let enlaceEncontrado = null;
+
+                for (const enlace of enlaces) {
+                  const texto = await page.evaluate((el) => el.innerText, enlace);
+                  if (texto.includes("Certificado genérico")) {
+                    enlaceEncontrado = enlace;
+                    break;
+                  }
+                }
+
+                let nuevaPagina;
+                try {
+                  [nuevaPagina] = await Promise.all([
+                    new Promise((resolvePromise) => {
+                      setTimeout(() => {
+                        resolvePromise(false);
+                      }, 10000);
+
+                      browser.once("targetcreated", async (target) => {
+                        const newPage = await target.page();
+                        newPage.on("response", async (response) => {
+                          // Verificar si el contenido es un PDF
+                          if (
+                            !response.url().endsWith(".js") &&
+                            !response.url().endsWith(".css") &&
+                            response.url().startsWith("chrome-extension://")
+                          ) {
+                            console.log("PDF detectado:", response.url());
+
+                            // Intercepta el PDF:
+                            const pdfBuffer = await response.buffer();
+
+                            // Guardar el PDF en el sistema de archivos
+                            const filePath = path.join(
+                              pathSalida,
+                              clientes[i]["nombreArchivo"],
+                            );
+                            const filePathFacturacion = path.join(
+                              pathSalidaFacturacion,
+                              clientes[i]["nombreArchivoFacturacion"],
+                            );
+
+                            fs.writeFileSync(filePath, pdfBuffer);
+                            fs.writeFileSync(filePathFacturacion, pdfBuffer);
+
+                            console.log("PDF descargado en:", filePath);
+                            resolvePromise(newPage);
+                          }
+                        });
                       });
-                    });
-                  }),
-                  await enlaceEncontrado.click(),
-                ]);
-              } catch (e) {
-                console.log("Error en catch: ", e);
-              }
+                    }),
+                    await enlaceEncontrado.click(),
+                  ]);
+                } catch (e) {
+                  console.log("Error en catch: ", e);
+                }
 
-              await this.esperar(1000);
+                await this.esperar(1000);
 
-              //Comprueba si hubo error
-              if (!nuevaPagina) {
-                console.log("ERROR EN DESCARGA");
+                //Comprueba si hubo error
+                if (!nuevaPagina) {
+                  console.log("ERROR EN DESCARGA");
+                  archivoSS
+                    .sheet("BASE DE DATOS (NO TOCAR)")
+                    .cell(i + 2, 8)
+                    .value("ERROR: No se ha podido descargar el certificado.");
+                } else {
+                  archivoSS
+                    .sheet("BASE DE DATOS (NO TOCAR)")
+                    .cell(i + 2, 8)
+                    .value("OK, certificado descargado.");
+                  await nuevaPagina.close();
+                }
+              } catch (clientErr) {
+                console.log(`Error procesando cliente ${i}:`, clientErr.message || clientErr);
+                clientes[i]["errores"] = [clientErr.message || "Error desconocido"];
                 archivoSS
                   .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
-                  .value("ERROR: No se ha podido descargar el certificado.");
-              } else {
-                archivoSS
-                  .sheet("BASE DE DATOS (NO TOCAR)")
-                  .cell(i + 2, 8)
-                  .value("OK, certificado descargado.");
-                await nuevaPagina.close();
+                  .value("ERROR: " + (clientErr.message || "Error desconocido"));
+                try { await page.goto("about:blank"); } catch (_) {}
               }
               console.log("Nuevo cliente");
               await this.esperar(1000);
@@ -5390,9 +5431,8 @@ class ProcesosAsesoria {
           })
           .then(() => {})
           .catch((err) => {
-            console.log("ERROR");
-
-            throw err;
+            console.log("ERROR: ", err.message || err);
+            resolve(false);
           });
       } catch (err) {
         var tituloError = "No se ha podido cargar el archivo";
@@ -5439,7 +5479,9 @@ class ProcesosAsesoria {
         argumentos.formularioControl[2],
       );
       if (codigosEmpresaObjetivoTrib.size === 0) {
-        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+        console.log(
+          "No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.",
+        );
       }
 
       var pathSalidaExcel = path.join(
@@ -5481,13 +5523,18 @@ class ProcesosAsesoria {
             var columnas = archivoTributario
               .sheet("BASE DE DATOS (NO TOCAR)")
               .usedRange()._numColumns;
-            var filas = archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").usedRange()._numRows;
+            var filas = archivoTributario
+              .sheet("BASE DE DATOS (NO TOCAR)")
+              .usedRange()._numRows;
             var objetoCliente = {};
 
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
               cabeceras.push(
-                archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value(),
+                archivoTributario
+                  .sheet("BASE DE DATOS (NO TOCAR)")
+                  .cell(1, i)
+                  .value(),
               );
             }
 
@@ -5496,8 +5543,10 @@ class ProcesosAsesoria {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
                 if (
-                  archivoTributario.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !==
-                  undefined
+                  archivoTributario
+                    .sheet("BASE DE DATOS (NO TOCAR)")
+                    .cell(i, j)
+                    .value() !== undefined
                 ) {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
@@ -5736,6 +5785,7 @@ class ProcesosAsesoria {
                     browser.once("targetcreated", async (target) => {
                       const newPage = await target.page();
 
+                      await this.esperar(1000);
                       await newPage.locator('input[id="Conforme"]').wait();
                       await newPage.locator('input[id="Conforme"]').click();
                       await this.esperar(500);
@@ -5904,7 +5954,9 @@ class ProcesosAsesoria {
         argumentos.formularioControl[2],
       );
       if (codigosEmpresaObjetivoATC.size === 0) {
-        console.log("No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.");
+        console.log(
+          "No se ha especificado ningún código de empresa. Se procesarán todos los expedientes.",
+        );
       }
 
       var pathSalidaExcel = path.join(
@@ -5954,7 +6006,10 @@ class ProcesosAsesoria {
             var cabeceras = [];
             for (var i = 1; i <= columnas; i++) {
               cabeceras.push(
-                archivoSubvencionesATC.sheet("BASE DE DATOS (NO TOCAR)").cell(1, i).value(),
+                archivoSubvencionesATC
+                  .sheet("BASE DE DATOS (NO TOCAR)")
+                  .cell(1, i)
+                  .value(),
               );
             }
 
@@ -5963,8 +6018,10 @@ class ProcesosAsesoria {
               objetoCliente = {};
               for (var j = 1; j <= columnas; j++) {
                 if (
-                  archivoSubvencionesATC.sheet("BASE DE DATOS (NO TOCAR)").cell(i, j).value() !==
-                  undefined
+                  archivoSubvencionesATC
+                    .sheet("BASE DE DATOS (NO TOCAR)")
+                    .cell(i, j)
+                    .value() !== undefined
                 ) {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
