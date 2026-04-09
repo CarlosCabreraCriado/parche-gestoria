@@ -4961,11 +4961,25 @@ class ProcesosAsesoria {
               await this.esperar(1000);
               //Comprueba si hubo error
               if (!nuevaPagina) {
+                // Intentar capturar mensaje de error del label #DIL en la página
+                let mensajeError = "ERROR: No se ha podido descargar el informe.";
+                try {
+                  const textoDIL = await page.$eval(
+                    "#DIL",
+                    (el) => el.textContent.trim()
+                  );
+                  if (textoDIL) {
+                    mensajeError = "ERROR: " + textoDIL;
+                    console.log("Error DIL capturado:", textoDIL);
+                  }
+                } catch (_) {
+                  // El elemento #DIL no existe en la página, usar mensaje genérico
+                }
                 console.log("ERROR EN DESCARGA");
                 archivoITA
                   .sheet(0)
                   .cell(clientes[i].filaExcel, columnaLog)
-                  .value("ERROR: No se ha podido descargar el informe.");
+                  .value(mensajeError);
               } else {
                 archivoITA
                   .sheet(0)
