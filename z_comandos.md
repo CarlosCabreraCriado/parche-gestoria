@@ -16,3 +16,5 @@ Powershell administrador
 
 Una vez esté construído, revisar el .exe en la carpeta;
 "C:\Users\gonza\OneDrive\Nodus\Proyectos\Nodus-app\parche-gestoria\dist"
+
+Enviar a través de : https://wetransfer.com/
