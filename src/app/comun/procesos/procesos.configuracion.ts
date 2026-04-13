@@ -13,8 +13,10 @@ interface LibreriaProcesos {
     | "Documentos"
     | "Asesoria"
     | "Prueba"
-    | "Asesoria"
-    | "Fie";
+    | "Fie"
+    | "Duplicados"
+    | "Autonomos";
+
   descripcion: string;
   autor?: string;
   opciones?: any;
@@ -133,6 +135,54 @@ var libreriaProcesos: LibreriaProcesos[] = [
         tipo: "proceso",
         descripcion:
           "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria de 2025",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
+        nombre: "IRPF 2026",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion:
+          "Obtiene los datos de los clientes mediante excel y calcular el IRPF correspondiente a la calculadora de la Agencia Tributaria de 2026",
         autor: "Carlos Cabrera",
         argumentos: [
           {
@@ -446,6 +496,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           },
           {
             tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
             obligado: true,
             identificador: "rutaSalida",
             formulario: {
@@ -459,7 +520,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
-
       {
         nombre: "Certificado Seguridad Social",
         categoria: "Asesoria",
@@ -489,6 +549,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
               accept: ".xlsm, .xlsx, .XLSX",
               placeholder:
                 "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
             },
           },
@@ -541,6 +612,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
           },
           {
             tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
             obligado: true,
             identificador: "rutaSalida",
             formulario: {
@@ -583,6 +665,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
               accept: ".xlsm, .xlsx, .XLSX",
               placeholder:
                 "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
             },
           },
@@ -801,6 +894,141 @@ var libreriaProcesos: LibreriaProcesos[] = [
               titulo: "Directorio de salida:",
               tipo: "ruta",
               placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
+  {
+    nombre: "Duplicados",
+    categoria: "Duplicados",
+    tipo: "directorio",
+    descripcion: "Procesos de asesoría",
+    subCategoria: [
+      {
+        // OJO: este "nombre" es el que se intenta ejecutar según tus logs
+        nombre: "DUPLICADOS TA2+IDC",
+        categoria: "Duplicados",
+        tipo: "proceso",
+        descripcion:
+          "Por cada trabajador: descarga TA2 y a continuación IDC (mismo Excel).",
+        autor: "Gonzalo Martín",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "regimen",
+            formulario: {
+              titulo: "Régimen (4 dígitos)",
+              tipo: "texto",
+              placeholder: "Ej: 0111",
+              valorDefault: "0111",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de PDFs:",
+              tipo: "ruta",
+              placeholder: "Carpeta con los PDFs",
+              valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
+  {
+    nombre: "Bases y recibos al cobro autónomos",
+    categoria: "Autonomos",
+    tipo: "directorio",
+    descripcion: "Procesos de asesoría",
+    subCategoria: [
+      {
+        // OJO: este "nombre" es el que se intenta ejecutar según tus logs
+        nombre: "Bases y recibos al cobro autónomos",
+        categoria: "Autonomos",
+        tipo: "proceso",
+        descripcion: "Bases y recibos al cobro autónomos",
+        autor: "Gonzalo Martín",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel de clientes",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "ejercicio_economico",
+            formulario: {
+              titulo: "Ejercicio económico (AAAA)",
+              tipo: "texto",
+              placeholder: "",
+              valorDefault: "2025",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de PDFs:",
+              tipo: "ruta",
+              placeholder: "Carpeta con los PDFs",
               valorDefault: "",
             },
           },

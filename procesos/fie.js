@@ -279,6 +279,7 @@ class ProcesosFie {
                   }
                   altas[i].expedienteEmpresa = empresa?.codigo || "";
                   altas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
+                  altas[i].nombreEmpresa = empresa?.empresa || "";
 
                   // 🔍 Depuración: detectar emails no string
                   if (empresa && typeof empresa.email !== "string") {
@@ -311,6 +312,8 @@ class ProcesosFie {
                   }
                   bajas[i].expedienteEmpresa = empresa?.codigo || "";
                   bajas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
+                  bajas[i].nombreEmpresa = empresa?.empresa || "";
+
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN BAJAS:",
@@ -341,6 +344,8 @@ class ProcesosFie {
                   }
                   confirmacion[i].expedienteEmpresa = empresa?.codigo || "";
                   confirmacion[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
+                  confirmacion[i].nombreEmpresa = empresa?.empresa || "";
+
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN CONFIRMACION:",
@@ -557,40 +562,31 @@ class ProcesosFie {
                 //     (TO = emailsEmpresa, como antes)
                 // ======================================================
                 for (const r of altas) {
-                  const file = await generarEmailFieAgrupadoDesdePlantilla(
-                    [r],
+                  const file = await generarEmailFieDesdePlantilla(
+                    r,
                     "ALTAS",
                     pathEmailsEmpleadosAltas,
-                    {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
-                      fileBase: buildLegacyFileBase(r, "ALTAS"),
-                    },
-                  );
+                    { to: obtenerEmailsDestino(r.emailsEmpresa) }
+                  )
                   results.push(file);
                 }
 
                 for (const r of bajas) {
-                  const file = await generarEmailFieAgrupadoDesdePlantilla(
-                    [r],
+                  const file = await generarEmailFieDesdePlantilla(
+                    r,
                     "BAJAS",
                     pathEmailsEmpleadosBajas,
-                    {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
-                      fileBase: buildLegacyFileBase(r, "BAJAS"),
-                    },
+                    { to: obtenerEmailsDestino(r.emailsEmpresa) }
                   );
                   results.push(file);
                 }
 
                 for (const r of confirmacion) {
-                  const file = await generarEmailFieAgrupadoDesdePlantilla(
-                    [r],
+                  const file = await generarEmailFieDesdePlantilla(
+                    r,
                     "CONFIRMACION",
                     pathEmailsEmpleadosConfirmacion,
-                    {
-                      to: obtenerEmailsDestino(r.emailsEmpresa),
-                      fileBase: buildLegacyFileBase(r, "CONFIRMACION"),
-                    },
+                    { to: obtenerEmailsDestino(r.emailsEmpresa) }
                   );
                   results.push(file);
                 }

@@ -108,29 +108,38 @@ function calcularTipoProceso(record) {
 
 // Construye asunto nuevo a partir del record (individual)
 function buildSubject(record, tipoDoc) {
-  let fechaRecep = formatDateFromExcel(record.fechaRecepcion);
+  const expte = safe(record.expedienteEmpresa || record.expte);
+
+  // Intenta “Apellidos, Nombre”. Si no existe, cae a record.nombre
+  const trabajador =
+    safe(record.apellidos, "").trim()
+      ? `${safe(record.apellidos).trim()} ${safe(record.nombrePila || record.nombre, "").trim()}`.trim()
+      : safe(record.nombre, "").trim();
+
+  let fecha = formatDateFromExcel(record.fechaRecepcion);
 
   switch (tipoDoc) {
     case "BAJAS":
-      fechaRecep = formatDateFromExcel(record.fechaBajaIt) || fechaRecep;
-      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PB ${fechaRecep}`;
+      fecha = formatDateFromExcel(record.fechaBajaIt) || fecha;
+      return `${expte} - COMUNICACIÓN IT - ${trabajador} - PB ${fecha}`;
+
     case "ALTAS":
-      fechaRecep = formatDateFromExcel(record.fechaFinIt) || fechaRecep;
-      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PA ${fechaRecep}`;
+      fecha = formatDateFromExcel(record.fechaFinIt) || fecha;
+      return `${expte} - COMUNICACIÓN IT - ${trabajador} - PA ${fecha}`;
+
     case "CONFIRMACION": {
       let parteConfirmacion = 0;
       if (Array.isArray(record.partesConfirmacion) && record.partesConfirmacion.length > 0) {
-        fechaRecep =
-          formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) ||
-          fechaRecep;
+        fecha = formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || fecha;
         parteConfirmacion = record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
       }
-      return `${safe(record.expte)} - COMUNICACIÓN IT - ${safe(record.nombre)} - PC${parteConfirmacion} ${fechaRecep}`;
+      return `${expte} - COMUNICACIÓN IT - ${trabajador} - PC${parteConfirmacion} ${fecha}`;
     }
   }
 
   return `null`;
 }
+
 
 // =======================
 // HTML filas tabla dinámica (agrupado)
@@ -371,7 +380,15 @@ async function generarEmailFieAgrupadoDesdePlantilla(
   }
 
   const expteEmpresa = records[0].expedienteEmpresa || "";
-  const subject = `${safe(expteEmpresa)} - COMUNICACIÓN IT - (${tipoDoc}) - ${formatTodayDDMMYYYY()}`;
+  const nombreEmpresa =
+  safe(records[0].nombreEmpresa, "").trim() ||
+  safe(records[0].empresa, "").trim() ||
+  safe(records[0].razonSocial, "").trim() ||
+  safe(records[0].nombre_empresa, "").trim() ||
+  safe(expteEmpresa, "").trim();
+
+  const subject = `${safe(expteEmpresa)} - COMUNICACIÓN IT - ${nombreEmpresa} - FIE ${formatTodayDDMMYYYY()}`;
+
 
   // ✅ En agrupado: SIEMPRE HTML (alta/baja/confirmacion)
   const templatePath = getTemplatePathByTipo(tipoDoc);
@@ -461,53 +478,65 @@ async function generarEmailFieDesdePlantilla(record, tipoDoc, OUTPUT_DIR, overri
   let html = fs.readFileSync(templatePath, "utf-8");
   const parsed = null;
 
-  // ✅ Sustituciones individuales
-  html = html.replaceAll(/{{\s*nombre\s*}}/g, escapeHtml(record.nombre || ""));
-  html = html.replaceAll(/{{\s*fechaAlta\s*}}/g, escapeHtml(formatDateFromExcel(record.fechaFinIt) || ""));
-  html = html.replaceAll(/{{\s*fechaBaja\s*}}/g, escapeHtml(formatDateFromExcel(record.fechaBajaIt) || ""));
-  html = html.replaceAll(/{{\s*contingencia\s*}}/g, escapeHtml(normalizeContingencia(record.contingencia || "")));
+  // ✅ Si la plantilla es la nueva (tabla dinámica), inyectamos FILAS_IT
+  if (/{{\s*FILAS_IT\s*}}/i.test(html)) {
+    const filas = buildFilasITHtml([record], tipoDoc);
+    html = html.replace(/{{\s*FILAS_IT\s*}}/gi, filas);
 
-  // Próxima revisión (BAJAS) / Confirmación (CONFIRMACION)
-  if (tipoDoc === "BAJAS") {
-    html = html.replaceAll(
-      /{{\s*proximaRevision\s*}}/g,
-      escapeHtml(formatDateFromExcel(record.fechaProximaRevisionParteBaja) || ""),
-    );
-  }
-
-  let numeroParteConfirmacion = 0;
-  if (Array.isArray(record.partesConfirmacion) && record.partesConfirmacion.length > 0) {
-    html = html.replaceAll(
-      /{{\s*proximaRevision\s*}}/g,
-      escapeHtml(formatDateFromExcel(record.partesConfirmacion[0].fechaSiguienteRevisionMedica) || ""),
-    );
-    html = html.replaceAll(
-      /{{\s*fechaConfirmacion\s*}}/g,
-      escapeHtml(formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || ""),
-    );
-    numeroParteConfirmacion = record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
-  } else {
-    // por si en la plantilla existen esos placeholders
+    // (Opcional) limpiar placeholders que pudieran existir por compatibilidad
+    html = html.replaceAll(/{{\s*nombre\s*}}/g, "");
+    html = html.replaceAll(/{{\s*fechaAlta\s*}}/g, "");
+    html = html.replaceAll(/{{\s*fechaBaja\s*}}/g, "");
+    html = html.replaceAll(/{{\s*contingencia\s*}}/g, "");
     html = html.replaceAll(/{{\s*fechaConfirmacion\s*}}/g, "");
     html = html.replaceAll(/{{\s*proximaRevision\s*}}/g, "");
-  }
+    html = html.replaceAll(/{{\s*observaciones\s*}}/g, "");
+  } else {
+    // ✅ Plantillas antiguas (placeholders sueltos)
+    html = html.replaceAll(/{{\s*nombre\s*}}/g, escapeHtml(record.nombre || ""));
+    html = html.replaceAll(/{{\s*fechaAlta\s*}}/g, escapeHtml(formatDateFromExcel(record.fechaFinIt) || ""));
+    html = html.replaceAll(/{{\s*fechaBaja\s*}}/g, escapeHtml(formatDateFromExcel(record.fechaBajaIt) || ""));
+    html = html.replaceAll(/{{\s*contingencia\s*}}/g, escapeHtml(normalizeContingencia(record.contingencia || "")));
 
-  const tipoProceso = calcularTipoProceso(record);
-
-  // Observaciones
-  switch (tipoDoc) {
-    case "ALTAS":
-      html = html.replaceAll(/{{\s*observaciones\s*}}/g, `PARTE DE ALTA MÉDICA. <br/>${escapeHtml(tipoProceso)}`);
-      break;
-    case "BAJAS":
-      html = html.replaceAll(/{{\s*observaciones\s*}}/g, `PARTE DE BAJA MÉDICA. <br/>${escapeHtml(tipoProceso)}`);
-      break;
-    case "CONFIRMACION":
+    if (tipoDoc === "BAJAS") {
       html = html.replaceAll(
-        /{{\s*observaciones\s*}}/g,
-        `PARTE DE CONFIRMACIÓN Nº${escapeHtml(String(numeroParteConfirmacion))}<br/>${escapeHtml(tipoProceso)}`,
+        /{{\s*proximaRevision\s*}}/g,
+        escapeHtml(formatDateFromExcel(record.fechaProximaRevisionParteBaja) || ""),
       );
-      break;
+    }
+
+    let numeroParteConfirmacion = 0;
+    if (Array.isArray(record.partesConfirmacion) && record.partesConfirmacion.length > 0) {
+      html = html.replaceAll(
+        /{{\s*proximaRevision\s*}}/g,
+        escapeHtml(formatDateFromExcel(record.partesConfirmacion[0].fechaSiguienteRevisionMedica) || ""),
+      );
+      html = html.replaceAll(
+        /{{\s*fechaConfirmacion\s*}}/g,
+        escapeHtml(formatDateFromExcel(record.partesConfirmacion[0].fechaDelParteDeConfirmacion) || ""),
+      );
+      numeroParteConfirmacion = record.partesConfirmacion[0].numeroDeParteDeConfirmacion || 0;
+    } else {
+      html = html.replaceAll(/{{\s*fechaConfirmacion\s*}}/g, "");
+      html = html.replaceAll(/{{\s*proximaRevision\s*}}/g, "");
+    }
+
+    const tipoProceso = calcularTipoProceso(record);
+
+    switch (tipoDoc) {
+      case "ALTAS":
+        html = html.replaceAll(/{{\s*observaciones\s*}}/g, `PARTE DE ALTA MÉDICA. <br/>${escapeHtml(tipoProceso)}`);
+        break;
+      case "BAJAS":
+        html = html.replaceAll(/{{\s*observaciones\s*}}/g, `PARTE DE BAJA MÉDICA. <br/>${escapeHtml(tipoProceso)}`);
+        break;
+      case "CONFIRMACION":
+        html = html.replaceAll(
+          /{{\s*observaciones\s*}}/g,
+          `PARTE DE CONFIRMACIÓN Nº${escapeHtml(String(numeroParteConfirmacion))}<br/>${escapeHtml(tipoProceso)}`,
+        );
+        break;
+    }
   }
 
   const subject = buildSubject(record, tipoDoc);
