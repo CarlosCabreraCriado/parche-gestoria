@@ -2320,56 +2320,46 @@ class ProcesosAsesoria {
 
                 console.log("[iRPF2026] Esperando: Retribuciones totales");
                 await page
-                  .locator(
-                    'input[title="Retribuciones totales (dinerarias y en especie)."]',
-                  )
+                  .locator('input[title^="Retribuciones totales"]')
                   .wait({ timeout: 10000 });
 
                 console.log("[iRPF2026] Esperando: Gastos deducibles");
                 await page
-                  .locator(
-                    'input[title="Gastos deducibles (Art. 19.2, letras a, b y c de la LIRPF: Seguridad Social, Mutualidades de funcionarios, derechos pasivos, colegios de huérfanos o instituciones similares)"]',
-                  )
+                  .locator('input[title^="Gastos deducibles"]')
                   .wait({ timeout: 10000 });
 
                 console.log("[iRPF2026] Esperando: Pensión compensatoria");
                 await page
-                  .locator(
-                    'input[title="Pensión compensatoria a favor del cónyuge. Importe fijado judicialmente"]',
-                  )
+                  .locator('input[title^="Pensión compensatoria"]')
                   .wait({ timeout: 10000 });
 
                 console.log("[iRPF2026] Esperando: Anualidades por alimentos");
                 await page
-                  .locator(
-                    'input[title="Anualidades por alimentos en favor de los hijos. Importe fijado judicialmente"]',
-                  )
+                  .locator('input[title^="Anualidades por alimentos"]')
                   .wait({ timeout: 10000 });
 
                 console.log("[iRPF2026] Esperando: checkbox vivienda habitual");
                 await page
-                  .locator(
-                    'span[title="El perceptor ha comunicado en el modelo 145 que está efectuando pagos por préstamos destinados a la adquisición o rehabilitación de su vivienda habitual por los que va a tener derecho a deducción por inversión en vivienda habitual en el IRPF y que la suma de los rendimientos íntegros del trabajo procedentes de todos sus pagadores es inferior a 33.007,20 euros anuales."]',
-                  )
+                  .locator('span[title^="El perceptor ha comunicado"]')
                   .wait({ timeout: 10000 });
 
                 console.log("[iRPF2026] Todos los campos encontrados. Rellenando datos económicos...");
 
                 if (clientes[i].sumatorio_015) {
                   await page.type(
-                    'input[title="Retribuciones totales (dinerarias y en especie)."]',
+                    'input[title^="Retribuciones totales"]',
                     String(clientes[i].sumatorio_015),
                   );
                 }
 
                 await page.type(
-                  'input[title="Gastos deducibles (Art. 19.2, letras a, b y c de la LIRPF: Seguridad Social, Mutualidades de funcionarios, derechos pasivos, colegios de huérfanos o instituciones similares)"]',
+                  'input[title^="Gastos deducibles"]',
                   String(clientes[i].sumatorio_017),
                 );
 
                 if (clientes[i].pension_conyuge) {
                   await page.type(
-                    'input[title="Pensión compensatoria a favor del cónyuge. Importe fijado judicialmente"]',
+                    'input[title^="Pensión compensatoria"]',
                     String(clientes[i].pension_conyuge),
                   );
                 }
@@ -2379,7 +2369,7 @@ class ProcesosAsesoria {
                     parseFloat(clientes[i].anualidades_hijos) / 12;
 
                   await page.type(
-                    'input[title="Anualidades por alimentos en favor de los hijos. Importe fijado judicialmente"]',
+                    'input[title^="Anualidades por alimentos"]',
                     String(clientes[i].anualidades_hijos),
                   );
                 }
@@ -2387,9 +2377,7 @@ class ProcesosAsesoria {
                 if (clientes[i].adquisicion_vivienda == "Destina (ant.2010)") {
                   if (clientes[i].sumatorio_015 < 33007.2) {
                     await page
-                      .locator(
-                        'span[title="El perceptor ha comunicado en el modelo 145 que está efectuando pagos por préstamos destinados a la adquisición o rehabilitación de su vivienda habitual por los que va a tener derecho a deducción por inversión en vivienda habitual en el IRPF y que la suma de los rendimientos íntegros del trabajo procedentes de todos sus pagadores es inferior a 33.007,20 euros anuales."]',
-                      )
+                      .locator('span[title^="El perceptor ha comunicado"]')
                       .click();
                   } else {
                     clientes[i]["errores"].push(
@@ -2402,7 +2390,7 @@ class ProcesosAsesoria {
                 clientes[i]["errores"].push(
                   "ERROR: Selector no encontrado en datos económicos: " + errDatosEco.message,
                 );
-                await page.reload();
+                try { await page.reload(); } catch (_) {}
                 continue;
               }
 
