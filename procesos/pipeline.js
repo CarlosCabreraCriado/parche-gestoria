@@ -155,11 +155,11 @@ class ProcesosPipeline {
         if (
           !analisisA3Path ||
           !fs.existsSync(
-            path.join(path.normalize(analisisA3Path), "generador_informes.py"),
+            path.join(path.normalize(analisisA3Path), "scripts", "modules", "nomv5e", "generador_informes.py"),
           )
         ) {
           this.logErr(
-            '[INPUT] Ruta de analisis-a3 no válida. No se encontró "generador_informes.py".',
+            '[INPUT] Ruta de analisis-a3 no válida. No se encontró "scripts/modules/nomv5e/generador_informes.py".',
           );
           return resolve(false);
         }
@@ -199,7 +199,7 @@ class ProcesosPipeline {
         }
 
         const pyArgs = [
-          "generador_informes.py",
+          path.join("scripts", "modules", "nomv5e", "generador_informes.py"),
           "--empresa",
           codes.join(","),
           "--formato",

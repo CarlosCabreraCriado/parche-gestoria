@@ -26,7 +26,7 @@ Los proyectos `analisis-a3` y `parche-gestoria` operan de forma aislada:
 
 Hasta ahora, el usuario debia:
 
-1. Abrir una terminal y ejecutar `python generador_informes.py` con los parametros adecuados
+1. Abrir una terminal y ejecutar `python scripts/modules/nomv5e/generador_informes.py` con los parametros adecuados
 2. Esperar a que se genere el XLSX
 3. Abrir parche-gestoria
 4. Cargar manualmente el XLSX como input del proceso correspondiente
@@ -48,8 +48,8 @@ Un **pipeline integrado dentro de parche-gestoria** que encadena ambos pasos aut
 |  M:\A3 (COBOL binario)   |          |  UI Angular (formulario)  |
 |         |                 |          |         |                 |
 |         v                 |          |         v                 |
-|  generador_informes.py    |  spawn   |  pipeline.js              |
-|  --empresa X --formato 8  | <-----  |  _spawnPython()           |
+|  scripts/.../              |  spawn   |  pipeline.js              |
+|   generador_informes.py   | <-----  |  _spawnPython()           |
 |         |                 |          |         |                 |
 |         v                 |          |         v                 |
 |  altas_fmt8.xlsx          | -------> |  duplicados.js            |
@@ -161,7 +161,7 @@ Las 13 columnas restantes del Format 8 (fechas, contrato, categoria, etc.) no so
 
 | Archivo | Proyecto | Rol |
 |---------|----------|-----|
-| `generador_informes.py` | analisis-a3 | Script Python invocado como subprocess |
+| `scripts/modules/nomv5e/generador_informes.py` | analisis-a3 | Script Python invocado como subprocess |
 | `src/nomv5e_reader.py` | analisis-a3 | Parser de datos COBOL de nominas |
 | `scripts/modules/nomv5e/export_altas.py` | analisis-a3 | Define cabeceras XLSX del Format 8 |
 | `scripts/modules/nomv5e/xlsx_exporter.py` | analisis-a3 | Genera XLSX sin dependencias externas |
@@ -191,19 +191,19 @@ main.js :: onEjecutarProceso
 
 ```
 pipeline.js :: pipelineAltasDuplicados()
-  -> Valida inputs (chrome existe, empresas no vacias, ruta A3 contiene generador_informes.py)
+  -> Valida inputs (chrome existe, empresas no vacias, ruta A3 contiene scripts/modules/nomv5e/generador_informes.py)
   -> Normaliza codigos de empresa: "8, 01378" -> ["00008", "01378"]
   -> Crea directorio: <salida>/pipeline-temp/
   -> Elimina XLSX previo si existe (evitar datos stale)
 
   -> _spawnPython("python", "<ruta-a3>", [
-       "generador_informes.py",
+       "scripts/modules/nomv5e/generador_informes.py",
        "--empresa", "00008,01378",
        "--formato", "8",
        "--output", "<salida>/pipeline-temp/altas_fmt8.xlsx"
      ])
 
-Python (generador_informes.py):
+Python (scripts/modules/nomv5e/generador_informes.py):
   -> Parsea --empresa, --formato, --output
   -> Instancia NomV5EReader(base_path="M:/A3/A3NOMV5E")
   -> Llama parse_altas(["00008", "01378"])
@@ -370,7 +370,7 @@ Abrir la consola de Electron (Ctrl+Shift+I > Console) para ver el progreso en ti
 [PIPELINE] Iniciando pipeline: Altas (Fmt 8) -> Duplicados TA2+IDC
 [PIPELINE] Empresas a procesar: 00008, 01378
 [PIPELINE] === PASO 1: Generando listado Altas (Formato 8) ===
-[PIPELINE] Ejecutando: python generador_informes.py --empresa 00008,01378 --formato 8 --output ...
+[PIPELINE] Ejecutando: python scripts/modules/nomv5e/generador_informes.py --empresa 00008,01378 --formato 8 --output ...
 [PIPELINE] [Python stdout] Exportados 142 trabajadores a altas_fmt8.xlsx
 [PIPELINE] XLSX generado: ...\pipeline-temp\altas_fmt8.xlsx (45.2 KB)
 [PIPELINE] === PASO 2: Ejecutando Duplicados TA2+IDC ===
@@ -422,7 +422,7 @@ Dentro del array `subCategoria` del directorio "Pipeline":
 
 #### 3. (Opcional) Anadir nuevo formato en analisis-a3
 
-Si el formato no existe, se anade en `generador_informes.py` > `FORMATOS` dict y se crea su parser en `nomv5e_reader.py` y exportador en `scripts/modules/nomv5e/`.
+Si el formato no existe, se anade en `scripts/modules/nomv5e/generador_informes.py` > `FORMATOS` dict y se crea su parser en `nomv5e_reader.py` y exportador en `scripts/modules/nomv5e/`.
 
 ### Pipeline FIE (proximo candidato)
 
@@ -462,7 +462,7 @@ _spawnPython(pythonPath, cwd, args, timeoutMs?)
 ### CLI de generador_informes.py
 
 ```
-python generador_informes.py [opciones]
+python scripts/modules/nomv5e/generador_informes.py [opciones]
 
 --empresa CODIGO[,CODIGO...]   Codigos de empresa (5 digitos, separados por coma)
 --formato {6,7,8,10,15}        Numero de formato
