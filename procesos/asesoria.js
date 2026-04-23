@@ -6547,6 +6547,10 @@ class ProcesosAsesoria {
             console.log("Excel cargado (certificados unificados)");
             const archivo = workbook;
             const hoja = archivo.sheet("BASE DE DATOS (NO TOCAR)");
+            if (!hoja) {
+              console.warn("[CERT] Hoja 'BASE DE DATOS (NO TOCAR)' no encontrada en el Excel.");
+              return resolve(false);
+            }
             const columnas = hoja.usedRange()._numColumns;
             const filas = hoja.usedRange()._numRows;
 
@@ -6665,11 +6669,17 @@ class ProcesosAsesoria {
             console.log("Clientes: ");
             console.log(clientes);
 
-            const browser = await puppeteer.launch({
-              executablePath: chromiumExecutablePath,
-              headless: false,
-            });
-            console.log(browser.executablePath);
+            let browser;
+            try {
+              browser = await puppeteer.launch({
+                executablePath: chromiumExecutablePath,
+                headless: false,
+              });
+              console.log("[CERT] Navegador iniciado:", chromiumExecutablePath);
+            } catch (e) {
+              console.warn("[CERT] Error lanzando Chromium:", e?.message || e);
+              return resolve(false);
+            }
 
             const prepararPagina = async (pageObj) => {
               pageObj.on("dialog", async (dialog) => {
@@ -6695,6 +6705,7 @@ class ProcesosAsesoria {
               registrosProcesados += 1;
 
               if (i % 10 === 0 && i > 0) {
+                console.log("[CERT] Reciclando página en iteración", i);
                 try {
                   await page.close();
                 } catch (_) {}
@@ -6816,10 +6827,12 @@ class ProcesosAsesoria {
               return resolve(false);
             }
 
-            registrarEjecucion({
-              nombreProceso,
-              registrosProcesados: registrosProcesados,
-            });
+            try {
+              registrarEjecucion({
+                nombreProceso,
+                registrosProcesados: registrosProcesados,
+              });
+            } catch (_) {}
             console.log("Fin del procesamiento (certificados unificados)");
             resolve(true);
           })
@@ -6842,12 +6855,22 @@ class ProcesosAsesoria {
   }
 
   async _procesarCertificadoSS({ browser, page, cliente, paths, hoja }) {
+    console.log(`[CERT SS] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
     const ccc = String(cliente.ccc);
 
-    await page.goto(
-      "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
-      { waitUntil: "networkidle0" },
-    );
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(`[CERT SS] Fallo navegación (intento ${intento}):`, e?.message || e);
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
 
     await page.locator('a[id="enlace_316077"]').click();
     await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
@@ -6916,8 +6939,13 @@ class ProcesosAsesoria {
                   paths.facturacion,
                   cliente.nombreArchivoSSFacturacion,
                 );
-                fs.writeFileSync(filePath, pdfBuffer);
-                fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                try {
+                  fs.writeFileSync(filePath, pdfBuffer);
+                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                } catch (fsErr) {
+                  console.warn("[CERT SS] Error guardando PDF en disco:", fsErr?.message || fsErr);
+                  throw fsErr;
+                }
                 console.log("PDF SS descargado en:", filePath);
                 resolvePromise(newPage);
               }
@@ -6961,10 +6989,21 @@ class ProcesosAsesoria {
       return;
     }
 
-    await page.goto(
-      "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
-      { waitUntil: "networkidle0" },
-    );
+    console.log(`[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
+
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(`[CERT TRIB] Fallo navegación (intento ${intento}):`, e?.message || e);
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
 
     try {
       const botonModal = await page.waitForSelector(
@@ -7052,8 +7091,13 @@ class ProcesosAsesoria {
                   paths.facturacion,
                   cliente.nombreArchivoTribFacturacion,
                 );
-                fs.writeFileSync(filePath, pdfBuffer);
-                fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                try {
+                  fs.writeFileSync(filePath, pdfBuffer);
+                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                } catch (fsErr) {
+                  console.warn("[CERT TRIB] Error guardando PDF en disco:", fsErr?.message || fsErr);
+                  throw fsErr;
+                }
                 console.log("PDF Tributario descargado en:", filePath);
                 resolvePromise(newPage);
               }
@@ -7063,7 +7107,7 @@ class ProcesosAsesoria {
         await page.locator('input[id="descarga"]').click(),
       ]);
     } catch (e) {
-      console.log("[CERT TRIB] Error en catch");
+      console.warn("[CERT TRIB] Error en catch:", e?.message || e);
     }
 
     if (!nuevaPagina) {
@@ -7091,10 +7135,21 @@ class ProcesosAsesoria {
       return;
     }
 
-    await page.goto(
-      "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
-      { waitUntil: "networkidle0" },
-    );
+    console.log(`[CERT ATC] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
+
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(`[CERT ATC] Fallo navegación (intento ${intento}):`, e?.message || e);
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
     await this.esperar(1000);
 
     if (page.url().includes("/publico/validacion/")) {
@@ -7211,8 +7266,13 @@ class ProcesosAsesoria {
                   paths.facturacion,
                   cliente.nombreArchivoATCFacturacion,
                 );
-                fs.writeFileSync(filePath, pdfBuffer);
-                fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                try {
+                  fs.writeFileSync(filePath, pdfBuffer);
+                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
+                } catch (fsErr) {
+                  console.warn("[CERT ATC] Error guardando PDF en disco:", fsErr?.message || fsErr);
+                  throw fsErr;
+                }
                 console.log("PDF ATC descargado en:", filePath);
                 resolvePromise(newPage);
               }
@@ -7222,7 +7282,7 @@ class ProcesosAsesoria {
         await page.locator('input[id="btnDescargar"]').click(),
       ]);
     } catch (e) {
-      console.log("[CERT ATC] Error en catch");
+      console.warn("[CERT ATC] Error en catch:", e?.message || e);
     }
 
     if (!nuevaPagina) {
