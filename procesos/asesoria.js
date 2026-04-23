@@ -7097,6 +7097,29 @@ class ProcesosAsesoria {
     );
     await this.esperar(1000);
 
+    if (page.url().includes("/publico/validacion/")) {
+      try {
+        await page.evaluate(() => {
+          const link = Array.from(document.querySelectorAll("a")).find((a) =>
+            a.textContent.includes("Certificado"),
+          );
+          if (link) link.click();
+        });
+      } catch (_) {}
+
+      try {
+        await page.waitForFunction(
+          () => !window.location.href.includes("/publico/validacion/"),
+          { timeout: 120000 },
+        );
+      } catch (_) {
+        throw new Error(
+          "Tiempo de autenticación ATC agotado. Seleccione el certificado cuando se le pida.",
+        );
+      }
+      await this.esperar(2000);
+    }
+
     try {
       const botonEntrar = await page.waitForSelector(
         'input[id="btnValidar"]',

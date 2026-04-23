@@ -27,6 +27,7 @@ import {
 import { MatSelectModule } from "@angular/material/select";
 import { FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { MatDatepickerModule } from "@angular/material/datepicker";
+import { MatCheckboxModule } from "@angular/material/checkbox";
 import { MatIconModule } from "@angular/material/icon";
 import { MatSidenavModule } from "@angular/material/sidenav";
 import { MatTreeModule } from "@angular/material/tree";
@@ -73,6 +74,7 @@ interface objetosSeleccionados {
     ReactiveFormsModule,
     MatTreeModule,
     MatDatepickerModule,
+    MatCheckboxModule,
   ],
   selector: "ejecutarProceso",
   templateUrl: "./ejecutarProceso.component.html",
