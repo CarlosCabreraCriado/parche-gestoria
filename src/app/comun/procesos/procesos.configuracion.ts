@@ -522,10 +522,103 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
       {
+        nombre: "Certificados de estar al corriente",
+        categoria: "Asesoria",
+        tipo: "proceso",
+        descripcion:
+          "Descarga 1..3 certificados (Seguridad Social, Tributario, ATC) en una sola ejecución usando el mismo Excel.",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel con CCC",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certSS",
+            formulario: {
+              titulo: "Seguridad Social",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certTributario",
+            formulario: {
+              titulo: "Tributario (AEAT)",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certATC",
+            formulario: {
+              titulo: "Subvenciones ATC",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+      {
         nombre: "Certificado Seguridad Social",
         categoria: "Asesoria",
         tipo: "proceso",
-        descripcion: "",
+        descripcion:
+          "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
         argumentos: [
           {
@@ -583,7 +676,8 @@ var libreriaProcesos: LibreriaProcesos[] = [
         nombre: "Certificado Tributario",
         categoria: "Asesoria",
         tipo: "proceso",
-        descripcion: "",
+        descripcion:
+          "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
         argumentos: [
           {
@@ -641,7 +735,8 @@ var libreriaProcesos: LibreriaProcesos[] = [
         nombre: "Certificado Subvenciones ATC",
         categoria: "Asesoria",
         tipo: "proceso",
-        descripcion: "",
+        descripcion:
+          "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
         argumentos: [
           {
