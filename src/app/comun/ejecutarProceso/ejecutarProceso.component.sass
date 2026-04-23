@@ -74,10 +74,11 @@ mat-drawer-content
                     right: 0
 
     form
+        display: grid
+        grid-template-columns: repeat(2, 1fr)
+        gap: 12px 24px
         .contenedorFormulario
             position: relative
-            display: inline-block
-            min-width: 400px
             min-height: 100px
 
         .tituloFormulario

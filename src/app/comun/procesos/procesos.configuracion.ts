@@ -15,7 +15,8 @@ interface LibreriaProcesos {
     | "Prueba"
     | "Fie"
     | "Duplicados"
-    | "Autonomos";
+    | "Autonomos"
+    | "Pipeline";
 
   descripcion: string;
   autor?: string;
@@ -1030,6 +1031,94 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "ruta",
               placeholder: "Carpeta con los PDFs",
               valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
+  {
+    nombre: "Pipeline",
+    categoria: "Pipeline",
+    tipo: "directorio",
+    descripcion: "Pipelines integrados: genera informe A3 + ejecuta proceso",
+    subCategoria: [
+      {
+        nombre: "PIPELINE ALTAS DUPLICADOS",
+        categoria: "Pipeline",
+        tipo: "proceso",
+        descripcion:
+          "Genera listado Altas (Fmt 8) desde A3 y ejecuta Duplicados TA2+IDC automáticamente",
+        autor: "Integración A3",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "empresaCodes",
+            formulario: {
+              titulo: "Códigos de empresa (separados por coma)",
+              tipo: "texto",
+              placeholder: "Ej: 00008, 01378",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "regimen",
+            formulario: {
+              titulo: "Régimen (4 dígitos)",
+              tipo: "texto",
+              placeholder: "Ej: 0111",
+              valorDefault: "0111",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Carpeta de salida",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "pythonPath",
+            formulario: {
+              titulo: "Ruta Python (vacío = usar PATH)",
+              tipo: "texto",
+              placeholder: "python",
+              valorDefault: "python",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "analisisA3Path",
+            formulario: {
+              titulo: "Ruta proyecto analisis-a3",
+              tipo: "ruta",
+              placeholder: "Carpeta raíz de analisis-a3",
+              valorDefault:
+                "C:\\Users\\preprod\\Documents\\Proyectos\\analisis-a3",
             },
           },
         ],
