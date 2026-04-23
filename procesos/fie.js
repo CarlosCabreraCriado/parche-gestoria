@@ -264,7 +264,7 @@ class ProcesosFie {
                   empresa = {};
                   if (altas[i].expte) {
                     empresa = datosEmpresas.find(
-                      (e) => Number(e.codigo) === Number(altas[i].expte),
+                      (e) => Number(e.expediente) === Number(altas[i].expte),
                     );
                   } else {
                     empresa = datosEmpresas.find(
@@ -277,7 +277,7 @@ class ProcesosFie {
                       altas[i].empresa,
                     );
                   }
-                  altas[i].expedienteEmpresa = empresa?.codigo || "";
+                  altas[i].expedienteEmpresa = empresa?.expediente || "";
                   altas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
                   altas[i].nombreEmpresa = empresa?.empresa || "";
 
@@ -285,7 +285,7 @@ class ProcesosFie {
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN ALTAS:",
-                      empresa.codigo,
+                      empresa.expediente,
                       empresa.empresa,
                       empresa.email,
                       typeof empresa.email,
@@ -297,7 +297,7 @@ class ProcesosFie {
 
                   if (bajas[i].expte) {
                     empresa = datosEmpresas.find(
-                      (e) => Number(e.codigo) === Number(bajas[i].expte),
+                      (e) => Number(e.expediente) === Number(bajas[i].expte),
                     );
                   } else {
                     empresa = datosEmpresas.find(
@@ -310,14 +310,14 @@ class ProcesosFie {
                       bajas[i].empresa,
                     );
                   }
-                  bajas[i].expedienteEmpresa = empresa?.codigo || "";
+                  bajas[i].expedienteEmpresa = empresa?.expediente || "";
                   bajas[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
                   bajas[i].nombreEmpresa = empresa?.empresa || "";
 
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN BAJAS:",
-                      empresa.codigo,
+                      empresa.expediente,
                       empresa.empresa,
                       empresa.email,
                       typeof empresa.email,
@@ -329,7 +329,7 @@ class ProcesosFie {
 
                   if (confirmacion[i].expte) {
                     empresa = datosEmpresas.find(
-                      (e) => Number(e.codigo) === Number(confirmacion[i].expte),
+                      (e) => Number(e.expediente) === Number(confirmacion[i].expte),
                     );
                   } else {
                     empresa = datosEmpresas.find(
@@ -342,14 +342,14 @@ class ProcesosFie {
                       confirmacion[i].empresa,
                     );
                   }
-                  confirmacion[i].expedienteEmpresa = empresa?.codigo || "";
+                  confirmacion[i].expedienteEmpresa = empresa?.expediente || "";
                   confirmacion[i].emailsEmpresa = normalizaEmailEmpresa(empresa?.email);
                   confirmacion[i].nombreEmpresa = empresa?.empresa || "";
 
                   if (empresa && typeof empresa.email !== "string") {
                     console.log(
                       "EMAIL NO STRING EN CONFIRMACION:",
-                      empresa.codigo,
+                      empresa.expediente,
                       empresa.empresa,
                       empresa.email,
                       typeof empresa.email,
