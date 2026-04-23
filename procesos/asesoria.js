@@ -6489,6 +6489,11 @@ class ProcesosAsesoria {
         );
       }
 
+      const fechaEjecucion = DateTime.now()
+        .setZone("Europe/Madrid")
+        .toFormat("dd-MM-yyyy");
+      const carpetaFecha = `Certificados de estar al corriente (${fechaEjecucion})`;
+
       const paths = {};
       if (runSS) {
         const base = path.join(
@@ -6497,8 +6502,8 @@ class ProcesosAsesoria {
         );
         paths.ss = {
           excel: base,
-          resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
+          resultados: path.join(base, "Resultados", carpetaFecha),
+          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
         };
       }
       if (runTrib) {
@@ -6508,8 +6513,8 @@ class ProcesosAsesoria {
         );
         paths.trib = {
           excel: base,
-          resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
+          resultados: path.join(base, "Resultados", carpetaFecha),
+          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
         };
       }
       if (runATC) {
@@ -6519,8 +6524,8 @@ class ProcesosAsesoria {
         );
         paths.atc = {
           excel: base,
-          resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
+          resultados: path.join(base, "Resultados", carpetaFecha),
+          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
         };
       }
       for (const key of Object.keys(paths)) {
