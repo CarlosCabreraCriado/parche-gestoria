@@ -6494,38 +6494,31 @@ class ProcesosAsesoria {
         .toFormat("dd-MM-yyyy");
       const carpetaFecha = `Certificados de estar al corriente (${fechaEjecucion})`;
 
+      const carpetaRaiz = path.join(path.normalize(pathBase), carpetaFecha);
+
       const paths = {};
       if (runSS) {
-        const base = path.join(
-          path.normalize(pathBase),
-          "SS-Certificados-Procesados",
-        );
+        const base = path.join(carpetaRaiz, "Certificados_SS-Procesados");
         paths.ss = {
-          excel: base,
-          resultados: path.join(base, "Resultados", carpetaFecha),
-          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
+          excel: carpetaRaiz,
+          resultados: path.join(base, "Resultados"),
+          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       if (runTrib) {
-        const base = path.join(
-          path.normalize(pathBase),
-          "Certificados_Tributarios-Procesados",
-        );
+        const base = path.join(carpetaRaiz, "Certificados_Tributarios-Procesados");
         paths.trib = {
-          excel: base,
-          resultados: path.join(base, "Resultados", carpetaFecha),
-          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
+          excel: carpetaRaiz,
+          resultados: path.join(base, "Resultados"),
+          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       if (runATC) {
-        const base = path.join(
-          path.normalize(pathBase),
-          "Certificados_SubvencionesATC-Procesados",
-        );
+        const base = path.join(carpetaRaiz, "Certificados_SubvencionesATC-Procesados");
         paths.atc = {
-          excel: base,
-          resultados: path.join(base, "Resultados", carpetaFecha),
-          facturacion: path.join(base, "FACTURACIÓN", carpetaFecha),
+          excel: carpetaRaiz,
+          resultados: path.join(base, "Resultados"),
+          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       for (const key of Object.keys(paths)) {
