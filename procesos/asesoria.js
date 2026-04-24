@@ -6502,7 +6502,6 @@ class ProcesosAsesoria {
         paths.ss = {
           excel: carpetaRaiz,
           resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       if (runTrib) {
@@ -6510,7 +6509,6 @@ class ProcesosAsesoria {
         paths.trib = {
           excel: carpetaRaiz,
           resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       if (runATC) {
@@ -6518,12 +6516,11 @@ class ProcesosAsesoria {
         paths.atc = {
           excel: carpetaRaiz,
           resultados: path.join(base, "Resultados"),
-          facturacion: path.join(base, "FACTURACIÓN"),
         };
       }
       for (const key of Object.keys(paths)) {
         const p = paths[key];
-        for (const dir of [p.resultados, p.facturacion]) {
+        for (const dir of [p.resultados]) {
           if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
             console.log(`Carpeta creada: ${dir}`);
@@ -6619,11 +6616,6 @@ class ProcesosAsesoria {
                   " " +
                   fechaHoy +
                   ".pdf";
-                objetoCliente.nombreArchivoSSFacturacion =
-                  objetoCliente.codigo +
-                  "-" +
-                  objetoCliente.empresa +
-                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
                 objetoCliente.nombreArchivoTrib =
                   objetoCliente.codigo +
                   " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
@@ -6631,11 +6623,6 @@ class ProcesosAsesoria {
                   " " +
                   fechaHoy +
                   ".pdf";
-                objetoCliente.nombreArchivoTribFacturacion =
-                  objetoCliente.codigo +
-                  "-" +
-                  objetoCliente.empresa +
-                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
                 objetoCliente.nombreArchivoATC =
                   objetoCliente.codigo +
                   " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
@@ -6643,11 +6630,6 @@ class ProcesosAsesoria {
                   " " +
                   fechaHoy +
                   ".pdf";
-                objetoCliente.nombreArchivoATCFacturacion =
-                  objetoCliente.codigo +
-                  "-" +
-                  objetoCliente.empresa +
-                  "-3.096-Certificado de estar al corriente AEAT-28.50€-CC.pdf";
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
@@ -6933,13 +6915,8 @@ class ProcesosAsesoria {
                   paths.resultados,
                   cliente.nombreArchivoSS,
                 );
-                const filePathFacturacion = path.join(
-                  paths.facturacion,
-                  cliente.nombreArchivoSSFacturacion,
-                );
                 try {
                   fs.writeFileSync(filePath, pdfBuffer);
-                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
                 } catch (fsErr) {
                   console.warn("[CERT SS] Error guardando PDF en disco:", fsErr?.message || fsErr);
                   throw fsErr;
@@ -7085,13 +7062,8 @@ class ProcesosAsesoria {
                   paths.resultados,
                   cliente.nombreArchivoTrib,
                 );
-                const filePathFacturacion = path.join(
-                  paths.facturacion,
-                  cliente.nombreArchivoTribFacturacion,
-                );
                 try {
                   fs.writeFileSync(filePath, pdfBuffer);
-                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
                 } catch (fsErr) {
                   console.warn("[CERT TRIB] Error guardando PDF en disco:", fsErr?.message || fsErr);
                   throw fsErr;
@@ -7260,13 +7232,8 @@ class ProcesosAsesoria {
                   paths.resultados,
                   cliente.nombreArchivoATC,
                 );
-                const filePathFacturacion = path.join(
-                  paths.facturacion,
-                  cliente.nombreArchivoATCFacturacion,
-                );
                 try {
                   fs.writeFileSync(filePath, pdfBuffer);
-                  fs.writeFileSync(filePathFacturacion, pdfBuffer);
                 } catch (fsErr) {
                   console.warn("[CERT ATC] Error guardando PDF en disco:", fsErr?.message || fsErr);
                   throw fsErr;
