@@ -7140,14 +7140,35 @@ class ProcesosAsesoria {
     }
     await this.esperar(1000);
 
+    // PASO 1: Página selectora de login (cert vs clave)
+    // Detecta por la imagen del certificado digital, no por URL
+    try {
+      await page.waitForSelector(
+        'img[alt="img_dig1"], img[src*="certificadoDigital"]',
+        { timeout: 3000 },
+      );
+      await page.evaluate(() => {
+        const img =
+          document.querySelector('img[alt="img_dig1"]') ||
+          document.querySelector('img[src*="certificadoDigital"]');
+        if (img?.parentElement?.tagName === "A") img.parentElement.click();
+      });
+      await page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
+        .catch(() => {});
+      await this.esperar(1000);
+    } catch (_) {
+      // Ya autenticado o página no encontrada, se continúa
+    }
+
+    // PASO 2: valida.jsp — clicar "Entrar" y esperar selección de certificado
     if (page.url().includes("/publico/validacion/")) {
       try {
-        await page.evaluate(() => {
-          const link = Array.from(document.querySelectorAll("a")).find((a) =>
-            a.textContent.includes("Certificado"),
-          );
-          if (link) link.click();
-        });
+        const botonEntrar = await page.waitForSelector(
+          'input[id="btnValidar"]',
+          { timeout: 5000 },
+        );
+        if (botonEntrar) await botonEntrar.click();
       } catch (_) {}
 
       try {
@@ -7162,16 +7183,6 @@ class ProcesosAsesoria {
       }
       await this.esperar(2000);
     }
-
-    try {
-      const botonEntrar = await page.waitForSelector(
-        'input[id="btnValidar"]',
-        { timeout: 1000 },
-      );
-      if (botonEntrar) {
-        await botonEntrar.click();
-      }
-    } catch (_) {}
 
     try {
       const botonSolicitar = await page.waitForSelector(
