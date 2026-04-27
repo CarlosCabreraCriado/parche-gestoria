@@ -16,7 +16,8 @@ interface LibreriaProcesos {
     | "Fie"
     | "Duplicados"
     | "Autonomos"
-    | "Pipeline";
+    | "Pipeline"
+    | "Facturacion";
 
   descripcion: string;
   autor?: string;
@@ -1214,6 +1215,48 @@ var libreriaProcesos: LibreriaProcesos[] = [
               placeholder: "Carpeta raíz de analisis-a3",
               valorDefault:
                 "C:\\Users\\preprod\\Documents\\Proyectos\\analisis-a3",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
+  {
+    nombre: "Facturación",
+    categoria: "Facturacion",
+    tipo: "directorio",
+    descripcion: "Reportes de facturación por empresa",
+    subCategoria: [
+      {
+        nombre: "Reporte de Facturación",
+        categoria: "Facturacion",
+        tipo: "proceso",
+        descripcion:
+          "Genera un Excel con todos los procesos ejecutados en el periodo, desglosados por empresa, para facturación.",
+        autor: "Gonzalo Martín",
+        argumentos: [
+          {
+            tipo: "fecha",
+            obligado: true,
+            identificador: "desde",
+            formulario: {
+              titulo: "Desde (fecha inicio)",
+              tipo: "fecha",
+              placeholder: "Fecha de inicio del periodo",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "fecha",
+            obligado: true,
+            identificador: "hasta",
+            formulario: {
+              titulo: "Hasta (fecha fin)",
+              tipo: "fecha",
+              placeholder: "Fecha de fin del periodo",
+              valorDefault: "",
             },
           },
         ],

@@ -11,7 +11,7 @@ const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
 
-const { registrarEjecucion } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 
@@ -293,9 +293,14 @@ class ProcesosAsesoria {
 
               return null;
             }
+            const empresasMetrica = [
+              ...agruparPorEmpresa(empresas, ["codigo"], ["codigo"]),
+              ...agruparPorEmpresa(autonomos, ["codigo"], ["codigo"]),
+            ];
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: empresasMetrica,
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -1014,6 +1019,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
                 console.log("Fin del procesamiento");
                 //console.log(archivoIRPF)
@@ -1805,6 +1811,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -2607,6 +2614,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -2994,6 +3002,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -3349,6 +3358,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
 
@@ -3614,6 +3624,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -4076,6 +4087,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -4629,6 +4641,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -5028,6 +5041,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -5452,6 +5466,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
 
@@ -5927,6 +5942,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -6421,6 +6437,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -6811,6 +6828,7 @@ class ProcesosAsesoria {
               registrarEjecucion({
                 nombreProceso,
                 registrosProcesados: registrosProcesados,
+                empresas: agruparPorEmpresa(clientes),
               });
             } catch (_) {}
             console.log("Fin del procesamiento (certificados unificados)");

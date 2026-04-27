@@ -1,10 +1,8 @@
-//DETERMINA SI ES DESARROLLO O PRODUCCION:
-const DEBUG = process.env.NODE_ENV === "dev"; //Verifica si esta en producción
+const DEBUG = process.env.NODE_ENV === "dev";
 console.log(process.env.NODE_ENV);
 console.log("DESARROLLO: " + DEBUG);
 
-// metricsClient.js
-const axios = require("axios"); // npm install axios
+const axios = require("axios");
 
 const METRICS_ENDPOINT =
   "https://nodus-backend-production.up.railway.app/registrarEjecucion";
@@ -12,24 +10,37 @@ const METRICS_ENDPOINT =
 async function registrarEjecucion({
   nombreProceso,
   fechaEjecucion = new Date(),
-  registrosProcesados,
+  registrosProcesados = 0,
+  empresas = [], // [{ codigo, nombre, registrosProcesados }]
 }) {
   try {
     const payload = {
       nombreProceso,
-      fechaEjecucion, // se enviará en ISO (axios lo serializa)
+      fechaEjecucion,
       registrosProcesados,
+      ...(empresas.length > 0 && { empresas }),
     };
 
-    const headers = {};
-
     if (!DEBUG) {
-      await axios.post(METRICS_ENDPOINT, payload, { headers });
+      await axios.post(METRICS_ENDPOINT, payload);
     }
   } catch (err) {
-    // Importante: nunca revientes el proceso sólo por fallo al enviar métricas
     console.error("Error enviando métricas:", err.message);
   }
 }
 
-module.exports = { registrarEjecucion };
+function agruparPorEmpresa(clientes, camposCodigo = ["cod_empresa"], camposNombre = ["nombre_empresa"]) {
+  const mapa = {};
+  for (const c of clientes) {
+    const codigo = camposCodigo.map((k) => c[k]).find((v) => v != null) ?? "";
+    const nombre = camposNombre.map((k) => c[k]).find((v) => v != null) ?? "";
+    const key = String(codigo);
+    if (!mapa[key]) {
+      mapa[key] = { codigo: String(codigo), nombre: String(nombre), registrosProcesados: 0 };
+    }
+    mapa[key].registrosProcesados += 1;
+  }
+  return Object.values(mapa);
+}
+
+module.exports = { registrarEjecucion, agruparPorEmpresa };
