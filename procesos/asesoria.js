@@ -6852,6 +6852,50 @@ class ProcesosAsesoria {
     });
   }
 
+  async _descargarPDF({ browser, botonClick, rutaArchivo, etiqueta, timeoutMs = 15000 }) {
+    let resuelto = false;
+    let timeoutId = null;
+
+    const resultado = await new Promise((resolve) => {
+      const finalizar = (valor) => {
+        if (resuelto) return;
+        resuelto = true;
+        clearTimeout(timeoutId);
+        browser.off("targetcreated", onTargetCreated);
+        resolve(valor);
+      };
+
+      const onTargetCreated = async (target) => {
+        if (resuelto) return;
+        try {
+          const newPage = await target.page();
+          if (!newPage) return;
+          newPage.on("response", async (response) => {
+            if (resuelto) return;
+            const contentType = response.headers()["content-type"] || "";
+            if (
+              response.url().startsWith("chrome-extension://") &&
+              contentType.includes("application/pdf")
+            ) {
+              console.log(`PDF detectado (${etiqueta}):`, response.url());
+              const pdfBuffer = await response.buffer();
+              fs.writeFileSync(rutaArchivo, pdfBuffer);
+              console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
+              finalizar(newPage);
+            }
+          });
+        } catch (_) {}
+      };
+
+      browser.on("targetcreated", onTargetCreated);
+      timeoutId = setTimeout(() => finalizar(false), timeoutMs);
+
+      botonClick();
+    });
+
+    return resultado;
+  }
+
   async _procesarCertificadoSS({ browser, page, cliente, paths, hoja }) {
     console.log(`[CERT SS] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
     const ccc = String(cliente.ccc);
@@ -6913,42 +6957,25 @@ class ProcesosAsesoria {
       throw new Error("No se encontró el enlace 'Certificado genérico'.");
     }
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 10000);
+    const rutaSS = path.join(paths.resultados, cliente.nombreArchivoSS);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => enlaceEncontrado.click(),
+      rutaArchivo: rutaSS,
+      etiqueta: "SS",
+      timeoutMs: 15000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (SS):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoSS,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT SS] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF SS descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await enlaceEncontrado.click(),
-      ]);
-    } catch (e) {
-      console.log("[CERT SS] Error en catch: ", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT SS] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => enlaceEncontrado.click(),
+        rutaArchivo: rutaSS,
+        etiqueta: "SS",
+        timeoutMs: 15000,
+      });
     }
 
     await this.esperar(1000);
@@ -7060,42 +7087,25 @@ class ProcesosAsesoria {
 
     await page.locator('input[id="descarga"]').wait();
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 5000);
+    const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => page.locator('input[id="descarga"]').click(),
+      rutaArchivo: rutaTrib,
+      etiqueta: "TRIB",
+      timeoutMs: 15000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (TRIB):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoTrib,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT TRIB] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF Tributario descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await page.locator('input[id="descarga"]').click(),
-      ]);
-    } catch (e) {
-      console.warn("[CERT TRIB] Error en catch:", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT TRIB] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => page.locator('input[id="descarga"]').click(),
+        rutaArchivo: rutaTrib,
+        etiqueta: "TRIB",
+        timeoutMs: 15000,
+      });
     }
 
     if (!nuevaPagina) {
@@ -7241,42 +7251,25 @@ class ProcesosAsesoria {
 
     await this.esperar(1000);
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 5000);
+    const rutaATC = path.join(paths.resultados, cliente.nombreArchivoATC);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => page.locator('input[id="btnDescargar"]').click(),
+      rutaArchivo: rutaATC,
+      etiqueta: "ATC",
+      timeoutMs: 20000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (ATC):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoATC,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT ATC] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF ATC descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await page.locator('input[id="btnDescargar"]').click(),
-      ]);
-    } catch (e) {
-      console.warn("[CERT ATC] Error en catch:", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT ATC] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => page.locator('input[id="btnDescargar"]').click(),
+        rutaArchivo: rutaATC,
+        etiqueta: "ATC",
+        timeoutMs: 20000,
+      });
     }
 
     if (!nuevaPagina) {
