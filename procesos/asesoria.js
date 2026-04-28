@@ -6698,6 +6698,14 @@ class ProcesosAsesoria {
             let page = await browser.newPage();
             await prepararPagina(page);
 
+            try {
+              await this._preinicializarCertificados({ browser, page, runSS, runTrib, runATC });
+            } catch (e) {
+              console.warn("[CERT INIT] Error en pre-inicialización:", e?.message || e);
+              try { await browser.close(); } catch (_) {}
+              return resolve(false);
+            }
+
             for (let i = 0; i < clientes.length; i++) {
               registrosProcesados += 1;
 
@@ -6850,6 +6858,97 @@ class ProcesosAsesoria {
       console.log("Se ha producido un error interno: ", err?.message || err);
       return false;
     });
+  }
+
+  async _preinicializarCertificados({ browser, page, runSS, runTrib, runATC }) {
+    console.log("[CERT INIT] Iniciando pre-selección de certificados digitales...");
+
+    if (runSS) {
+      console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      console.log("[CERT INIT] SS listo.");
+    }
+
+    if (runTrib) {
+      console.log("[CERT INIT] TRIB — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      try {
+        const botonModal = await page.waitForSelector('button[data-dismiss="modal"]', { timeout: 1000 });
+        if (botonModal) await botonModal.click();
+      } catch (_) {}
+      console.log("[CERT INIT] TRIB listo.");
+    }
+
+    if (runATC) {
+      console.log("[CERT INIT] ATC — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      await this.esperar(1000);
+
+      try {
+        await page.waitForSelector('img[alt="img_dig1"], img[src*="certificadoDigital"]', { timeout: 3000 });
+        await page.evaluate(() => {
+          const img =
+            document.querySelector('img[alt="img_dig1"]') ||
+            document.querySelector('img[src*="certificadoDigital"]');
+          if (img?.parentElement?.tagName === "A") img.parentElement.click();
+        });
+        await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 }).catch(() => {});
+        await this.esperar(1000);
+      } catch (_) {}
+
+      if (page.url().includes("/publico/validacion/")) {
+        try {
+          const botonEntrar = await page.waitForSelector('input[id="btnValidar"]', { timeout: 5000 });
+          if (botonEntrar) await botonEntrar.click();
+        } catch (_) {}
+
+        try {
+          await page.waitForFunction(
+            () => !window.location.href.includes("/publico/validacion/"),
+            { timeout: 120000 },
+          );
+        } catch (_) {
+          throw new Error("Tiempo de autenticación ATC agotado en la fase de inicialización.");
+        }
+        await this.esperar(2000);
+      }
+      console.log("[CERT INIT] ATC listo.");
+    }
+
+    console.log("[CERT INIT] Todos los certificados pre-seleccionados. Iniciando procesamiento de clientes...");
   }
 
   async _descargarPDF({ browser, botonClick, rutaArchivo, etiqueta, timeoutMs = 15000 }) {
