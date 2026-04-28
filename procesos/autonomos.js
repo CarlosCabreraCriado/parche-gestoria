@@ -2,7 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const XlsxPopulate = require("xlsx-populate");
 const puppeteer = require("puppeteer");
-const { registrarEjecucion } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
 
 /**
  * Bases y recibos al cobro autónomos
@@ -1160,7 +1160,11 @@ class ProcesosBasesRecibosAutonomos {
         if (browser) await browser.close();
       } catch (_) {}
 
-      await registrarEjecucion({ nombreProceso, registrosProcesados });
+      await registrarEjecucion({
+        nombreProceso,
+        registrosProcesados,
+        empresas: agruparPorEmpresa(toProcess, ["empresa"], ["empresa"]),
+      });
       return true;
     } catch (err) {
       this.logErr("Error general:", err?.message || err);

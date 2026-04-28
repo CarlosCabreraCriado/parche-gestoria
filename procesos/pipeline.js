@@ -264,7 +264,11 @@ class ProcesosPipeline {
         const dupResult = await dup.duplicadosTa2(dupArgs);
 
         registrosProcesados = codes.length;
-        registrarEjecucion(nombreProceso, registrosProcesados);
+        registrarEjecucion({
+          nombreProceso,
+          registrosProcesados,
+          empresas: codes.map((c) => ({ codigo: c, nombre: "", registrosProcesados: 1 })),
+        });
 
         this.log(
           `Pipeline finalizado. Resultado duplicados: ${dupResult}`,

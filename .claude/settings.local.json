@@ -15,7 +15,21 @@
       "Read(//c/Users/gonza/AppData/Local/Microsoft/Edge/**)",
       "Bash(wc -l /c/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/procesos/*.js)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(xargs ls *)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "Bash(xargs grep *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const ExcelJS = require\\('exceljs'\\); console.log\\('exceljs OK:', typeof ExcelJS.Workbook\\)\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" status)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/asesoria.js)",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria' commit -m ' *)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff --stat)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff procesos/asesoria.js)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" log --oneline -5)"
     ]
   }
 }

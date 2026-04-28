@@ -11,7 +11,7 @@ const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
 
-const { registrarEjecucion } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 
@@ -293,9 +293,14 @@ class ProcesosAsesoria {
 
               return null;
             }
+            const empresasMetrica = [
+              ...agruparPorEmpresa(empresas, ["codigo"], ["codigo"]),
+              ...agruparPorEmpresa(autonomos, ["codigo"], ["codigo"]),
+            ];
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: empresasMetrica,
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -1014,6 +1019,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
                 console.log("Fin del procesamiento");
                 //console.log(archivoIRPF)
@@ -1805,6 +1811,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -2607,6 +2614,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -2994,6 +3002,7 @@ class ProcesosAsesoria {
                 registrarEjecucion({
                   nombreProceso,
                   registrosProcesados: registrosProcesados,
+                  empresas: agruparPorEmpresa(clientes),
                 });
 
                 console.log("Fin del procesamiento");
@@ -3349,6 +3358,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
 
@@ -3614,6 +3624,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -4076,6 +4087,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -4629,6 +4641,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -5028,6 +5041,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -5452,6 +5466,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
 
@@ -5927,6 +5942,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -6421,6 +6437,7 @@ class ProcesosAsesoria {
             registrarEjecucion({
               nombreProceso,
               registrosProcesados: registrosProcesados,
+              empresas: agruparPorEmpresa(clientes),
             });
             console.log("Fin del procesamiento");
             resolve(true);
@@ -6681,6 +6698,14 @@ class ProcesosAsesoria {
             let page = await browser.newPage();
             await prepararPagina(page);
 
+            try {
+              await this._preinicializarCertificados({ browser, page, runSS, runTrib, runATC });
+            } catch (e) {
+              console.warn("[CERT INIT] Error en pre-inicialización:", e?.message || e);
+              try { await browser.close(); } catch (_) {}
+              return resolve(false);
+            }
+
             for (let i = 0; i < clientes.length; i++) {
               registrosProcesados += 1;
 
@@ -6811,6 +6836,7 @@ class ProcesosAsesoria {
               registrarEjecucion({
                 nombreProceso,
                 registrosProcesados: registrosProcesados,
+                empresas: agruparPorEmpresa(clientes),
               });
             } catch (_) {}
             console.log("Fin del procesamiento (certificados unificados)");
@@ -6832,6 +6858,141 @@ class ProcesosAsesoria {
       console.log("Se ha producido un error interno: ", err?.message || err);
       return false;
     });
+  }
+
+  async _preinicializarCertificados({ browser, page, runSS, runTrib, runATC }) {
+    console.log("[CERT INIT] Iniciando pre-selección de certificados digitales...");
+
+    if (runSS) {
+      console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      console.log("[CERT INIT] SS listo.");
+    }
+
+    if (runTrib) {
+      console.log("[CERT INIT] TRIB — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      try {
+        const botonModal = await page.waitForSelector('button[data-dismiss="modal"]', { timeout: 1000 });
+        if (botonModal) await botonModal.click();
+      } catch (_) {}
+      console.log("[CERT INIT] TRIB listo.");
+    }
+
+    if (runATC) {
+      console.log("[CERT INIT] ATC — navegando para seleccionar certificado...");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      await this.esperar(1000);
+
+      try {
+        await page.waitForSelector('img[alt="img_dig1"], img[src*="certificadoDigital"]', { timeout: 3000 });
+        await page.evaluate(() => {
+          const img =
+            document.querySelector('img[alt="img_dig1"]') ||
+            document.querySelector('img[src*="certificadoDigital"]');
+          if (img?.parentElement?.tagName === "A") img.parentElement.click();
+        });
+        await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 }).catch(() => {});
+        await this.esperar(1000);
+      } catch (_) {}
+
+      if (page.url().includes("/publico/validacion/")) {
+        try {
+          const botonEntrar = await page.waitForSelector('input[id="btnValidar"]', { timeout: 5000 });
+          if (botonEntrar) await botonEntrar.click();
+        } catch (_) {}
+
+        try {
+          await page.waitForFunction(
+            () => !window.location.href.includes("/publico/validacion/"),
+            { timeout: 120000 },
+          );
+        } catch (_) {
+          throw new Error("Tiempo de autenticación ATC agotado en la fase de inicialización.");
+        }
+        await this.esperar(2000);
+      }
+      console.log("[CERT INIT] ATC listo.");
+    }
+
+    console.log("[CERT INIT] Todos los certificados pre-seleccionados. Iniciando procesamiento de clientes...");
+  }
+
+  async _descargarPDF({ browser, botonClick, rutaArchivo, etiqueta, timeoutMs = 15000 }) {
+    let resuelto = false;
+    let timeoutId = null;
+
+    const resultado = await new Promise((resolve) => {
+      const finalizar = (valor) => {
+        if (resuelto) return;
+        resuelto = true;
+        clearTimeout(timeoutId);
+        browser.off("targetcreated", onTargetCreated);
+        resolve(valor);
+      };
+
+      const onTargetCreated = async (target) => {
+        if (resuelto) return;
+        try {
+          const newPage = await target.page();
+          if (!newPage) return;
+          newPage.on("response", async (response) => {
+            if (resuelto) return;
+            const contentType = response.headers()["content-type"] || "";
+            if (
+              response.url().startsWith("chrome-extension://") &&
+              contentType.includes("application/pdf")
+            ) {
+              console.log(`PDF detectado (${etiqueta}):`, response.url());
+              const pdfBuffer = await response.buffer();
+              fs.writeFileSync(rutaArchivo, pdfBuffer);
+              console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
+              finalizar(newPage);
+            }
+          });
+        } catch (_) {}
+      };
+
+      browser.on("targetcreated", onTargetCreated);
+      timeoutId = setTimeout(() => finalizar(false), timeoutMs);
+
+      botonClick();
+    });
+
+    return resultado;
   }
 
   async _procesarCertificadoSS({ browser, page, cliente, paths, hoja }) {
@@ -6895,42 +7056,25 @@ class ProcesosAsesoria {
       throw new Error("No se encontró el enlace 'Certificado genérico'.");
     }
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 10000);
+    const rutaSS = path.join(paths.resultados, cliente.nombreArchivoSS);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => enlaceEncontrado.click(),
+      rutaArchivo: rutaSS,
+      etiqueta: "SS",
+      timeoutMs: 15000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (SS):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoSS,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT SS] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF SS descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await enlaceEncontrado.click(),
-      ]);
-    } catch (e) {
-      console.log("[CERT SS] Error en catch: ", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT SS] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => enlaceEncontrado.click(),
+        rutaArchivo: rutaSS,
+        etiqueta: "SS",
+        timeoutMs: 15000,
+      });
     }
 
     await this.esperar(1000);
@@ -7042,42 +7186,25 @@ class ProcesosAsesoria {
 
     await page.locator('input[id="descarga"]').wait();
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 5000);
+    const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => page.locator('input[id="descarga"]').click(),
+      rutaArchivo: rutaTrib,
+      etiqueta: "TRIB",
+      timeoutMs: 15000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (TRIB):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoTrib,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT TRIB] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF Tributario descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await page.locator('input[id="descarga"]').click(),
-      ]);
-    } catch (e) {
-      console.warn("[CERT TRIB] Error en catch:", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT TRIB] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => page.locator('input[id="descarga"]').click(),
+        rutaArchivo: rutaTrib,
+        etiqueta: "TRIB",
+        timeoutMs: 15000,
+      });
     }
 
     if (!nuevaPagina) {
@@ -7122,14 +7249,35 @@ class ProcesosAsesoria {
     }
     await this.esperar(1000);
 
+    // PASO 1: Página selectora de login (cert vs clave)
+    // Detecta por la imagen del certificado digital, no por URL
+    try {
+      await page.waitForSelector(
+        'img[alt="img_dig1"], img[src*="certificadoDigital"]',
+        { timeout: 3000 },
+      );
+      await page.evaluate(() => {
+        const img =
+          document.querySelector('img[alt="img_dig1"]') ||
+          document.querySelector('img[src*="certificadoDigital"]');
+        if (img?.parentElement?.tagName === "A") img.parentElement.click();
+      });
+      await page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
+        .catch(() => {});
+      await this.esperar(1000);
+    } catch (_) {
+      // Ya autenticado o página no encontrada, se continúa
+    }
+
+    // PASO 2: valida.jsp — clicar "Entrar" y esperar selección de certificado
     if (page.url().includes("/publico/validacion/")) {
       try {
-        await page.evaluate(() => {
-          const link = Array.from(document.querySelectorAll("a")).find((a) =>
-            a.textContent.includes("Certificado"),
-          );
-          if (link) link.click();
-        });
+        const botonEntrar = await page.waitForSelector(
+          'input[id="btnValidar"]',
+          { timeout: 5000 },
+        );
+        if (botonEntrar) await botonEntrar.click();
       } catch (_) {}
 
       try {
@@ -7144,16 +7292,6 @@ class ProcesosAsesoria {
       }
       await this.esperar(2000);
     }
-
-    try {
-      const botonEntrar = await page.waitForSelector(
-        'input[id="btnValidar"]',
-        { timeout: 1000 },
-      );
-      if (botonEntrar) {
-        await botonEntrar.click();
-      }
-    } catch (_) {}
 
     try {
       const botonSolicitar = await page.waitForSelector(
@@ -7212,42 +7350,25 @@ class ProcesosAsesoria {
 
     await this.esperar(1000);
 
-    let nuevaPagina;
-    try {
-      [nuevaPagina] = await Promise.all([
-        new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 5000);
+    const rutaATC = path.join(paths.resultados, cliente.nombreArchivoATC);
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: () => page.locator('input[id="btnDescargar"]').click(),
+      rutaArchivo: rutaATC,
+      etiqueta: "ATC",
+      timeoutMs: 20000,
+    });
 
-          browser.once("targetcreated", async (target) => {
-            const newPage = await target.page();
-            newPage.on("response", async (response) => {
-              if (
-                !response.url().endsWith(".js") &&
-                !response.url().endsWith(".css") &&
-                response.url().startsWith("chrome-extension://")
-              ) {
-                console.log("PDF detectado (ATC):", response.url());
-                const pdfBuffer = await response.buffer();
-                const filePath = path.join(
-                  paths.resultados,
-                  cliente.nombreArchivoATC,
-                );
-                try {
-                  fs.writeFileSync(filePath, pdfBuffer);
-                } catch (fsErr) {
-                  console.warn("[CERT ATC] Error guardando PDF en disco:", fsErr?.message || fsErr);
-                  throw fsErr;
-                }
-                console.log("PDF ATC descargado en:", filePath);
-                resolvePromise(newPage);
-              }
-            });
-          });
-        }),
-        await page.locator('input[id="btnDescargar"]').click(),
-      ]);
-    } catch (e) {
-      console.warn("[CERT ATC] Error en catch:", e?.message || e);
+    if (!nuevaPagina) {
+      console.log("[CERT ATC] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => page.locator('input[id="btnDescargar"]').click(),
+        rutaArchivo: rutaATC,
+        etiqueta: "ATC",
+        timeoutMs: 20000,
+      });
     }
 
     if (!nuevaPagina) {
