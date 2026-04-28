@@ -12,6 +12,7 @@ const fs = require("fs");
 const ipc = require("electron").ipcMain;
 
 var https = require("https");
+const axios = require("axios");
 const readline = require("readline");
 const moment = require("moment");
 
@@ -1248,6 +1249,35 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
       case "pipeline":
       result = await procesosPipeline[identificador](argumentos);
       break;
+      case "facturacion": {
+        const desde = argumentos.formularioControl[0];
+        const hasta = argumentos.formularioControl[1];
+        if (!desde || !hasta) {
+          console.error("[FACTURACION] Fechas no proporcionadas");
+          result = false;
+          break;
+        }
+        const desdeStr = new Date(desde).toISOString().slice(0, 10);
+        const hastaStr = new Date(hasta).toISOString().slice(0, 10);
+        const backendUrl = `https://nodus-backend-production.up.railway.app/metricas/reporte/excel?desde=${desdeStr}&hasta=${hastaStr}`;
+        try {
+          const response = await axios.get(backendUrl, { responseType: "arraybuffer" });
+          const { canceled, filePath } = await dialog.showSaveDialog({
+            title: "Guardar reporte de facturación",
+            defaultPath: `reporte-facturacion-${desdeStr}_${hastaStr}.xlsx`,
+            filters: [{ name: "Excel", extensions: ["xlsx"] }],
+          });
+          if (!canceled && filePath) {
+            fs.writeFileSync(filePath, Buffer.from(response.data));
+            console.log(`[FACTURACION] Excel guardado en: ${filePath}`);
+          }
+          result = true;
+        } catch (err) {
+          console.error("[FACTURACION] Error descargando reporte:", err.message);
+          result = false;
+        }
+        break;
+      }
   }
 
   if (result == undefined) {
