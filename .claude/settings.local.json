@@ -29,7 +29,16 @@
       "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria' commit -m ' *)",
       "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff --stat)",
       "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff procesos/asesoria.js)",
-      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" log --oneline -5)"
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" log --oneline -5)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" status)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" diff)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add main.js)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add \"src/app/comun/procesos/procesos.configuracion.ts\")",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria' commit -m 'fix\\(procesos\\): renombrar etiqueta del argumento excel en proceso de autónomos')",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/controllers/metricasController.ts src/models/metricas.ts)",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m ' *)",
+      "Bash(python3)",
+      "Bash(grep -n \"^  }$\" \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\")"
     ]
   }
 }

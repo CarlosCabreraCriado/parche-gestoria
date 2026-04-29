@@ -527,7 +527,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         categoria: "Asesoria",
         tipo: "proceso",
         descripcion:
-          "Descarga 1..3 certificados (Seguridad Social, Tributario, ATC) en una sola ejecución usando el mismo Excel.",
+          "Descarga certificados e informes (Seguridad Social, Tributario, ATC, ITA) en una sola ejecución usando el mismo Excel.",
         autor: "Carlos Cabrera",
         argumentos: [
           {
@@ -608,6 +608,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certITA",
+            formulario: {
+              titulo: "Informes ITA",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
             },
           },
         ],
