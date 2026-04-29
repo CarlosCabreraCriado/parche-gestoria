@@ -905,7 +905,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             obligado: true,
             identificador: "exelEmpresas",
             formulario: {
-              titulo: "Excel Correos de Empresas",
+              titulo: "Excel con CCC",
               tipo: "archivo",
               accept: ".xlsm, .xlsx, .XLSX",
               placeholder: "Introduzca la ruta del archivo...",
