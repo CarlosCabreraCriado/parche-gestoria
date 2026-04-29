@@ -2322,8 +2322,12 @@ class ProcesosAsesoria {
 
               try {
                 console.log("[iRPF2026] Esperando: tab 'Datos económicos'");
-                await page.locator("span ::-p-text('Datos económicos')").wait({ timeout: 10000 });
-                await page.locator("span ::-p-text('Datos económicos')").click();
+                await page
+                  .locator("span ::-p-text('Datos económicos')")
+                  .wait({ timeout: 10000 });
+                await page
+                  .locator("span ::-p-text('Datos económicos')")
+                  .click();
 
                 console.log("[iRPF2026] Esperando: Retribuciones totales");
                 await page
@@ -2350,7 +2354,9 @@ class ProcesosAsesoria {
                   .locator('span[title^="El perceptor ha comunicado"]')
                   .wait({ timeout: 10000 });
 
-                console.log("[iRPF2026] Todos los campos encontrados. Rellenando datos económicos...");
+                console.log(
+                  "[iRPF2026] Todos los campos encontrados. Rellenando datos económicos...",
+                );
 
                 if (clientes[i].sumatorio_015) {
                   await page.type(
@@ -2393,11 +2399,17 @@ class ProcesosAsesoria {
                   }
                 }
               } catch (errDatosEco) {
-                console.log("[iRPF2026] ERROR en datos económicos:", errDatosEco.message);
-                clientes[i]["errores"].push(
-                  "ERROR: Selector no encontrado en datos económicos: " + errDatosEco.message,
+                console.log(
+                  "[iRPF2026] ERROR en datos económicos:",
+                  errDatosEco.message,
                 );
-                try { await page.reload(); } catch (_) {}
+                clientes[i]["errores"].push(
+                  "ERROR: Selector no encontrado en datos económicos: " +
+                    errDatosEco.message,
+                );
+                try {
+                  await page.reload();
+                } catch (_) {}
                 continue;
               }
 
@@ -4985,11 +4997,11 @@ class ProcesosAsesoria {
               //Comprueba si hubo error
               if (!nuevaPagina) {
                 // Intentar capturar mensaje de error del label #DIL en la página
-                let mensajeError = "ERROR: No se ha podido descargar el informe.";
+                let mensajeError =
+                  "ERROR: No se ha podido descargar el informe.";
                 try {
-                  const textoDIL = await page.$eval(
-                    "#DIL",
-                    (el) => el.textContent.trim()
+                  const textoDIL = await page.$eval("#DIL", (el) =>
+                    el.textContent.trim(),
                   );
                   if (textoDIL) {
                     mensajeError = "ERROR: " + textoDIL;
@@ -5266,7 +5278,7 @@ class ProcesosAsesoria {
                 });
                 await page.setViewport({ width: 1080, height: 1024 });
               }
-                page.setDefaultTimeout(60000);
+              page.setDefaultTimeout(60000);
 
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
@@ -5301,7 +5313,10 @@ class ProcesosAsesoria {
                 //********
                 // Pulsar opcion CCC/NAF
                 //********
-                await page.waitForSelector(`input[title="Buscar por CCC o NAF"]`, { timeout: 60000 });
+                await page.waitForSelector(
+                  `input[title="Buscar por CCC o NAF"]`,
+                  { timeout: 60000 },
+                );
                 var radioButton = await page.$(
                   `input[title="Buscar por CCC o NAF"]`,
                 );
@@ -5316,7 +5331,10 @@ class ProcesosAsesoria {
                 //********
                 // Introducir CCC
                 //********
-                await page.waitForSelector('input[name="criteriosBusquedaCccNaf"]', { timeout: 60000 });
+                await page.waitForSelector(
+                  'input[name="criteriosBusquedaCccNaf"]',
+                  { timeout: 60000 },
+                );
                 await page.type(
                   'input[name="criteriosBusquedaCccNaf"]',
                   String(clientes[i].ccc),
@@ -5334,11 +5352,15 @@ class ProcesosAsesoria {
                 //********
                 // Pulsar opcion encontrada
                 //********
-                const selectorResultado = 'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]';
-                const enlaceResultado = await page.waitForSelector(selectorResultado, { timeout: 10000 })
+                const selectorResultado =
+                  'a[id="enlace_' + String(Number(clientes[i].ccc)) + '"]';
+                const enlaceResultado = await page
+                  .waitForSelector(selectorResultado, { timeout: 10000 })
                   .catch(() => null);
                 if (!enlaceResultado) {
-                  throw new Error("CCC no encontrado en el sistema ARED: " + clientes[i].ccc);
+                  throw new Error(
+                    "CCC no encontrado en el sistema ARED: " + clientes[i].ccc,
+                  );
                 }
                 await enlaceResultado.click();
 
@@ -5360,7 +5382,10 @@ class ProcesosAsesoria {
                 let enlaceEncontrado = null;
 
                 for (const enlace of enlaces) {
-                  const texto = await page.evaluate((el) => el.innerText, enlace);
+                  const texto = await page.evaluate(
+                    (el) => el.innerText,
+                    enlace,
+                  );
                   if (texto.includes("Certificado genérico")) {
                     enlaceEncontrado = enlace;
                     break;
@@ -5431,13 +5456,22 @@ class ProcesosAsesoria {
                   await nuevaPagina.close();
                 }
               } catch (clientErr) {
-                console.log(`Error procesando cliente ${i}:`, clientErr.message || clientErr);
-                clientes[i]["errores"] = [clientErr.message || "Error desconocido"];
+                console.log(
+                  `Error procesando cliente ${i}:`,
+                  clientErr.message || clientErr,
+                );
+                clientes[i]["errores"] = [
+                  clientErr.message || "Error desconocido",
+                ];
                 archivoSS
                   .sheet("BASE DE DATOS (NO TOCAR)")
                   .cell(i + 2, 8)
-                  .value("ERROR: " + (clientErr.message || "Error desconocido"));
-                try { await page.goto("about:blank"); } catch (_) {}
+                  .value(
+                    "ERROR: " + (clientErr.message || "Error desconocido"),
+                  );
+                try {
+                  await page.goto("about:blank");
+                } catch (_) {}
               }
               console.log("Nuevo cliente");
               await this.esperar(1000);
@@ -6483,8 +6517,9 @@ class ProcesosAsesoria {
       const runSS = !!argumentos.formularioControl[4];
       const runTrib = !!argumentos.formularioControl[5];
       const runATC = !!argumentos.formularioControl[6];
+      const runITA = !!argumentos.formularioControl[7];
 
-      if (!runSS && !runTrib && !runATC) {
+      if (!runSS && !runTrib && !runATC && !runITA) {
         console.log(
           "No se ha seleccionado ningún certificado. Nada que hacer.",
         );
@@ -6522,15 +6557,28 @@ class ProcesosAsesoria {
         };
       }
       if (runTrib) {
-        const base = path.join(carpetaRaiz, "Certificados_Tributarios-Procesados");
+        const base = path.join(
+          carpetaRaiz,
+          "Certificados_Tributarios-Procesados",
+        );
         paths.trib = {
           excel: carpetaRaiz,
           resultados: path.join(base, "Resultados"),
         };
       }
       if (runATC) {
-        const base = path.join(carpetaRaiz, "Certificados_SubvencionesATC-Procesados");
+        const base = path.join(
+          carpetaRaiz,
+          "Certificados_SubvencionesATC-Procesados",
+        );
         paths.atc = {
+          excel: carpetaRaiz,
+          resultados: path.join(base, "Resultados"),
+        };
+      }
+      if (runITA) {
+        const base = path.join(carpetaRaiz, "ITA-Informes-Procesados");
+        paths.ita = {
           excel: carpetaRaiz,
           resultados: path.join(base, "Resultados"),
         };
@@ -6560,7 +6608,9 @@ class ProcesosAsesoria {
             const archivo = workbook;
             const hoja = archivo.sheet("BASE DE DATOS (NO TOCAR)");
             if (!hoja) {
-              console.warn("[CERT] Hoja 'BASE DE DATOS (NO TOCAR)' no encontrada en el Excel.");
+              console.warn(
+                "[CERT] Hoja 'BASE DE DATOS (NO TOCAR)' no encontrada en el Excel.",
+              );
               return resolve(false);
             }
             const columnas = hoja.usedRange()._numColumns;
@@ -6575,6 +6625,7 @@ class ProcesosAsesoria {
             if (runSS) setHeaderIfEmpty(8, "LOG SS");
             if (runTrib) setHeaderIfEmpty(9, "LOG TRIB");
             if (runATC) setHeaderIfEmpty(10, "LOG ATC");
+            if (runITA) setHeaderIfEmpty(11, "LOG ITA");
 
             const cabeceras = [];
             for (let i = 1; i <= columnas; i++) {
@@ -6595,6 +6646,12 @@ class ProcesosAsesoria {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
                       objetoCliente.ccc = cellVal;
+                      if (runITA) {
+                        const c = String(cellVal);
+                        objetoCliente.ccc1 = c.substring(0, 4);
+                        objetoCliente.ccc2 = c.substring(4, 6);
+                        objetoCliente.ccc3 = c.substring(6);
+                      }
                       break;
                     case "EMPRESA":
                       objetoCliente.empresa = cellVal;
@@ -6642,11 +6699,13 @@ class ProcesosAsesoria {
                   ".pdf";
                 objetoCliente.nombreArchivoATC =
                   objetoCliente.codigo +
-                  " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
+                  " CERTIFICADO ESTAR AL CORRIENTE ATC " +
                   objetoCliente.empresa +
                   " " +
                   fechaHoy +
                   ".pdf";
+                objetoCliente.nombreArchivoITA =
+                  `${objetoCliente.codigo}-${objetoCliente.ccc}.pdf`;
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
@@ -6699,10 +6758,21 @@ class ProcesosAsesoria {
             await prepararPagina(page);
 
             try {
-              await this._preinicializarCertificados({ browser, page, runSS, runTrib, runATC });
+              await this._preinicializarCertificados({
+                browser,
+                page,
+                runSS,
+                runTrib,
+                runATC,
+              });
             } catch (e) {
-              console.warn("[CERT INIT] Error en pre-inicialización:", e?.message || e);
-              try { await browser.close(); } catch (_) {}
+              console.warn(
+                "[CERT INIT] Error en pre-inicialización:",
+                e?.message || e,
+              );
+              try {
+                await browser.close();
+              } catch (_) {}
               return resolve(false);
             }
 
@@ -6739,6 +6809,10 @@ class ProcesosAsesoria {
                   hoja
                     .cell(clientes[i].filaExcel, 10)
                     .value("ERROR: Campo CCC no definido.");
+                if (runITA)
+                  hoja
+                    .cell(clientes[i].filaExcel, 11)
+                    .value("ERROR: Campo CCC no definido.");
                 continue;
               }
 
@@ -6754,9 +6828,7 @@ class ProcesosAsesoria {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT SS] Error:", msg);
-                  hoja
-                    .cell(clientes[i].filaExcel, 8)
-                    .value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 8).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
@@ -6775,9 +6847,7 @@ class ProcesosAsesoria {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT TRIB] Error:", msg);
-                  hoja
-                    .cell(clientes[i].filaExcel, 9)
-                    .value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 9).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
@@ -6796,9 +6866,26 @@ class ProcesosAsesoria {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT ATC] Error:", msg);
-                  hoja
-                    .cell(clientes[i].filaExcel, 10)
-                    .value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 10).value("ERROR: " + msg);
+                  try {
+                    await page.goto("about:blank");
+                  } catch (_) {}
+                }
+              }
+
+              if (runITA) {
+                try {
+                  await this._procesarInformeITA({
+                    browser,
+                    page,
+                    cliente: clientes[i],
+                    paths: paths.ita,
+                    hoja,
+                  });
+                } catch (e) {
+                  const msg = String(e?.message || e);
+                  console.warn("[ITA] Error:", msg);
+                  hoja.cell(clientes[i].filaExcel, 11).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
@@ -6817,7 +6904,9 @@ class ProcesosAsesoria {
               ? paths.ss.excel
               : runTrib
                 ? paths.trib.excel
-                : paths.atc.excel;
+                : runATC
+                  ? paths.atc.excel
+                  : paths.ita.excel;
             console.log("Escribiendo archivo...");
             console.log("Path: " + path.normalize(excelOutBase));
             try {
@@ -6861,7 +6950,9 @@ class ProcesosAsesoria {
   }
 
   async _preinicializarCertificados({ browser, page, runSS, runTrib, runATC }) {
-    console.log("[CERT INIT] Iniciando pre-selección de certificados digitales...");
+    console.log(
+      "[CERT INIT] Iniciando pre-selección de certificados digitales...",
+    );
 
     if (runSS) {
       console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
@@ -6881,7 +6972,9 @@ class ProcesosAsesoria {
     }
 
     if (runTrib) {
-      console.log("[CERT INIT] TRIB — navegando para seleccionar certificado...");
+      console.log(
+        "[CERT INIT] TRIB — navegando para seleccionar certificado...",
+      );
       for (let intento = 1; intento <= 2; intento++) {
         try {
           await page.goto(
@@ -6895,14 +6988,19 @@ class ProcesosAsesoria {
         }
       }
       try {
-        const botonModal = await page.waitForSelector('button[data-dismiss="modal"]', { timeout: 1000 });
+        const botonModal = await page.waitForSelector(
+          'button[data-dismiss="modal"]',
+          { timeout: 1000 },
+        );
         if (botonModal) await botonModal.click();
       } catch (_) {}
       console.log("[CERT INIT] TRIB listo.");
     }
 
     if (runATC) {
-      console.log("[CERT INIT] ATC — navegando para seleccionar certificado...");
+      console.log(
+        "[CERT INIT] ATC — navegando para seleccionar certificado...",
+      );
       for (let intento = 1; intento <= 2; intento++) {
         try {
           await page.goto(
@@ -6918,20 +7016,28 @@ class ProcesosAsesoria {
       await this.esperar(1000);
 
       try {
-        await page.waitForSelector('img[alt="img_dig1"], img[src*="certificadoDigital"]', { timeout: 3000 });
+        await page.waitForSelector(
+          'img[alt="img_dig1"], img[src*="certificadoDigital"]',
+          { timeout: 3000 },
+        );
         await page.evaluate(() => {
           const img =
             document.querySelector('img[alt="img_dig1"]') ||
             document.querySelector('img[src*="certificadoDigital"]');
           if (img?.parentElement?.tagName === "A") img.parentElement.click();
         });
-        await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 }).catch(() => {});
+        await page
+          .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
+          .catch(() => {});
         await this.esperar(1000);
       } catch (_) {}
 
       if (page.url().includes("/publico/validacion/")) {
         try {
-          const botonEntrar = await page.waitForSelector('input[id="btnValidar"]', { timeout: 5000 });
+          const botonEntrar = await page.waitForSelector(
+            'input[id="btnValidar"]',
+            { timeout: 5000 },
+          );
           if (botonEntrar) await botonEntrar.click();
         } catch (_) {}
 
@@ -6941,17 +7047,27 @@ class ProcesosAsesoria {
             { timeout: 120000 },
           );
         } catch (_) {
-          throw new Error("Tiempo de autenticación ATC agotado en la fase de inicialización.");
+          throw new Error(
+            "Tiempo de autenticación ATC agotado en la fase de inicialización.",
+          );
         }
         await this.esperar(2000);
       }
       console.log("[CERT INIT] ATC listo.");
     }
 
-    console.log("[CERT INIT] Todos los certificados pre-seleccionados. Iniciando procesamiento de clientes...");
+    console.log(
+      "[CERT INIT] Todos los certificados pre-seleccionados. Iniciando procesamiento de clientes...",
+    );
   }
 
-  async _descargarPDF({ browser, botonClick, rutaArchivo, etiqueta, timeoutMs = 15000 }) {
+  async _descargarPDF({
+    browser,
+    botonClick,
+    rutaArchivo,
+    etiqueta,
+    timeoutMs = 15000,
+  }) {
     let resuelto = false;
     let timeoutId = null;
 
@@ -6995,8 +7111,81 @@ class ProcesosAsesoria {
     return resultado;
   }
 
+  async _procesarInformeITA({ browser, page, cliente, paths, hoja }) {
+    console.log(`[ITA] Iniciando para cliente: ${cliente.codigo} - ${cliente.ccc}`);
+    const filePath = path.join(paths.resultados, cliente.nombreArchivoITA);
+
+    await page.goto(
+      "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
+      { waitUntil: "networkidle0" },
+    );
+    await this.esperar(1000);
+
+    await page.locator('input[name="txt_SDFREG62_ayuda"]').wait();
+    await page.type('input[name="txt_SDFREG62_ayuda"]', String(cliente.ccc1));
+    await page.locator('input[name="txt_SDFTESO62"]').wait();
+    await page.type('input[name="txt_SDFTESO62"]', String(cliente.ccc2));
+    await page.locator('input[name="txt_SDFNUM62"]').wait();
+    await page.type('input[name="txt_SDFNUM62"]', String(cliente.ccc3));
+
+    await this.esperar(1000);
+    await page.select('select[name="cbo_ListaTipoImpresion"]', "OnLine");
+    await this.esperar(1000);
+
+    let nuevaPagina = await this._descargarPDF({
+      browser,
+      botonClick: async () => {
+        await page.locator('input[name="btn_Sub2207601004"]').wait();
+        await page.locator('input[name="btn_Sub2207601004"]').click();
+      },
+      rutaArchivo: filePath,
+      etiqueta: "ITA",
+      timeoutMs: 15000,
+    });
+
+    if (!nuevaPagina) {
+      console.log("[ITA] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: async () => {
+          await page.locator('input[name="btn_Sub2207601004"]').wait();
+          await page.locator('input[name="btn_Sub2207601004"]').click();
+        },
+        rutaArchivo: filePath,
+        etiqueta: "ITA",
+        timeoutMs: 15000,
+      });
+    }
+
+    const descargaOk = nuevaPagina || fs.existsSync(filePath);
+
+    if (!descargaOk) {
+      let mensajeError = "ERROR: No se ha podido descargar el informe.";
+      try {
+        const textoDIL = await page.$eval("#DIL", (el) => el.textContent.trim());
+        if (textoDIL) mensajeError = "ERROR: " + textoDIL;
+      } catch (_) {
+        try {
+          const textoBody = await page.$eval("body", (el) => el.innerText.trim().slice(0, 200));
+          if (textoBody) mensajeError = "ERROR (página): " + textoBody;
+        } catch (_2) {}
+      }
+      hoja.cell(cliente.filaExcel, 11).value(mensajeError);
+      console.warn("[ITA] Error en descarga:", mensajeError);
+    } else {
+      hoja.cell(cliente.filaExcel, 11).value("OK");
+      if (nuevaPagina && typeof nuevaPagina.close === "function") {
+        await nuevaPagina.close();
+      }
+    }
+    await this.esperar(1000);
+  }
+
   async _procesarCertificadoSS({ browser, page, cliente, paths, hoja }) {
-    console.log(`[CERT SS] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
+    console.log(
+      `[CERT SS] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
+    );
     const ccc = String(cliente.ccc);
 
     for (let intento = 1; intento <= 2; intento++) {
@@ -7007,30 +7196,42 @@ class ProcesosAsesoria {
         );
         break;
       } catch (e) {
-        console.warn(`[CERT SS] Fallo navegación (intento ${intento}):`, e?.message || e);
+        console.warn(
+          `[CERT SS] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
         if (intento === 2) throw e;
         await this.esperar(1500);
       }
     }
 
-    await page.locator('a[id="enlace_316077"]').click();
-    await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
+    try {
+      await page.locator('a[id="enlace_316077"]').click();
+    } catch (e) { throw new Error(`[SS-Paso enlace ARED] ${e.message}`); }
+    try {
+      await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
+    } catch (e) { throw new Error(`[SS-Paso botón buscar inicial] ${e.message}`); }
 
-    await page.waitForSelector(`input[title="Buscar por CCC o NAF"]`, {
-      timeout: 60000,
-    });
+    try {
+      await page.waitForSelector(`input[title="Buscar por CCC o NAF"]`, {
+        timeout: 60000,
+      });
+    } catch (e) { throw new Error(`[SS-Paso radio CCC/NAF] ${e.message}`); }
     const radio = await page.$(`input[title="Buscar por CCC o NAF"]`);
     if (radio) await radio.click();
 
-    await page.waitForSelector('input[name="criteriosBusquedaCccNaf"]', {
-      timeout: 60000,
-    });
+    try {
+      await page.waitForSelector('input[name="criteriosBusquedaCccNaf"]', {
+        timeout: 60000,
+      });
+    } catch (e) { throw new Error(`[SS-Paso campo CCC] ${e.message}`); }
     await page.type('input[name="criteriosBusquedaCccNaf"]', ccc);
     await this.esperar(1000);
-    await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
+    try {
+      await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
+    } catch (e) { throw new Error(`[SS-Paso botón buscar CCC] ${e.message}`); }
 
-    const selectorResultado =
-      'a[id="enlace_' + String(Number(ccc)) + '"]';
+    const selectorResultado = 'a[id="enlace_' + String(Number(ccc)) + '"]';
     const enlaceResultado = await page
       .waitForSelector(selectorResultado, { timeout: 10000 })
       .catch(() => null);
@@ -7085,9 +7286,7 @@ class ProcesosAsesoria {
         .cell(cliente.filaExcel, 8)
         .value("ERROR: No se ha podido descargar el certificado.");
     } else {
-      hoja
-        .cell(cliente.filaExcel, 8)
-        .value("OK, certificado descargado.");
+      hoja.cell(cliente.filaExcel, 8).value("OK, certificado descargado.");
       try {
         await nuevaPagina.close();
       } catch (_) {}
@@ -7108,7 +7307,9 @@ class ProcesosAsesoria {
       return;
     }
 
-    console.log(`[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
+    console.log(
+      `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
+    );
 
     for (let intento = 1; intento <= 2; intento++) {
       try {
@@ -7118,7 +7319,10 @@ class ProcesosAsesoria {
         );
         break;
       } catch (e) {
-        console.warn(`[CERT TRIB] Fallo navegación (intento ${intento}):`, e?.message || e);
+        console.warn(
+          `[CERT TRIB] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
         if (intento === 2) throw e;
         await this.esperar(1500);
       }
@@ -7211,9 +7415,7 @@ class ProcesosAsesoria {
       console.log("[CERT TRIB] ERROR EN DESCARGA");
       hoja
         .cell(cliente.filaExcel, 9)
-        .value(
-          "ERROR: No se ha podido generar el resguardo de la solicitud.",
-        );
+        .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
     } else {
       hoja
         .cell(cliente.filaExcel, 9)
@@ -7232,7 +7434,9 @@ class ProcesosAsesoria {
       return;
     }
 
-    console.log(`[CERT ATC] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`);
+    console.log(
+      `[CERT ATC] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
+    );
 
     for (let intento = 1; intento <= 2; intento++) {
       try {
@@ -7242,7 +7446,10 @@ class ProcesosAsesoria {
         );
         break;
       } catch (e) {
-        console.warn(`[CERT ATC] Fallo navegación (intento ${intento}):`, e?.message || e);
+        console.warn(
+          `[CERT ATC] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
         if (intento === 2) throw e;
         await this.esperar(1500);
       }
@@ -7375,9 +7582,7 @@ class ProcesosAsesoria {
       console.log("[CERT ATC] ERROR ABRIENDO DESCARGA");
       hoja
         .cell(cliente.filaExcel, 10)
-        .value(
-          "ERROR: No se ha podido generar el resguardo de la solicitud.",
-        );
+        .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
     } else {
       hoja
         .cell(cliente.filaExcel, 10)
