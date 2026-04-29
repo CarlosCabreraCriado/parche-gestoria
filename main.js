@@ -1274,6 +1274,7 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
           result = true;
         } catch (err) {
           console.error("[FACTURACION] Error descargando reporte:", err.message);
+          console.error("[FACTURACION] Detalle:", err.response?.data);
           result = false;
         }
         break;
