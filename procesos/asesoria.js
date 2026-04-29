@@ -7132,33 +7132,55 @@ class ProcesosAsesoria {
     await page.select('select[name="cbo_ListaTipoImpresion"]', "OnLine");
     await this.esperar(1000);
 
-    let nuevaPagina = await this._descargarPDF({
-      browser,
-      botonClick: async () => {
-        await page.locator('input[name="btn_Sub2207601004"]').wait();
-        await page.locator('input[name="btn_Sub2207601004"]').click();
-      },
-      rutaArchivo: filePath,
-      etiqueta: "ITA",
-      timeoutMs: 15000,
+    // ITA abre el informe en el visor InSeNaCoder (w2.seg-social.es/ImprPDF/InSeNaCoder)
+    // en lugar del visor chrome-extension://, por lo que _descargarPDF no lo detecta.
+    // Capturamos la pestaña del visor y exportamos vía CDP Page.printToPDF.
+    let tabITA = null;
+    await new Promise((resolve) => {
+      let timeoutId;
+      const onTarget = async (target) => {
+        clearTimeout(timeoutId);
+        browser.off("targetcreated", onTarget);
+        try {
+          const newPage = await target.page();
+          if (newPage) {
+            await newPage
+              .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
+              .catch(() => {});
+            tabITA = newPage;
+          }
+        } catch (_) {}
+        resolve();
+      };
+      browser.on("targetcreated", onTarget);
+      timeoutId = setTimeout(() => {
+        browser.off("targetcreated", onTarget);
+        resolve();
+      }, 20000);
+
+      page.locator('input[name="btn_Sub2207601004"]')
+        .wait()
+        .then(() => page.locator('input[name="btn_Sub2207601004"]').click())
+        .catch(() => resolve());
     });
 
-    if (!nuevaPagina) {
-      console.log("[ITA] Reintentando descarga...");
-      await this.esperar(3000);
-      nuevaPagina = await this._descargarPDF({
-        browser,
-        botonClick: async () => {
-          await page.locator('input[name="btn_Sub2207601004"]').wait();
-          await page.locator('input[name="btn_Sub2207601004"]').click();
-        },
-        rutaArchivo: filePath,
-        etiqueta: "ITA",
-        timeoutMs: 15000,
-      });
+    let descargaOk = false;
+    if (tabITA) {
+      try {
+        const cdp = await tabITA.createCDPSession();
+        const { data } = await cdp.send("Page.printToPDF", {
+          printBackground: true,
+          preferCSSPageSize: true,
+        });
+        await cdp.detach();
+        fs.writeFileSync(filePath, Buffer.from(data, "base64"));
+        descargaOk = true;
+        console.log(`PDF ITA descargado en:`, filePath);
+      } catch (e) {
+        console.warn("[ITA] Error al generar PDF via CDP:", e.message);
+      }
     }
-
-    const descargaOk = nuevaPagina || fs.existsSync(filePath);
+    descargaOk = descargaOk || fs.existsSync(filePath);
 
     if (!descargaOk) {
       let mensajeError = "ERROR: No se ha podido descargar el informe.";
@@ -7175,8 +7197,8 @@ class ProcesosAsesoria {
       console.warn("[ITA] Error en descarga:", mensajeError);
     } else {
       hoja.cell(cliente.filaExcel, 11).value("OK");
-      if (nuevaPagina && typeof nuevaPagina.close === "function") {
-        await nuevaPagina.close();
+      if (tabITA && typeof tabITA.close === "function") {
+        try { await tabITA.close(); } catch (_) {}
       }
     }
     await this.esperar(1000);
