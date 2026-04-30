@@ -8,7 +8,7 @@ const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
 
-const { registrarEjecucion } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
 const { ipcRenderer } = require("electron");
 const puppeteer = require("puppeteer");
 const generatePDF = require("./pdf-fie");
@@ -1380,6 +1380,7 @@ class ProcesosFie {
                           registrarEjecucion({
                             nombreProceso,
                             registrosProcesados: registrosProcesados,
+                            empresas: agruparPorEmpresa(datosEmpresas, ["expediente"], ["empresa"]),
                           });
                           console.log("Fin del procesamiento");
 
