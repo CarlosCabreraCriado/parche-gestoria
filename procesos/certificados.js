@@ -709,55 +709,55 @@ class ProcesosCertificados {
     await page.select('select[name="cbo_ListaTipoImpresion"]', "OnLine");
     await this.esperar(1000);
 
-    // ITA abre el informe en el visor InSeNaCoder (w2.seg-social.es/ImprPDF/InSeNaCoder)
-    // en lugar del visor chrome-extension://, por lo que _descargarPDF no lo detecta.
-    // Capturamos la pestaña del visor y exportamos vía CDP Page.printToPDF.
-    let tabITA = null;
-    await new Promise((resolve) => {
-      let timeoutId;
-      const onTarget = async (target) => {
-        clearTimeout(timeoutId);
-        browser.off("targetcreated", onTarget);
-        try {
-          const newPage = await target.page();
-          if (newPage) {
-            await newPage
-              .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-              .catch(() => {});
-            tabITA = newPage;
-          }
-        } catch (_) {}
-        resolve();
-      };
-      browser.on("targetcreated", onTarget);
-      timeoutId = setTimeout(() => {
-        browser.off("targetcreated", onTarget);
-        resolve();
-      }, 20000);
+    let tabITA;
+    try {
+      tabITA = await new Promise(async (resolvePromise) => {
+        let resuelto = false;
+        let timeoutId = null;
 
-      page.locator('input[name="btn_Sub2207601004"]')
-        .wait()
-        .then(() => page.locator('input[name="btn_Sub2207601004"]').click())
-        .catch(() => resolve());
-    });
+        const finalizar = (resultado) => {
+          if (resuelto) return;
+          resuelto = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          browser.off("targetcreated", onTargetCreated);
+          resolvePromise(resultado);
+        };
 
-    let descargaOk = false;
-    if (tabITA) {
-      try {
-        const cdp = await tabITA.createCDPSession();
-        const { data } = await cdp.send("Page.printToPDF", {
-          printBackground: true,
-          preferCSSPageSize: true,
-        });
-        await cdp.detach();
-        fs.writeFileSync(filePath, Buffer.from(data, "base64"));
-        descargaOk = true;
-        console.log(`PDF ITA descargado en:`, filePath);
-      } catch (e) {
-        console.warn("[ITA] Error al generar PDF via CDP:", e.message);
-      }
+        const onTargetCreated = async (target) => {
+          if (resuelto) return;
+          try {
+            const newPage = await target.page();
+            if (!newPage) return;
+            newPage.on("response", async (response) => {
+              if (resuelto) return;
+              if (
+                !response.url().endsWith(".js") &&
+                !response.url().endsWith(".css") &&
+                response.url().startsWith("chrome-extension://")
+              ) {
+                console.log("[ITA] PDF detectado:", response.url());
+                const pdfBuffer = await response.buffer();
+                fs.writeFileSync(filePath, pdfBuffer);
+                console.log("[ITA] PDF descargado en:", filePath);
+                finalizar(newPage);
+              }
+            });
+          } catch (_) {}
+        };
+
+        browser.on("targetcreated", onTargetCreated);
+        timeoutId = setTimeout(() => finalizar(false), 15000);
+
+        await page.locator('input[name="btn_Sub2207601004"]').wait();
+        await page.locator('input[name="btn_Sub2207601004"]').click();
+      });
+    } catch (e) {
+      console.log("[ITA] Error en descarga de PDF:", e);
     }
-    descargaOk = descargaOk || fs.existsSync(filePath);
+
+    if (!tabITA && fs.existsSync(filePath)) tabITA = true;
+
+    let descargaOk = !!tabITA || fs.existsSync(filePath);
 
     if (!descargaOk) {
       let mensajeError = "ERROR: No se ha podido descargar el informe.";
