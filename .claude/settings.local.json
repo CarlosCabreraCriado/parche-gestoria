@@ -38,7 +38,28 @@
       "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/controllers/metricasController.ts src/models/metricas.ts)",
       "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m ' *)",
       "Bash(python3)",
-      "Bash(grep -n \"^  }$\" \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\")"
+      "Bash(grep -n \"^  }$\" \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\")",
+      "Bash(dir \"c:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/Nodus-Backend\")",
+      "Bash(git push *)",
+      "Bash(git -C \"c:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria\" log --oneline --after=\"2026-03-31\" --before=\"2026-05-01\" --format=\"%h %ad %s\" --date=short)",
+      "Bash(git -C \"c:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/Nodus-Backend\" log --oneline --after=\"2026-03-31\" --before=\"2026-05-01\" --format=\"%h %ad %s\" --date=short)",
+      "Bash(git -C \"c:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/An-lisis-A3---Del-Castillo-Asesores\" log --oneline --after=\"2026-03-31\" --before=\"2026-05-01\" --format=\"%h %ad %s\" --date=short)",
+      "Bash(grep -E \"^-.*\\\\.js$\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/controllers/metricasController.ts src/models/metricas.ts src/routes/apiNodus.ts)",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria' commit -m 'fix\\(facturacion\\): usar nuevo endpoint de extracción de metricas_provisionales')",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" commit -m \"fix\\(metricas\\): eliminar columna id de la query de metricas_provisionales\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/models/metricas.ts src/controllers/metricasController.ts)",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m 'feat\\(metricas\\): añadir columna codigo_empresa a metricas_provisionales *)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add metricas.js)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" commit -m \"feat\\(metricas\\): añadir soporte para codigoEmpresa en registrarEjecucion\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/models/metricas.ts)",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m 'refactor\\(metricas\\): crear una fila por empresa en metricas_provisionales *)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/fie.js)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" commit -m \"feat\\(fie\\): registrar empresas en metricas al finalizar FIE_1\")",
+      "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m 'fix\\(metricas\\): eliminar migración de columna id que bloqueaba codigo_empresa *)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/controllers/metricasController.ts)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" commit -m \"fix\\(metricas\\): mostrar fecha y hora en el Excel de facturación\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" commit -m \"fix\\(facturacion\\): usar fecha local en lugar de UTC para el rango de fechas\")"
     ]
   }
 }

@@ -1257,9 +1257,9 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
           result = false;
           break;
         }
-        const desdeStr = new Date(desde).toISOString().slice(0, 10);
-        const hastaStr = new Date(hasta).toISOString().slice(0, 10);
-        const backendUrl = `https://nodus-backend-production.up.railway.app/metricas/reporte/excel?desde=${desdeStr}&hasta=${hastaStr}`;
+        const desdeStr = new Date(desde).toLocaleDateString("sv-SE");
+        const hastaStr = new Date(hasta).toLocaleDateString("sv-SE");
+        const backendUrl = `https://nodus-backend-production.up.railway.app/metricas/provisionales/excel?desde=${desdeStr}&hasta=${hastaStr}`;
         try {
           const response = await axios.get(backendUrl, { responseType: "arraybuffer" });
           const { canceled, filePath } = await dialog.showSaveDialog({

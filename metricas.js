@@ -12,6 +12,7 @@ async function registrarEjecucion({
   fechaEjecucion = new Date(),
   registrosProcesados = 0,
   empresas = [], // [{ codigo, nombre, registrosProcesados }]
+  codigoEmpresa,
 }) {
   try {
     const payload = {
@@ -19,6 +20,7 @@ async function registrarEjecucion({
       fechaEjecucion,
       registrosProcesados,
       ...(empresas.length > 0 && { empresas }),
+      ...(codigoEmpresa != null && { codigoEmpresa }),
     };
 
     if (!DEBUG) {
