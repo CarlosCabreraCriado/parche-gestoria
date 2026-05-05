@@ -38,6 +38,7 @@ var procesosImport;
 var procesosDuplicados;
 var procesosAutonomos;
 var procesosPipeline;
+var procesosCertificados;
 
 
 var procesarPlantillaDocx;
@@ -914,6 +915,7 @@ ipc.on("abrirProyecto", function (event, nombreProy) {
     proyecto,
   );
   procesosFie = new ProcesosFie(pathToDbFolder, nombreProyecto, proyecto);
+  procesosCertificados = new ProcesosCertificados(pathToDbFolder, nombreProyecto, proyecto);
   procesosDocumentos = new ProcesosDocumentos(
     pathToDbFolder,
     nombreProyecto,
@@ -1205,6 +1207,9 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
     case "fie":
       //result = await procesosGenerales[identificador](argumentos.formularioControl);
       result = await procesosFie[identificador](argumentos);
+      break;
+    case "certificados":
+      result = await procesosCertificados[identificador](argumentos);
       break;
     case "documentos":
       //result = await procesosDocumentos[identificador](argumentos.formularioControl);
@@ -1956,6 +1961,7 @@ const ProcesosKPIs = require("./procesos/kpis.js");
 const ProcesosDuplicados = require("./procesos/duplicados.js");
 const ProcesosAutonomos = require("./procesos/autonomos.js");
 const ProcesosPipeline = require("./procesos/pipeline.js");
+const ProcesosCertificados = require("./procesos/certificados.js");
 
 
 const PlantillaExcel = require("./plantillas/excel.js");

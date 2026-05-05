@@ -17,7 +17,8 @@ interface LibreriaProcesos {
     | "Duplicados"
     | "Autonomos"
     | "Pipeline"
-    | "Facturacion";
+    | "Facturacion"
+    | "Certificados";
 
   descripcion: string;
   autor?: string;
@@ -523,120 +524,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
       {
-        nombre: "Certificados de estar al corriente",
-        categoria: "Asesoria",
-        tipo: "proceso",
-        descripcion:
-          "Descarga certificados e informes (Seguridad Social, Tributario, ATC, ITA) en una sola ejecución usando el mismo Excel.",
-        autor: "Carlos Cabrera",
-        argumentos: [
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "googleChrome",
-            formulario: {
-              titulo: "Google .exe",
-              tipo: "archivo",
-              accept: ".exe, .EXE",
-              placeholder: "Introduzca la ruta del ejecutable de Google",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "excelClientes",
-            formulario: {
-              titulo: "Excel con CCC",
-              tipo: "archivo",
-              accept: ".xlsm, .xlsx, .XLSX",
-              placeholder:
-                "Introduzca la ruta del archivo de datos de clientes.",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: false,
-            identificador: "codigoEmpresa",
-            formulario: {
-              titulo: "Código de empresa (Dejar vacío para procesar todos)",
-              tipo: "texto",
-              placeholder: "Ej: 0061, 52; 8 0140-72",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "rutaSalida",
-            formulario: {
-              titulo: "Directorio de salida:",
-              tipo: "ruta",
-              placeholder: "Ruta de guardado...",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "certSS",
-            formulario: {
-              titulo: "Seguridad Social",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: true,
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "certTributario",
-            formulario: {
-              titulo: "Tributario AEAT",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: true,
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "certATC",
-            formulario: {
-              titulo: "Subvenciones ATC",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: true,
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "certITA",
-            formulario: {
-              titulo: "Informes ITA",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: false,
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "certArt42",
-            formulario: {
-              titulo: "Art. 42",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: false,
-            },
-          },
-        ],
-        opciones: null,
-        salida: [{ tipo: "boolean", valor: false }],
-      },
-      {
         nombre: "Certificado Seguridad Social",
         categoria: "Asesoria",
         tipo: "proceso",
@@ -1014,6 +901,128 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "ruta",
               placeholder: "Ruta de guardado...",
               valorDefault: "",
+            },
+          },
+        ],
+        opciones: null,
+        salida: [{ tipo: "boolean", valor: false }],
+      },
+    ],
+  },
+  {
+    nombre: "Certificados",
+    categoria: "Certificados",
+    tipo: "directorio",
+    descripcion: "Certificados oficiales (AEAT, Seguridad Social, ATC, ITA)",
+    subCategoria: [
+      {
+        nombre: "Certificados de estar al corriente",
+        categoria: "Certificados",
+        tipo: "proceso",
+        descripcion:
+          "Descarga certificados e informes (Seguridad Social, Tributario, ATC, ITA) en una sola ejecución usando el mismo Excel.",
+        autor: "Carlos Cabrera",
+        argumentos: [
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "googleChrome",
+            formulario: {
+              titulo: "Google .exe",
+              tipo: "archivo",
+              accept: ".exe, .EXE",
+              placeholder: "Introduzca la ruta del ejecutable de Google",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "excelClientes",
+            formulario: {
+              titulo: "Excel con CCC",
+              tipo: "archivo",
+              accept: ".xlsm, .xlsx, .XLSX",
+              placeholder:
+                "Introduzca la ruta del archivo de datos de clientes.",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: true,
+            identificador: "rutaSalida",
+            formulario: {
+              titulo: "Directorio de salida:",
+              tipo: "ruta",
+              placeholder: "Ruta de guardado...",
+              valorDefault: "",
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certSS",
+            formulario: {
+              titulo: "Seguridad Social",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certTributario",
+            formulario: {
+              titulo: "Tributario AEAT",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certATC",
+            formulario: {
+              titulo: "Subvenciones ATC",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: true,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certITA",
+            formulario: {
+              titulo: "Informes ITA",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certArt42",
+            formulario: {
+              titulo: "Art. 42",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
             },
           },
         ],
