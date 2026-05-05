@@ -593,7 +593,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             obligado: false,
             identificador: "certTributario",
             formulario: {
-              titulo: "Tributario (AEAT)",
+              titulo: "Tributario AEAT",
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
@@ -616,6 +616,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
             identificador: "certITA",
             formulario: {
               titulo: "Informes ITA",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "certArt42",
+            formulario: {
+              titulo: "Art. 42",
               tipo: "boolean",
               placeholder: "",
               valorDefault: false,

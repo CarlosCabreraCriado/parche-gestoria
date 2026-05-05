@@ -6518,8 +6518,9 @@ class ProcesosAsesoria {
       const runTrib = !!argumentos.formularioControl[5];
       const runATC = !!argumentos.formularioControl[6];
       const runITA = !!argumentos.formularioControl[7];
+      const runArt42 = !!argumentos.formularioControl[8];
 
-      if (!runSS && !runTrib && !runATC && !runITA) {
+      if (!runSS && !runTrib && !runATC && !runITA && !runArt42) {
         console.log(
           "No se ha seleccionado ningún certificado. Nada que hacer.",
         );
@@ -6583,6 +6584,13 @@ class ProcesosAsesoria {
           resultados: path.join(base, "Resultados"),
         };
       }
+      if (runArt42) {
+        const base = path.join(carpetaRaiz, "Certificados_Art42-Procesados");
+        paths.art42 = {
+          excel: carpetaRaiz,
+          resultados: path.join(base, "Resultados"),
+        };
+      }
       for (const key of Object.keys(paths)) {
         const p = paths[key];
         for (const dir of [p.resultados]) {
@@ -6599,7 +6607,11 @@ class ProcesosAsesoria {
         ? paths.ss.resultados
         : runTrib
           ? paths.trib.resultados
-          : paths.atc.resultados;
+          : runATC
+            ? paths.atc.resultados
+            : runITA
+              ? paths.ita.resultados
+              : paths.art42.resultados;
 
       try {
         XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
@@ -6626,6 +6638,7 @@ class ProcesosAsesoria {
             if (runTrib) setHeaderIfEmpty(9, "LOG TRIB");
             if (runATC) setHeaderIfEmpty(10, "LOG ATC");
             if (runITA) setHeaderIfEmpty(11, "LOG ITA");
+            if (runArt42) setHeaderIfEmpty(12, "LOG ART42");
 
             const cabeceras = [];
             for (let i = 1; i <= columnas; i++) {
@@ -6646,7 +6659,7 @@ class ProcesosAsesoria {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
                       objetoCliente.ccc = cellVal;
-                      if (runITA) {
+                      if (runITA || runArt42) {
                         const c = String(cellVal);
                         objetoCliente.ccc1 = c.substring(0, 4);
                         objetoCliente.ccc2 = c.substring(4, 6);
@@ -6706,6 +6719,8 @@ class ProcesosAsesoria {
                   ".pdf";
                 objetoCliente.nombreArchivoITA =
                   `${objetoCliente.codigo}-${objetoCliente.ccc}.pdf`;
+                objetoCliente.nombreArchivoArt42 =
+                  `${objetoCliente.codigo} ART42 ${objetoCliente.empresa} ${fechaHoy}.png`;
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
@@ -6764,6 +6779,7 @@ class ProcesosAsesoria {
                 runSS,
                 runTrib,
                 runATC,
+                runArt42,
               });
             } catch (e) {
               console.warn(
@@ -6812,6 +6828,10 @@ class ProcesosAsesoria {
                 if (runITA)
                   hoja
                     .cell(clientes[i].filaExcel, 11)
+                    .value("ERROR: Campo CCC no definido.");
+                if (runArt42)
+                  hoja
+                    .cell(clientes[i].filaExcel, 12)
                     .value("ERROR: Campo CCC no definido.");
                 continue;
               }
@@ -6892,6 +6912,25 @@ class ProcesosAsesoria {
                 }
               }
 
+              if (runArt42) {
+                try {
+                  await this._procesarCertificadoArt42({
+                    browser,
+                    page,
+                    cliente: clientes[i],
+                    paths: paths.art42,
+                    hoja,
+                  });
+                } catch (e) {
+                  const msg = String(e?.message || e);
+                  console.warn("[ART42] Error:", msg);
+                  hoja.cell(clientes[i].filaExcel, 12).value("ERROR: " + msg);
+                  try {
+                    await page.goto("about:blank");
+                  } catch (_) {}
+                }
+              }
+
               console.log("Nuevo cliente");
               await this.esperar(1000);
             }
@@ -6906,7 +6945,9 @@ class ProcesosAsesoria {
                 ? paths.trib.excel
                 : runATC
                   ? paths.atc.excel
-                  : paths.ita.excel;
+                  : runITA
+                    ? paths.ita.excel
+                    : paths.art42.excel;
             console.log("Escribiendo archivo...");
             console.log("Path: " + path.normalize(excelOutBase));
             try {
@@ -6949,7 +6990,7 @@ class ProcesosAsesoria {
     });
   }
 
-  async _preinicializarCertificados({ browser, page, runSS, runTrib, runATC }) {
+  async _preinicializarCertificados({ browser, page, runSS, runTrib, runATC, runArt42 }) {
     console.log(
       "[CERT INIT] Iniciando pre-selección de certificados digitales...",
     );
@@ -7054,6 +7095,25 @@ class ProcesosAsesoria {
         await this.esperar(2000);
       }
       console.log("[CERT INIT] ATC listo.");
+    }
+
+    if (runArt42) {
+      console.log(
+        "[CERT INIT] ART42 — navegando para seleccionar certificado digital...",
+      );
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://w2.seg-social.es/fs/indexframes.html",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+      console.log("[CERT INIT] ART42 listo.");
     }
 
     console.log(
@@ -7613,6 +7673,164 @@ class ProcesosAsesoria {
         await nuevaPagina.close();
       } catch (_) {}
     }
+  }
+
+  async _procesarCertificadoArt42({ browser, page, cliente, paths, hoja }) {
+    console.log(
+      `[ART42] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
+    );
+
+    // TODO: Reemplazar por los valores reales de la empresa autorizada cuando se conozcan
+    const EMPRESA_AUT_REGIMEN   = "XXXX";      // campo #SDFREGKCGK
+    const EMPRESA_AUT_TESORERIA = "XX";        // campo #SDFTESCCGK
+    const EMPRESA_AUT_CUENTA    = "XXXXXXXXX"; // campo #SDFCCONCGK9
+
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://w2.seg-social.es/fs/indexframes.html",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(
+          `[ART42] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
+    await this.esperar(1000);
+
+    const getFrame = () => page.mainFrame().childFrames()[0];
+
+    let frame = getFrame();
+    if (!frame) throw new Error("[ART42] No se encontró el iframe del menú.");
+
+    await frame.waitForSelector("a", { timeout: 10000 });
+    const clickedGestion = await frame.evaluate(() => {
+      const link = Array.from(document.querySelectorAll("a")).find((a) =>
+        a.textContent.includes("Gestión de Deuda"),
+      );
+      if (link) { link.click(); return true; }
+      return false;
+    });
+    if (!clickedGestion) {
+      throw new Error('[ART42] Enlace "Gestión de Deuda" no encontrado.');
+    }
+    await this.esperar(1000);
+
+    frame = getFrame();
+    if (!frame) {
+      throw new Error(
+        "[ART42] No se encontró el iframe tras expandir Gestión de Deuda.",
+      );
+    }
+    await frame.waitForSelector("a", { timeout: 10000 });
+    const clickedArt42 = await frame.evaluate(() => {
+      const link = Array.from(document.querySelectorAll("a")).find((a) =>
+        a.textContent.includes("Autorización Certificado Art.42"),
+      );
+      if (link) { link.click(); return true; }
+      return false;
+    });
+    if (!clickedArt42) {
+      throw new Error(
+        '[ART42] Enlace "Autorización Certificado Art.42 Est.Trab." no encontrado.',
+      );
+    }
+
+    await page
+      .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
+      .catch(() => {});
+    await this.esperar(500);
+
+    frame = getFrame();
+    if (!frame) throw new Error("[ART42] No se encontró el frame del formulario.");
+
+    try {
+      await frame.waitForSelector("#SDFREGIMEN", { timeout: 15000 });
+    } catch (e) {
+      throw new Error(`[ART42] #SDFREGIMEN no apareció: ${e.message}`);
+    }
+
+    await frame.type("#SDFREGIMEN",   String(cliente.ccc1));
+    await frame.type("#SDFPROVINCIA", String(cliente.ccc2));
+    await frame.type("#SDFNISS",      String(cliente.ccc3));
+
+    try {
+      await frame.select("#SDFOPCION", "Alta");
+    } catch (e) {
+      throw new Error(`[ART42] Error seleccionando Alta en #SDFOPCION: ${e.message}`);
+    }
+
+    await Promise.all([
+      page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
+        .catch(() => {}),
+      frame.click("#Sub2207001004_35"),
+    ]);
+    await this.esperar(500);
+
+    frame = getFrame();
+    if (!frame) throw new Error("[ART42] No se encontró el frame tras Continuar 1.");
+
+    try {
+      await frame.waitForSelector("#SDFREGKCGK", { timeout: 15000 });
+    } catch (e) {
+      throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
+    }
+
+    await frame.type("#SDFREGKCGK",  EMPRESA_AUT_REGIMEN);
+    await frame.type("#SDFTESCCGK",  EMPRESA_AUT_TESORERIA);
+    await frame.type("#SDFCCONCGK9", EMPRESA_AUT_CUENTA);
+
+    const ahora = DateTime.now().setZone("Europe/Madrid");
+    const hasta = ahora.plus({ years: 1 });
+
+    await frame.type("#SDFDIADESDE",  ahora.toFormat("dd"));
+    await frame.type("#SDFMESDESDE",  ahora.toFormat("MM"));
+    await frame.type("#SDFAODESDE",   ahora.toFormat("yyyy"));
+    await frame.type("#SDFDIAHASTA",  hasta.toFormat("dd"));
+    await frame.type("#SDFMESHASTA",  hasta.toFormat("MM"));
+    await frame.type("#SDFAOHASTA",   hasta.toFormat("yyyy"));
+
+    await Promise.all([
+      page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
+        .catch(() => {}),
+      frame.click("#Sub2207001004_75"),
+    ]);
+    await this.esperar(500);
+
+    frame = getFrame();
+    if (!frame) throw new Error("[ART42] No se encontró el frame tras Continuar 2.");
+
+    try {
+      await frame.waitForSelector("#Sub2204701006_74", { timeout: 15000 });
+    } catch (e) {
+      throw new Error(`[ART42] Botón Confirmar no apareció: ${e.message}`);
+    }
+
+    await Promise.all([
+      page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
+        .catch(() => {}),
+      frame.click("#Sub2204701006_74"),
+    ]);
+    await this.esperar(1000);
+
+    const rutaScreenshot = path.join(paths.resultados, cliente.nombreArchivoArt42);
+    try {
+      await page.screenshot({ path: rutaScreenshot, fullPage: false });
+      console.log(`[ART42] Screenshot guardado: ${rutaScreenshot}`);
+    } catch (e) {
+      throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
+    }
+
+    hoja.cell(cliente.filaExcel, 12).value("OK, autorización generada.");
+    await this.esperar(1000);
   }
 
   async spoolToXLSX(argumentos) {
