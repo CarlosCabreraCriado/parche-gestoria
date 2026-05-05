@@ -1,0 +1,334 @@
+const puppeteer = require('puppeteer'); // v23.0.0 or later
+
+(async () => {
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    const timeout = 5000;
+    page.setDefaultTimeout(timeout);
+
+    {
+        const targetPage = page;
+        await targetPage.setViewport({
+            width: 1006,
+            height: 911
+        })
+    }
+    {
+        const targetPage = page;
+        await targetPage.goto('chrome://new-tab-page/');
+    }
+    {
+        const targetPage = page;
+        await targetPage.goto('https://w2.seg-social.es/fs/indexframes.html');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        const promises = [];
+        const startWaitingForEvents = () => {
+            promises.push(frame.waitForNavigation());
+        }
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Gestión de Deuda)'),
+            frame.locator('li:nth-of-type(8) > a'),
+            frame.locator('::-p-xpath(//*[@id=\\"subcontenedor3\\"]/div[1]/ul/li[8]/a)'),
+            frame.locator(':scope >>> li:nth-of-type(8) > a'),
+            frame.locator('::-p-text(Gestión de Deuda)')
+        ])
+            .setTimeout(timeout)
+            .on('action', () => startWaitingForEvents())
+            .click({
+              offset: {
+                x: 33,
+                y: 7.328125,
+              },
+            });
+        await Promise.all(promises);
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        const promises = [];
+        const startWaitingForEvents = () => {
+            promises.push(frame.waitForNavigation());
+        }
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Autorización Certificado Art.42 Est.Trab.)'),
+            frame.locator('li:nth-of-type(1) > a'),
+            frame.locator('::-p-xpath(//*[@id=\\"colI\\"]/ul/li[1]/a)'),
+            frame.locator(':scope >>> li:nth-of-type(1) > a'),
+            frame.locator('::-p-text(Autorización)')
+        ])
+            .setTimeout(timeout)
+            .on('action', () => startWaitingForEvents())
+            .click({
+              offset: {
+                x: 104,
+                y: 7,
+              },
+            });
+        await Promise.all(promises);
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Empresa emisora de la autorización)'),
+            frame.locator('#SDFREGIMEN'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFREGIMEN\\"])'),
+            frame.locator(':scope >>> #SDFREGIMEN')
+        ])
+            .setTimeout(timeout)
+            .fill('0111');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFPROVINCIA'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFPROVINCIA\\"])'),
+            frame.locator(':scope >>> #SDFPROVINCIA')
+        ])
+            .setTimeout(timeout)
+            .fill('38');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFNISS'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFNISS\\"])'),
+            frame.locator(':scope >>> #SDFNISS')
+        ])
+            .setTimeout(timeout)
+            .fill('114409757');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Alta o Modificación)'),
+            frame.locator('#SDFOPCION'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFOPCION\\"])'),
+            frame.locator(':scope >>> #SDFOPCION')
+        ])
+            .setTimeout(timeout)
+            .click({
+              offset: {
+                x: 77,
+                y: 7,
+              },
+            });
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Alta o Modificación)'),
+            frame.locator('#SDFOPCION'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFOPCION\\"])'),
+            frame.locator(':scope >>> #SDFOPCION')
+        ])
+            .setTimeout(timeout)
+            .fill('Alta');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        const promises = [];
+        const startWaitingForEvents = () => {
+            promises.push(frame.waitForNavigation());
+        }
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Continuar)'),
+            frame.locator('#Sub2207001004_35'),
+            frame.locator('::-p-xpath(//*[@id=\\"Sub2207001004_35\\"])'),
+            frame.locator(':scope >>> #Sub2207001004_35'),
+            frame.locator('::-p-text(Continuar)')
+        ])
+            .setTimeout(timeout)
+            .on('action', () => startWaitingForEvents())
+            .click({
+              offset: {
+                x: 33,
+                y: 9,
+              },
+            });
+        await Promise.all(promises);
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Empresa autorizada o principal)'),
+            frame.locator('#SDFREGKCGK'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFREGKCGK\\"])'),
+            frame.locator(':scope >>> #SDFREGKCGK')
+        ])
+            .setTimeout(timeout)
+            .fill('0111');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFTESCCGK'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFTESCCGK\\"])'),
+            frame.locator(':scope >>> #SDFTESCCGK')
+        ])
+            .setTimeout(timeout)
+            .fill('38');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFCCONCGK9'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFCCONCGK9\\"])'),
+            frame.locator(':scope >>> #SDFCCONCGK9')
+        ])
+            .setTimeout(timeout)
+            .fill('007713172');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Fecha Desde)'),
+            frame.locator('#SDFDIADESDE'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFDIADESDE\\"])'),
+            frame.locator(':scope >>> #SDFDIADESDE')
+        ])
+            .setTimeout(timeout)
+            .fill('29');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFMESDESDE'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFMESDESDE\\"])'),
+            frame.locator(':scope >>> #SDFMESDESDE')
+        ])
+            .setTimeout(timeout)
+            .fill('04');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFAODESDE'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFAODESDE\\"])'),
+            frame.locator(':scope >>> #SDFAODESDE')
+        ])
+            .setTimeout(timeout)
+            .fill('2026');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Fecha Hasta)'),
+            frame.locator('#SDFDIAHASTA'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFDIAHASTA\\"])'),
+            frame.locator(':scope >>> #SDFDIAHASTA')
+        ])
+            .setTimeout(timeout)
+            .fill('28');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFMESHASTA'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFMESHASTA\\"])'),
+            frame.locator(':scope >>> #SDFMESHASTA')
+        ])
+            .setTimeout(timeout)
+            .fill('04');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        await puppeteer.Locator.race([
+            frame.locator('#SDFAOHASTA'),
+            frame.locator('::-p-xpath(//*[@id=\\"SDFAOHASTA\\"])'),
+            frame.locator(':scope >>> #SDFAOHASTA')
+        ])
+            .setTimeout(timeout)
+            .fill('2027');
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        const promises = [];
+        const startWaitingForEvents = () => {
+            promises.push(frame.waitForNavigation());
+        }
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Continuar)'),
+            frame.locator('#Sub2207001004_75'),
+            frame.locator('::-p-xpath(//*[@id=\\"Sub2207001004_75\\"])'),
+            frame.locator(':scope >>> #Sub2207001004_75'),
+            frame.locator('::-p-text(Continuar)')
+        ])
+            .setTimeout(timeout)
+            .on('action', () => startWaitingForEvents())
+            .click({
+              offset: {
+                x: 19,
+                y: 6,
+              },
+            });
+        await Promise.all(promises);
+    }
+    {
+        const targetPage = page;
+        let frame = targetPage.mainFrame();
+        frame = frame.childFrames()[0];
+        const promises = [];
+        const startWaitingForEvents = () => {
+            promises.push(frame.waitForNavigation());
+        }
+        await puppeteer.Locator.race([
+            frame.locator('::-p-aria(Confirmar)'),
+            frame.locator('#Sub2204701006_74'),
+            frame.locator('::-p-xpath(//*[@id=\\"Sub2204701006_74\\"])'),
+            frame.locator(':scope >>> #Sub2204701006_74'),
+            frame.locator('::-p-text(Confirmar)')
+        ])
+            .setTimeout(timeout)
+            .on('action', () => startWaitingForEvents())
+            .click({
+              offset: {
+                x: 29,
+                y: 7,
+              },
+            });
+        await Promise.all(promises);
+    }
+
+    await browser.close();
+
+})().catch(err => {
+    console.error(err);
+    process.exit(1);
+});
