@@ -1198,9 +1198,9 @@ class ProcesosCertificados {
     );
 
     // TODO: Reemplazar por los valores reales de la empresa autorizada cuando se conozcan
-    const EMPRESA_AUT_REGIMEN   = "XXXX";      // campo #SDFREGKCGK
-    const EMPRESA_AUT_TESORERIA = "XX";        // campo #SDFTESCCGK
-    const EMPRESA_AUT_CUENTA    = "XXXXXXXXX"; // campo #SDFCCONCGK9
+    const EMPRESA_AUT_REGIMEN   = "0111";      // campo #SDFREGKCGK
+    const EMPRESA_AUT_TESORERIA = "38";        // campo #SDFTESCCGK
+    const EMPRESA_AUT_CUENTA    = "007713172"; // campo #SDFCCONCGK9
 
     for (let intento = 1; intento <= 2; intento++) {
       try {

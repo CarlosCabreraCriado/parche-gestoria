@@ -59,7 +59,16 @@
       "Bash(git -C 'c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend' commit -m 'fix\\(metricas\\): eliminar migración de columna id que bloqueaba codigo_empresa *)",
       "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" add src/controllers/metricasController.ts)",
       "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" commit -m \"fix\\(metricas\\): mostrar fecha y hora en el Excel de facturación\")",
-      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" commit -m \"fix\\(facturacion\\): usar fecha local en lugar de UTC para el rango de fechas\")"
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" commit -m \"fix\\(facturacion\\): usar fecha local en lugar de UTC para el rango de fechas\")",
+      "Bash(^-\")",
+      "Bash(grep -c \"page\\\\\\\\.click\\\\\\\\|page\\\\\\\\.goto\\\\\\\\|page\\\\\\\\.waitForSelector\\\\\\\\|page\\\\\\\\.type\\\\\\\\|page\\\\\\\\.select\\\\\\\\|page\\\\\\\\.locator\" \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\")",
+      "Bash(grep -n \"esperar\\(\" c:\\\\\\\\Users\\\\\\\\gonza\\\\\\\\OneDrive\\\\\\\\Nodus\\\\\\\\Proyectos\\\\\\\\Nodus-app\\\\\\\\parche-gestoria\\\\\\\\procesos\\\\\\\\asesoria.js)",
+      "Bash(grep -n \"async esperar\\\\|esperar\\(\" c:\\\\\\\\Users\\\\\\\\gonza\\\\\\\\OneDrive\\\\\\\\Nodus\\\\\\\\Proyectos\\\\\\\\Nodus-app\\\\\\\\parche-gestoria\\\\\\\\procesos\\\\\\\\asesoria.js)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Force)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\src\" -Recurse -Directory -Force | Where-Object { $_.Name -match 'asesoria|facturac|gestion' })",
+      "Bash(Select-String -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\" -Pattern \"^\\\\s{2}async \")",
+      "Bash(Select-Object LineNumber, Line)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
