@@ -26,6 +26,7 @@ interface LibreriaProcesos {
   argumentos?: Argumentos[];
   salida?: Salida[];
   subCategoria?: LibreriaProcesos[];
+  oculto?: boolean;
 }
 
 interface Argumentos {
@@ -1225,6 +1226,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
     categoria: "Pipeline",
     tipo: "directorio",
     descripcion: "Pipelines integrados: genera informe A3 + ejecuta proceso",
+    oculto: true,
     subCategoria: [
       {
         nombre: "PIPELINE ALTAS DUPLICADOS",

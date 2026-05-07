@@ -56,9 +56,19 @@ interface objetosSeleccionados {
 
 export class AddProcesoComponent implements OnInit{
 
+    private filtrarOcultos(procesos: LibreriaProcesos[]): LibreriaProcesos[] {
+      return procesos
+        .filter(p => !p.oculto)
+        .map(p => p.subCategoria
+          ? { ...p, subCategoria: this.filtrarOcultos(p.subCategoria) }
+          : p
+        );
+    }
+
     constructor(private appService: AppService, public dialogRef: MatDialogRef<AddProcesoComponent>, @Inject(MAT_DIALOG_DATA) public data: AddDatoData, public formBuilder: UntypedFormBuilder, private dialog: MatDialog)  {
-        
-        //Inicializacion del arbol de procesos: 
+
+        //Inicializacion del arbol de procesos:
+        this.datosArbolProcesos = this.filtrarOcultos(libreriaProcesos);
         this.arbolProcesosDataSource.data = this.datosArbolProcesos;
 
         this.formularioProcesoGroup = formBuilder.group({
@@ -100,7 +110,7 @@ export class AddProcesoComponent implements OnInit{
     public formularioPruebaControl  = new UntypedFormControl("") 
 
     ngOnInit() {
-        this.datosArbolProcesos= libreriaProcesos;
+        this.datosArbolProcesos = this.filtrarOcultos(libreriaProcesos);
     }
     
 
