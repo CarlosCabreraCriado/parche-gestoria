@@ -31,13 +31,17 @@ class ProcesosCertificados {
       const pathArchivoEtiquetas = argumentos.formularioControl[1];
       const codigosEmpresaInput = argumentos.formularioControl[2];
       const pathBase = argumentos.formularioControl[3];
-      const runSS = !!argumentos.formularioControl[4];
-      const runTrib = !!argumentos.formularioControl[5];
-      const runATC = !!argumentos.formularioControl[6];
-      const runITA = !!argumentos.formularioControl[7];
-      const runArt42 = !!argumentos.formularioControl[8];
+      const modoManual = !!argumentos.formularioControl[9];
 
-      if (!runSS && !runTrib && !runATC && !runITA && !runArt42) {
+      let runSS = !!argumentos.formularioControl[4];
+      let runTrib = !!argumentos.formularioControl[5];
+      let runATC = !!argumentos.formularioControl[6];
+      let runITA = !!argumentos.formularioControl[7];
+      let runArt42 = !!argumentos.formularioControl[8];
+
+      console.log(`[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`);
+
+      if (modoManual && !runSS && !runTrib && !runATC && !runITA && !runArt42) {
         console.log(
           "No se ha seleccionado ningún certificado. Nada que hacer.",
         );
@@ -151,11 +155,11 @@ class ProcesosCertificados {
                 hoja.cell(1, col).value(titulo);
               }
             };
-            if (runSS) setHeaderIfEmpty(8, "LOG SS");
-            if (runTrib) setHeaderIfEmpty(9, "LOG TRIB");
-            if (runATC) setHeaderIfEmpty(10, "LOG ATC");
-            if (runITA) setHeaderIfEmpty(11, "LOG ITA");
-            if (runArt42) setHeaderIfEmpty(12, "LOG ART42");
+            if (runSS) setHeaderIfEmpty(13, "LOG SS");
+            if (runTrib) setHeaderIfEmpty(14, "LOG TRIB");
+            if (runATC) setHeaderIfEmpty(15, "LOG ATC");
+            if (runITA) setHeaderIfEmpty(16, "LOG ITA");
+            if (runArt42) setHeaderIfEmpty(17, "LOG ART42");
 
             const cabeceras = [];
             for (let i = 1; i <= columnas; i++) {
@@ -169,6 +173,11 @@ class ProcesosCertificados {
                 filaExcel: i,
                 errores: [],
                 flagDupeNIF: false,
+                flagSS: false,
+                flagAEAT: false,
+                flagATC: false,
+                flagITA: false,
+                flagArt42: false,
               };
               for (let j = 1; j <= columnas; j++) {
                 const cellVal = hoja.cell(i, j).value();
@@ -176,12 +185,10 @@ class ProcesosCertificados {
                   switch (cabeceras[j - 1]) {
                     case "Código Cuenta Cotización (CCC)":
                       objetoCliente.ccc = cellVal;
-                      if (runITA || runArt42) {
-                        const c = String(cellVal);
-                        objetoCliente.ccc1 = c.substring(0, 4);
-                        objetoCliente.ccc2 = c.substring(4, 6);
-                        objetoCliente.ccc3 = c.substring(6);
-                      }
+                      const c = String(cellVal);
+                      objetoCliente.ccc1 = c.substring(0, 4);
+                      objetoCliente.ccc2 = c.substring(4, 6);
+                      objetoCliente.ccc3 = c.substring(6);
                       break;
                     case "EMPRESA":
                       objetoCliente.empresa = cellVal;
@@ -192,6 +199,21 @@ class ProcesosCertificados {
                     case "NIF":
                       objetoCliente.nif = cellVal;
                       break;
+                    case "SS":
+                      objetoCliente.flagSS = String(cellVal || '').trim().toLowerCase() === 'x';
+                      break;
+                    case "AEAT":
+                      objetoCliente.flagAEAT = String(cellVal || '').trim().toLowerCase() === 'x';
+                      break;
+                    case "ATC":
+                      objetoCliente.flagATC = String(cellVal || '').trim().toLowerCase() === 'x';
+                      break;
+                    case "ITA":
+                      objetoCliente.flagITA = String(cellVal || '').trim().toLowerCase() === 'x';
+                      break;
+                    case "ART.42":
+                      objetoCliente.flagArt42 = String(cellVal || '').trim().toLowerCase() === 'x';
+                      break;
                   }
                 }
               }
@@ -199,10 +221,19 @@ class ProcesosCertificados {
               const codigoNormalizado = String(objetoCliente.codigo || "")
                 .replace(/\D/g, "")
                 .padStart(4, "0");
-              const debeProcesarse =
+
+              const debeProcesarseManual =
                 codigoNormalizado !== "" &&
                 (codigosEmpresaObjetivo.size === 0 ||
                   codigosEmpresaObjetivo.has(codigoNormalizado));
+
+              const tieneAlgunFlag = objetoCliente.flagSS || objetoCliente.flagAEAT ||
+                                    objetoCliente.flagATC || objetoCliente.flagITA ||
+                                    objetoCliente.flagArt42;
+
+              const debeProcesarse = modoManual
+                ? debeProcesarseManual
+                : (codigoNormalizado !== "" && tieneAlgunFlag);
 
               if (
                 debeProcesarse &&
@@ -242,6 +273,22 @@ class ProcesosCertificados {
               }
             }
 
+            if (!modoManual) {
+              runSS = clientes.some(c => c.flagSS);
+              runTrib = clientes.some(c => c.flagAEAT);
+              runATC = clientes.some(c => c.flagATC);
+              runITA = clientes.some(c => c.flagITA);
+              runArt42 = clientes.some(c => c.flagArt42);
+
+              if (!runSS && !runTrib && !runATC && !runITA && !runArt42) {
+                console.log("No hay empresas con certificados marcados en el Excel. Nada que hacer.");
+                return resolve(false);
+              }
+              console.log(
+                `[AUTO] Procesos requeridos: SS=${runSS}, TRIB=${runTrib}, ATC=${runATC}, ITA=${runITA}, ART42=${runArt42}`,
+              );
+            }
+
             if (runTrib || runATC) {
               const vistos = new Set();
               clientes = clientes.map((obj) => {
@@ -254,6 +301,7 @@ class ProcesosCertificados {
               });
             }
 
+            console.log(`Clientes a procesar: ${clientes.length}`);
             console.log("Clientes: ");
             console.log(clientes);
 
@@ -324,36 +372,48 @@ class ProcesosCertificados {
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
 
+              const clientRunSS = modoManual ? runSS : clientes[i].flagSS;
+              const clientRunTrib = modoManual ? runTrib : clientes[i].flagAEAT;
+              const clientRunATC = modoManual ? runATC : clientes[i].flagATC;
+              const clientRunITA = modoManual ? runITA : clientes[i].flagITA;
+              const clientRunArt42 = modoManual ? runArt42 : clientes[i].flagArt42;
+
               if (
                 clientes[i].ccc === "" ||
                 clientes[i].ccc === null ||
                 clientes[i].ccc === undefined
               ) {
                 clientes[i].errores = ["Campo CCC no definidos."];
-                if (runSS)
+                const clientRunSS = modoManual ? runSS : clientes[i].flagSS;
+                const clientRunTrib = modoManual ? runTrib : clientes[i].flagAEAT;
+                const clientRunATC = modoManual ? runATC : clientes[i].flagATC;
+                const clientRunITA = modoManual ? runITA : clientes[i].flagITA;
+                const clientRunArt42 = modoManual ? runArt42 : clientes[i].flagArt42;
+
+                if (clientRunSS)
                   hoja
-                    .cell(clientes[i].filaExcel, 8)
+                    .cell(clientes[i].filaExcel, 13)
                     .value("ERROR: Campo CCC no definido.");
-                if (runTrib)
+                if (clientRunTrib)
                   hoja
-                    .cell(clientes[i].filaExcel, 9)
+                    .cell(clientes[i].filaExcel, 14)
                     .value("ERROR: Campo CCC no definido.");
-                if (runATC)
+                if (clientRunATC)
                   hoja
-                    .cell(clientes[i].filaExcel, 10)
+                    .cell(clientes[i].filaExcel, 15)
                     .value("ERROR: Campo CCC no definido.");
-                if (runITA)
+                if (clientRunITA)
                   hoja
-                    .cell(clientes[i].filaExcel, 11)
+                    .cell(clientes[i].filaExcel, 16)
                     .value("ERROR: Campo CCC no definido.");
-                if (runArt42)
+                if (clientRunArt42)
                   hoja
-                    .cell(clientes[i].filaExcel, 12)
+                    .cell(clientes[i].filaExcel, 17)
                     .value("ERROR: Campo CCC no definido.");
                 continue;
               }
 
-              if (runSS) {
+              if (clientRunSS) {
                 try {
                   await this._procesarCertificadoSS({
                     browser,
@@ -365,14 +425,14 @@ class ProcesosCertificados {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT SS] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, 8).value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 13).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
                 }
               }
 
-              if (runTrib) {
+              if (clientRunTrib) {
                 try {
                   await this._procesarCertificadoTributario({
                     browser,
@@ -384,14 +444,14 @@ class ProcesosCertificados {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT TRIB] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, 9).value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 14).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
                 }
               }
 
-              if (runATC) {
+              if (clientRunATC) {
                 try {
                   await this._procesarCertificadoATC({
                     browser,
@@ -403,14 +463,14 @@ class ProcesosCertificados {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[CERT ATC] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, 10).value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 15).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
                 }
               }
 
-              if (runITA) {
+              if (clientRunITA) {
                 try {
                   await this._procesarInformeITA({
                     browser,
@@ -422,14 +482,14 @@ class ProcesosCertificados {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[ITA] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, 11).value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 16).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
                 }
               }
 
-              if (runArt42) {
+              if (clientRunArt42) {
                 try {
                   await this._procesarCertificadoArt42({
                     browser,
@@ -441,7 +501,7 @@ class ProcesosCertificados {
                 } catch (e) {
                   const msg = String(e?.message || e);
                   console.warn("[ART42] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, 12).value("ERROR: " + msg);
+                  hoja.cell(clientes[i].filaExcel, 17).value("ERROR: " + msg);
                   try {
                     await page.goto("about:blank");
                   } catch (_) {}
@@ -770,10 +830,10 @@ class ProcesosCertificados {
           if (textoBody) mensajeError = "ERROR (página): " + textoBody;
         } catch (_2) {}
       }
-      hoja.cell(cliente.filaExcel, 11).value(mensajeError);
+      hoja.cell(cliente.filaExcel, 16).value(mensajeError);
       console.warn("[ITA] Error en descarga:", mensajeError);
     } else {
-      hoja.cell(cliente.filaExcel, 11).value("OK");
+      hoja.cell(cliente.filaExcel, 16).value("OK");
       if (tabITA && typeof tabITA.close === "function") {
         try { await tabITA.close(); } catch (_) {}
       }
@@ -882,10 +942,10 @@ class ProcesosCertificados {
     if (!nuevaPagina) {
       console.log("[CERT SS] ERROR EN DESCARGA");
       hoja
-        .cell(cliente.filaExcel, 8)
+        .cell(cliente.filaExcel, 13)
         .value("ERROR: No se ha podido descargar el certificado.");
     } else {
-      hoja.cell(cliente.filaExcel, 8).value("OK, certificado descargado.");
+      hoja.cell(cliente.filaExcel, 13).value("OK, certificado descargado.");
       try {
         await nuevaPagina.close();
       } catch (_) {}
@@ -1013,11 +1073,11 @@ class ProcesosCertificados {
     if (!nuevaPagina) {
       console.log("[CERT TRIB] ERROR EN DESCARGA");
       hoja
-        .cell(cliente.filaExcel, 9)
+        .cell(cliente.filaExcel, 14)
         .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
     } else {
       hoja
-        .cell(cliente.filaExcel, 9)
+        .cell(cliente.filaExcel, 14)
         .value("OK, resguardo de solicitud descargado.");
       try {
         await nuevaPagina.close();
@@ -1180,11 +1240,11 @@ class ProcesosCertificados {
     if (!nuevaPagina) {
       console.log("[CERT ATC] ERROR ABRIENDO DESCARGA");
       hoja
-        .cell(cliente.filaExcel, 10)
+        .cell(cliente.filaExcel, 15)
         .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
     } else {
       hoja
-        .cell(cliente.filaExcel, 10)
+        .cell(cliente.filaExcel, 15)
         .value("OK, resguardo de solicitud descargado.");
       try {
         await nuevaPagina.close();
@@ -1346,7 +1406,7 @@ class ProcesosCertificados {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
-    hoja.cell(cliente.filaExcel, 12).value("OK, autorización generada.");
+    hoja.cell(cliente.filaExcel, 17).value("OK, autorización generada.");
     await this.esperar(1000);
   }
 }

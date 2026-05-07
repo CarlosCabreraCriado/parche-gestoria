@@ -91,11 +91,14 @@
                     let i = $index
                   ) {
                     <div class="contenedorFormulario">
-                      <!-- Formulario de archivo  -->
-                      @if (
-                        procesoSeleccionado.argumentos[i].formulario.tipo ==
-                        "archivo"
-                      ) {
+                      @if (!procesoSeleccionado.argumentos[i].formulario.mostrarSi ||
+                           formularioControl.controls[procesoSeleccionado.argumentos[i].formulario.mostrarSi.indice]?.value ===
+                           procesoSeleccionado.argumentos[i].formulario.mostrarSi.valor) {
+                        <!-- Formulario de archivo  -->
+                        @if (
+                          procesoSeleccionado.argumentos[i].formulario.tipo ==
+                          "archivo"
+                        ) {
                         <div>
                           <div class="tituloFormulario">
                             {{
@@ -349,6 +352,7 @@
                             </mat-select>
                           </mat-form-field>
                         </div>
+                      }
                       }
                     </div>
                   }

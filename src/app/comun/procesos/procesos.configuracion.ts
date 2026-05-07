@@ -957,6 +957,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
+              mostrarSi: { indice: 9, valor: true },
             },
           },
           {
@@ -979,6 +980,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
+              mostrarSi: { indice: 9, valor: true },
             },
           },
           {
@@ -990,6 +992,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
+              mostrarSi: { indice: 9, valor: true },
             },
           },
           {
@@ -1001,6 +1004,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
+              mostrarSi: { indice: 9, valor: true },
             },
           },
           {
@@ -1012,6 +1016,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: false,
+              mostrarSi: { indice: 9, valor: true },
             },
           },
           {
@@ -1020,6 +1025,18 @@ var libreriaProcesos: LibreriaProcesos[] = [
             identificador: "certArt42",
             formulario: {
               titulo: "Art. 42",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+              mostrarSi: { indice: 9, valor: true },
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
+            identificador: "modoManual",
+            formulario: {
+              titulo: "Selección manual",
               tipo: "boolean",
               placeholder: "",
               valorDefault: false,
