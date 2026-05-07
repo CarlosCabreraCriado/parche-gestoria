@@ -55,6 +55,7 @@ interface FormularioArgumento {
   placeholder: string;
   valorDefault: any;
   accept?: string;
+  mostrarSi?: { indice: number; valor: boolean };
 }
 
 type tipoSalida =
