@@ -39,6 +39,10 @@ class ProcesosCertificados {
       let runITA = !!argumentos.formularioControl[8];
       let runArt42 = !!argumentos.formularioControl[9];
 
+      const empresaAutRegimen = String(argumentos.formularioControl[10] || "");
+      const empresaAutTesoreria = String(argumentos.formularioControl[11] || "");
+      const empresaAutCuenta = String(argumentos.formularioControl[12] || "");
+
       console.log(`[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`);
 
       if (modoManual && !runSS && !runTrib && !runATC && !runITA && !runArt42) {
@@ -177,7 +181,6 @@ class ProcesosCertificados {
                 flagAEAT: false,
                 flagATC: false,
                 flagITA: false,
-                flagArt42: false,
               };
               for (let j = 1; j <= columnas; j++) {
                 const cellVal = hoja.cell(i, j).value();
@@ -211,9 +214,6 @@ class ProcesosCertificados {
                     case "ITA":
                       objetoCliente.flagITA = String(cellVal || '').trim().toLowerCase() === 'x';
                       break;
-                    case "ART.42":
-                      objetoCliente.flagArt42 = String(cellVal || '').trim().toLowerCase() === 'x';
-                      break;
                   }
                 }
               }
@@ -228,8 +228,7 @@ class ProcesosCertificados {
                   codigosEmpresaObjetivo.has(codigoNormalizado));
 
               const tieneAlgunFlag = objetoCliente.flagSS || objetoCliente.flagAEAT ||
-                                    objetoCliente.flagATC || objetoCliente.flagITA ||
-                                    objetoCliente.flagArt42;
+                                    objetoCliente.flagATC || objetoCliente.flagITA;
 
               const debeProcesarse = modoManual
                 ? debeProcesarseManual
@@ -278,14 +277,14 @@ class ProcesosCertificados {
               runTrib = clientes.some(c => c.flagAEAT);
               runATC = clientes.some(c => c.flagATC);
               runITA = clientes.some(c => c.flagITA);
-              runArt42 = clientes.some(c => c.flagArt42);
+              runArt42 = false;
 
-              if (!runSS && !runTrib && !runATC && !runITA && !runArt42) {
+              if (!runSS && !runTrib && !runATC && !runITA) {
                 console.log("No hay empresas con certificados marcados en el Excel. Nada que hacer.");
                 return resolve(false);
               }
               console.log(
-                `[AUTO] Procesos requeridos: SS=${runSS}, TRIB=${runTrib}, ATC=${runATC}, ITA=${runITA}, ART42=${runArt42}`,
+                `[AUTO] Procesos requeridos: SS=${runSS}, TRIB=${runTrib}, ATC=${runATC}, ITA=${runITA}`,
               );
             }
 
@@ -376,7 +375,7 @@ class ProcesosCertificados {
               const clientRunTrib = modoManual ? runTrib : clientes[i].flagAEAT;
               const clientRunATC = modoManual ? runATC : clientes[i].flagATC;
               const clientRunITA = modoManual ? runITA : clientes[i].flagITA;
-              const clientRunArt42 = modoManual ? runArt42 : clientes[i].flagArt42;
+              const clientRunArt42 = modoManual && runArt42;
 
               if (
                 clientes[i].ccc === "" ||
@@ -384,11 +383,6 @@ class ProcesosCertificados {
                 clientes[i].ccc === undefined
               ) {
                 clientes[i].errores = ["Campo CCC no definidos."];
-                const clientRunSS = modoManual ? runSS : clientes[i].flagSS;
-                const clientRunTrib = modoManual ? runTrib : clientes[i].flagAEAT;
-                const clientRunATC = modoManual ? runATC : clientes[i].flagATC;
-                const clientRunITA = modoManual ? runITA : clientes[i].flagITA;
-                const clientRunArt42 = modoManual ? runArt42 : clientes[i].flagArt42;
 
                 if (clientRunSS)
                   hoja
@@ -497,6 +491,9 @@ class ProcesosCertificados {
                     cliente: clientes[i],
                     paths: paths.art42,
                     hoja,
+                    empresaAutRegimen,
+                    empresaAutTesoreria,
+                    empresaAutCuenta,
                   });
                 } catch (e) {
                   const msg = String(e?.message || e);
@@ -1252,15 +1249,10 @@ class ProcesosCertificados {
     }
   }
 
-  async _procesarCertificadoArt42({ browser, page, cliente, paths, hoja }) {
+  async _procesarCertificadoArt42({ browser, page, cliente, paths, hoja, empresaAutRegimen, empresaAutTesoreria, empresaAutCuenta }) {
     console.log(
       `[ART42] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
-
-    // TODO: Reemplazar por los valores reales de la empresa autorizada cuando se conozcan
-    const EMPRESA_AUT_REGIMEN   = "0111";      // campo #SDFREGKCGK
-    const EMPRESA_AUT_TESORERIA = "38";        // campo #SDFTESCCGK
-    const EMPRESA_AUT_CUENTA    = "007713172"; // campo #SDFCCONCGK9
 
     for (let intento = 1; intento <= 2; intento++) {
       try {
@@ -1359,9 +1351,9 @@ class ProcesosCertificados {
       throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
-    await frame.type("#SDFREGKCGK",  EMPRESA_AUT_REGIMEN);
-    await frame.type("#SDFTESCCGK",  EMPRESA_AUT_TESORERIA);
-    await frame.type("#SDFCCONCGK9", EMPRESA_AUT_CUENTA);
+    await frame.type("#SDFREGKCGK",  empresaAutRegimen);
+    await frame.type("#SDFTESCCGK",  empresaAutTesoreria);
+    await frame.type("#SDFCCONCGK9", empresaAutCuenta);
 
     const ahora = DateTime.now().setZone("Europe/Madrid");
     const hasta = ahora.plus({ years: 1 });
