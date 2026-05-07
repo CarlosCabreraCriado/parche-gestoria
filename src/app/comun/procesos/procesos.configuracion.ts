@@ -951,18 +951,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
           },
           {
             tipo: "texto",
-            obligado: false,
-            identificador: "codigoEmpresa",
-            formulario: {
-              titulo: "Código de empresa (Dejar vacío para procesar todos)",
-              tipo: "texto",
-              placeholder: "Ej: 0061, 52; 8 0140-72",
-              valorDefault: "",
-              mostrarSi: { indice: 9, valor: true },
-            },
-          },
-          {
-            tipo: "texto",
             obligado: true,
             identificador: "rutaSalida",
             formulario: {
@@ -975,13 +963,36 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "boolean",
             obligado: false,
+            identificador: "modoManual",
+            formulario: {
+              titulo: "Selección manual",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+            },
+          },
+          {
+            tipo: "texto",
+            obligado: false,
+            identificador: "codigoEmpresa",
+            formulario: {
+              titulo: "Código de empresa (Dejar vacío para procesar todos)",
+              tipo: "texto",
+              placeholder: "Ej: 0061, 52; 8 0140-72",
+              valorDefault: "",
+              mostrarSi: { indice: 3, valor: true },
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
             identificador: "certSS",
             formulario: {
               titulo: "Seguridad Social",
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -993,7 +1004,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1005,7 +1016,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: true,
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1017,7 +1028,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: false,
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1029,18 +1040,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "boolean",
               placeholder: "",
               valorDefault: false,
-              mostrarSi: { indice: 9, valor: true },
-            },
-          },
-          {
-            tipo: "boolean",
-            obligado: false,
-            identificador: "modoManual",
-            formulario: {
-              titulo: "Selección manual",
-              tipo: "boolean",
-              placeholder: "",
-              valorDefault: false,
+              mostrarSi: { indice: 3, valor: true },
             },
           },
         ],

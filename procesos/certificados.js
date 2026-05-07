@@ -29,15 +29,15 @@ class ProcesosCertificados {
         argumentos.formularioControl[0],
       );
       const pathArchivoEtiquetas = argumentos.formularioControl[1];
-      const codigosEmpresaInput = argumentos.formularioControl[2];
-      const pathBase = argumentos.formularioControl[3];
-      const modoManual = !!argumentos.formularioControl[9];
+      const pathBase = argumentos.formularioControl[2];
+      const modoManual = !!argumentos.formularioControl[3];
+      const codigosEmpresaInput = argumentos.formularioControl[4];
 
-      let runSS = !!argumentos.formularioControl[4];
-      let runTrib = !!argumentos.formularioControl[5];
-      let runATC = !!argumentos.formularioControl[6];
-      let runITA = !!argumentos.formularioControl[7];
-      let runArt42 = !!argumentos.formularioControl[8];
+      let runSS = !!argumentos.formularioControl[5];
+      let runTrib = !!argumentos.formularioControl[6];
+      let runATC = !!argumentos.formularioControl[7];
+      let runITA = !!argumentos.formularioControl[8];
+      let runArt42 = !!argumentos.formularioControl[9];
 
       console.log(`[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`);
 
