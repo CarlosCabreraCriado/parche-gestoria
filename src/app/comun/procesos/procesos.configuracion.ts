@@ -473,6 +473,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         tipo: "proceso",
         descripcion: "",
         autor: "Carlos Cabrera",
+        oculto:true,
         argumentos: [
           {
             tipo: "texto",
@@ -532,6 +533,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         descripcion:
           "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
+        oculto:true,
         argumentos: [
           {
             tipo: "texto",
@@ -591,6 +593,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         descripcion:
           "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
+        oculto:true,
         argumentos: [
           {
             tipo: "texto",
@@ -650,6 +653,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         descripcion:
           "[Deprecado: usa 'Certificados de estar al corriente']",
         autor: "Carlos Cabrera",
+        oculto:true,
         argumentos: [
           {
             tipo: "texto",
@@ -739,52 +743,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
       },
     ],
   },
-  /*
-  {
-    nombre: "Test Excel",
-    categoria: "Prueba",
-    tipo: "directorio",
-    descripcion: "Procesos de asesoría",
-    subCategoria: [
-      {
-        nombre: "Test Excel",
-        categoria: "Prueba",
-        tipo: "proceso",
-        descripcion:
-          "Obtiene los nombres de los clientes mediante excel y los pasa a mayúsculas",
-        autor: "Gonzalo",
-        argumentos: [
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "excelClientes",
-            formulario: {
-              titulo: "Excel de clientes",
-              tipo: "archivo",
-              accept: ".xlsm, .xlsx, .XLSX",
-              placeholder:
-                "Introduzca la ruta del archivo de datos de clientes.",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: true,
-            identificador: "rutaSalida",
-            formulario: {
-              titulo: "Directorio de salida:",
-              tipo: "ruta",
-              placeholder: "Ruta de guardado...",
-              valorDefault: "",
-            },
-          },
-        ],
-        opciones: null,
-        salida: [{ tipo: "boolean", valor: false }],
-      },
-    ],
-  },
-    */
   {
     nombre: "FIE",
     categoria: "Fie",
