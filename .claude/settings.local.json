@@ -68,7 +68,9 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\src\" -Recurse -Directory -Force | Where-Object { $_.Name -match 'asesoria|facturac|gestion' })",
       "Bash(Select-String -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\asesoria.js\" -Pattern \"^\\\\s{2}async \")",
       "Bash(Select-Object LineNumber, Line)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(npm start *)",
+      "Bash(npm run *)"
     ]
   }
 }

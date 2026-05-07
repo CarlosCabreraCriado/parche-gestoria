@@ -1052,7 +1052,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 0111",
               valorDefault: "",
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1064,7 +1064,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 38",
               valorDefault: "",
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1076,7 +1076,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 007713172",
               valorDefault: "",
-              mostrarSi: { indice: 9, valor: true },
+              mostrarSi: { indice: 3, valor: true },
             },
           },
         ],

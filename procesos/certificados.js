@@ -95,11 +95,11 @@ class ProcesosCertificados {
                 hoja.cell(1, col).value(titulo);
               }
             };
-            if (runSS) setHeaderIfEmpty(13, "LOG SS");
-            if (runTrib) setHeaderIfEmpty(14, "LOG TRIB");
-            if (runATC) setHeaderIfEmpty(15, "LOG ATC");
-            if (runITA) setHeaderIfEmpty(16, "LOG ITA");
-            if (runArt42) setHeaderIfEmpty(17, "LOG ART42");
+            setHeaderIfEmpty(13, "LOG SS");
+            setHeaderIfEmpty(14, "LOG TRIB");
+            setHeaderIfEmpty(15, "LOG ATC");
+            setHeaderIfEmpty(16, "LOG ITA");
+            setHeaderIfEmpty(17, "LOG ART42");
 
             const cabeceras = [];
             for (let i = 1; i <= columnas; i++) {
@@ -958,7 +958,7 @@ class ProcesosCertificados {
   }) {
     if (cliente.flagDupeNIF) {
       hoja
-        .cell(cliente.filaExcel, 9)
+        .cell(cliente.filaExcel, 14)
         .value("WARNING: Solicitud evitada por duplicidad en NIF.");
       return;
     }
@@ -1019,9 +1019,7 @@ class ProcesosCertificados {
     try {
       [firmaOk] = await Promise.all([
         new Promise((resolvePromise) => {
-          setTimeout(() => resolvePromise(false), 10000);
-
-          browser.once("targetcreated", async (target) => {
+          const onTargetCreated = async (target) => {
             const newPage = await target.page();
             await this.esperar(1000);
             await newPage.locator('input[id="Conforme"]').wait();
@@ -1033,9 +1031,14 @@ class ProcesosCertificados {
               await newPage.close();
             } catch (_) {}
             resolvePromise(true);
-          });
+          };
+          browser.once("targetcreated", onTargetCreated);
+          setTimeout(() => {
+            browser.off("targetcreated", onTargetCreated);
+            resolvePromise(false);
+          }, 10000);
         }),
-        await page.locator('input[value="Firmar Enviar"]').click(),
+        page.locator('input[value="Firmar Enviar"]').click(),
       ]);
     } catch (e) {
       console.log("[CERT TRIB] Error firma: ", e?.message || e);
@@ -1085,7 +1088,7 @@ class ProcesosCertificados {
   async _procesarCertificadoATC({ browser, page, cliente, paths, hoja }) {
     if (cliente.flagDupeNIF) {
       hoja
-        .cell(cliente.filaExcel, 10)
+        .cell(cliente.filaExcel, 15)
         .value("WARNING: Solicitud evitada por duplicidad en NIF.");
       return;
     }
