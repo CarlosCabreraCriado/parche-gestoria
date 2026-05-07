@@ -74,70 +74,6 @@ class ProcesosCertificados {
 
       const carpetaRaiz = path.join(path.normalize(pathBase), carpetaFecha);
 
-      const paths = {};
-      if (runSS) {
-        const base = path.join(carpetaRaiz, "Certificados_SS-Procesados");
-        paths.ss = {
-          excel: carpetaRaiz,
-          resultados: path.join(base, "Resultados"),
-        };
-      }
-      if (runTrib) {
-        const base = path.join(
-          carpetaRaiz,
-          "Certificados_Tributarios-Procesados",
-        );
-        paths.trib = {
-          excel: carpetaRaiz,
-          resultados: path.join(base, "Resultados"),
-        };
-      }
-      if (runATC) {
-        const base = path.join(
-          carpetaRaiz,
-          "Certificados_SubvencionesATC-Procesados",
-        );
-        paths.atc = {
-          excel: carpetaRaiz,
-          resultados: path.join(base, "Resultados"),
-        };
-      }
-      if (runITA) {
-        const base = path.join(carpetaRaiz, "ITA-Informes-Procesados");
-        paths.ita = {
-          excel: carpetaRaiz,
-          resultados: path.join(base, "Resultados"),
-        };
-      }
-      if (runArt42) {
-        const base = path.join(carpetaRaiz, "Certificados_Art42-Procesados");
-        paths.art42 = {
-          excel: carpetaRaiz,
-          resultados: path.join(base, "Resultados"),
-        };
-      }
-      for (const key of Object.keys(paths)) {
-        const p = paths[key];
-        for (const dir of [p.resultados]) {
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-            console.log(`Carpeta creada: ${dir}`);
-          } else {
-            console.log(`La carpeta ya existe: ${dir}`);
-          }
-        }
-      }
-
-      const downloadPathInicial = runSS
-        ? paths.ss.resultados
-        : runTrib
-          ? paths.trib.resultados
-          : runATC
-            ? paths.atc.resultados
-            : runITA
-              ? paths.ita.resultados
-              : paths.art42.resultados;
-
       try {
         XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEtiquetas))
           .then(async (workbook) => {
@@ -287,6 +223,70 @@ class ProcesosCertificados {
                 `[AUTO] Procesos requeridos: SS=${runSS}, TRIB=${runTrib}, ATC=${runATC}, ITA=${runITA}`,
               );
             }
+
+            const paths = {};
+            if (runSS) {
+              const base = path.join(carpetaRaiz, "Certificados_SS-Procesados");
+              paths.ss = {
+                excel: carpetaRaiz,
+                resultados: path.join(base, "Resultados"),
+              };
+            }
+            if (runTrib) {
+              const base = path.join(
+                carpetaRaiz,
+                "Certificados_Tributarios-Procesados",
+              );
+              paths.trib = {
+                excel: carpetaRaiz,
+                resultados: path.join(base, "Resultados"),
+              };
+            }
+            if (runATC) {
+              const base = path.join(
+                carpetaRaiz,
+                "Certificados_SubvencionesATC-Procesados",
+              );
+              paths.atc = {
+                excel: carpetaRaiz,
+                resultados: path.join(base, "Resultados"),
+              };
+            }
+            if (runITA) {
+              const base = path.join(carpetaRaiz, "ITA-Informes-Procesados");
+              paths.ita = {
+                excel: carpetaRaiz,
+                resultados: path.join(base, "Resultados"),
+              };
+            }
+            if (runArt42) {
+              const base = path.join(carpetaRaiz, "Certificados_Art42-Procesados");
+              paths.art42 = {
+                excel: carpetaRaiz,
+                resultados: path.join(base, "Resultados"),
+              };
+            }
+            for (const key of Object.keys(paths)) {
+              const p = paths[key];
+              for (const dir of [p.resultados]) {
+                if (!fs.existsSync(dir)) {
+                  fs.mkdirSync(dir, { recursive: true });
+                  console.log(`Carpeta creada: ${dir}`);
+                } else {
+                  console.log(`La carpeta ya existe: ${dir}`);
+                }
+              }
+            }
+
+            const downloadPathInicial = runSS
+              ? paths.ss.resultados
+              : runTrib
+                ? paths.trib.resultados
+                : runATC
+                  ? paths.atc.resultados
+                  : runITA
+                    ? paths.ita.resultados
+                    : paths.art42.resultados;
 
             if (runTrib || runATC) {
               const vistos = new Set();
