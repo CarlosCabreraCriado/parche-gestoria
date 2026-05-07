@@ -90,10 +90,10 @@
                     track control;
                     let i = $index
                   ) {
-                    <div class="contenedorFormulario">
-                      @if (!procesoSeleccionado.argumentos[i].formulario.mostrarSi ||
-                           formularioControl.controls[procesoSeleccionado.argumentos[i].formulario.mostrarSi.indice]?.value ===
-                           procesoSeleccionado.argumentos[i].formulario.mostrarSi.valor) {
+                    @if (!procesoSeleccionado.argumentos[i].formulario.mostrarSi ||
+                         formularioControl.controls[procesoSeleccionado.argumentos[i].formulario.mostrarSi.indice]?.value ===
+                         procesoSeleccionado.argumentos[i].formulario.mostrarSi.valor) {
+                      <div class="contenedorFormulario">
                         <!-- Formulario de archivo  -->
                         @if (
                           procesoSeleccionado.argumentos[i].formulario.tipo ==
@@ -353,8 +353,8 @@
                           </mat-form-field>
                         </div>
                       }
-                      }
-                    </div>
+                      </div>
+                    }
                   }
                 </form>
                 <!-- Ejecucion:  -->
