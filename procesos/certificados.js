@@ -201,9 +201,9 @@ class ProcesosCertificados {
                   fechaHoy +
                   ".pdf";
                 objetoCliente.nombreArchivoITA =
-                  `${objetoCliente.codigo}-${objetoCliente.ccc}.pdf`;
+                  `${objetoCliente.codigo} CERTIFICADO ESTAR AL CORRIENTE ITA ${objetoCliente.empresa} ${fechaHoy}.pdf`;
                 objetoCliente.nombreArchivoArt42 =
-                  `${objetoCliente.codigo} ART42 ${objetoCliente.empresa} ${fechaHoy}.png`;
+                  `${objetoCliente.codigo} CERTIFICADO ESTAR AL CORRIENTE ART42 ${objetoCliente.empresa} ${fechaHoy}.png`;
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
