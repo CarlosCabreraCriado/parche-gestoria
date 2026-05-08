@@ -225,68 +225,19 @@ class ProcesosCertificados {
             }
 
             const paths = {};
-            if (runSS) {
-              const base = path.join(carpetaRaiz, "Certificados_SS-Procesados");
-              paths.ss = {
-                excel: carpetaRaiz,
-                resultados: path.join(base, "Resultados"),
-              };
-            }
-            if (runTrib) {
-              const base = path.join(
-                carpetaRaiz,
-                "Certificados_Tributarios-Procesados",
-              );
-              paths.trib = {
-                excel: carpetaRaiz,
-                resultados: path.join(base, "Resultados"),
-              };
-            }
-            if (runATC) {
-              const base = path.join(
-                carpetaRaiz,
-                "Certificados_SubvencionesATC-Procesados",
-              );
-              paths.atc = {
-                excel: carpetaRaiz,
-                resultados: path.join(base, "Resultados"),
-              };
-            }
-            if (runITA) {
-              const base = path.join(carpetaRaiz, "ITA-Informes-Procesados");
-              paths.ita = {
-                excel: carpetaRaiz,
-                resultados: path.join(base, "Resultados"),
-              };
-            }
-            if (runArt42) {
-              const base = path.join(carpetaRaiz, "Certificados_Art42-Procesados");
-              paths.art42 = {
-                excel: carpetaRaiz,
-                resultados: path.join(base, "Resultados"),
-              };
-            }
-            for (const key of Object.keys(paths)) {
-              const p = paths[key];
-              for (const dir of [p.resultados]) {
-                if (!fs.existsSync(dir)) {
-                  fs.mkdirSync(dir, { recursive: true });
-                  console.log(`Carpeta creada: ${dir}`);
-                } else {
-                  console.log(`La carpeta ya existe: ${dir}`);
-                }
-              }
+            if (runSS) paths.ss = { excel: carpetaRaiz, resultados: carpetaRaiz };
+            if (runTrib) paths.trib = { excel: carpetaRaiz, resultados: carpetaRaiz };
+            if (runATC) paths.atc = { excel: carpetaRaiz, resultados: carpetaRaiz };
+            if (runITA) paths.ita = { excel: carpetaRaiz, resultados: carpetaRaiz };
+            if (runArt42) paths.art42 = { excel: carpetaRaiz, resultados: carpetaRaiz };
+            if (!fs.existsSync(carpetaRaiz)) {
+              fs.mkdirSync(carpetaRaiz, { recursive: true });
+              console.log(`Carpeta creada: ${carpetaRaiz}`);
+            } else {
+              console.log(`La carpeta ya existe: ${carpetaRaiz}`);
             }
 
-            const downloadPathInicial = runSS
-              ? paths.ss.resultados
-              : runTrib
-                ? paths.trib.resultados
-                : runATC
-                  ? paths.atc.resultados
-                  : runITA
-                    ? paths.ita.resultados
-                    : paths.art42.resultados;
+            const downloadPathInicial = carpetaRaiz;
 
             if (runTrib || runATC) {
               const vistos = new Set();
