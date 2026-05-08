@@ -90,9 +90,10 @@
                     track control;
                     let i = $index
                   ) {
-                    @if (!procesoSeleccionado.argumentos[i].formulario.mostrarSi ||
+                    @if (!procesoSeleccionado.argumentos[i].formulario.siempreOculto &&
+                         (!procesoSeleccionado.argumentos[i].formulario.mostrarSi ||
                          formularioControl.controls[procesoSeleccionado.argumentos[i].formulario.mostrarSi.indice]?.value ===
-                         procesoSeleccionado.argumentos[i].formulario.mostrarSi.valor) {
+                         procesoSeleccionado.argumentos[i].formulario.mostrarSi.valor)) {
                       <div class="contenedorFormulario">
                         <!-- Formulario de archivo  -->
                         @if (
