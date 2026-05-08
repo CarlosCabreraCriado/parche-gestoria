@@ -379,7 +379,7 @@ class ProcesosCertificados {
 
               if (clientRunTrib) {
                 try {
-                  await this._procesarCertificadoTributario({
+                  await this._procesarCertificadoAEAT({
                     browser,
                     page,
                     cliente: clientes[i],
@@ -900,7 +900,7 @@ class ProcesosCertificados {
     }
   }
 
-  async _procesarCertificadoTributario({
+  async _procesarCertificadoAEAT({
     browser,
     page,
     cliente,
@@ -1160,7 +1160,7 @@ class ProcesosCertificados {
       });
     } catch (_) {
       hoja
-        .cell(cliente.filaExcel, 10)
+        .cell(cliente.filaExcel, 15)
         .value("ERROR: No se ha podido generar la solicitud.");
       return;
     }
