@@ -70,7 +70,8 @@
       "Bash(Select-Object LineNumber, Line)",
       "Bash(Format-Table -AutoSize)",
       "Bash(npm start *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git restore *)"
     ]
   }
 }
