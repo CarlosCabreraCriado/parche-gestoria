@@ -1047,19 +1047,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             formulario: {
               titulo: "Carpeta de certificados digitales (opcional)",
               tipo: "ruta",
-              placeholder: "Carpeta que contiene los archivos .pfx",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: false,
-            identificador: "certDigitalesConfig",
-            formulario: {
-              titulo: "Archivo de configuración de certificados (opcional)",
-              tipo: "archivo",
-              accept: ".json",
-              placeholder: "Archivo config.json con NIF y contraseñas",
+              placeholder: "Carpeta que contiene los archivos .pfx y config.json",
               valorDefault: "",
             },
           },
@@ -1402,19 +1390,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
             formulario: {
               titulo: "Carpeta de certificados digitales (opcional)",
               tipo: "ruta",
-              placeholder: "Carpeta que contiene los archivos .pfx",
-              valorDefault: "",
-            },
-          },
-          {
-            tipo: "texto",
-            obligado: false,
-            identificador: "certDigitalesConfig",
-            formulario: {
-              titulo: "Archivo de configuración de certificados (opcional)",
-              tipo: "archivo",
-              accept: ".json",
-              placeholder: "Archivo config.json con NIF y contraseñas",
+              placeholder: "Carpeta que contiene los archivos .pfx y config.json",
               valorDefault: "",
             },
           },
