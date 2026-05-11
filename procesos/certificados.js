@@ -935,6 +935,14 @@ class ProcesosCertificados {
     await this.esperar(2000);
 
     try {
+      const botonModal = await page.waitForSelector('button[data-dismiss="modal"]', { timeout: 2000 });
+      if (botonModal) {
+        await botonModal.click();
+        await this.esperar(500);
+      }
+    } catch (_) {}
+
+    try {
       await page.locator('a[id="enlace_316077"]').click();
     } catch (e) {
       throw new Error(`[SS-Paso enlace ARED] ${e.message}`);
