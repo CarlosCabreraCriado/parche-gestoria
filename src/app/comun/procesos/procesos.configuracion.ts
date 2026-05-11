@@ -1045,7 +1045,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
       {
-        nombre: "Certificados SS / ITA / ATC",
+        nombre: "Certificados SS ITA ATC",
         categoria: "Certificados",
         tipo: "proceso",
         descripcion: "Descarga certificados de Seguridad Social, ITA y ATC",
@@ -1377,7 +1377,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         salida: [{ tipo: "boolean", valor: false }],
       },
       {
-        nombre: "Certificado Art. 42",
+        nombre: "Certificado Art 42",
         categoria: "Certificados",
         tipo: "proceso",
         descripcion: "Descarga autorización certificado Art. 42 de Seguridad Social",
@@ -1427,7 +1427,8 @@ var libreriaProcesos: LibreriaProcesos[] = [
               titulo: "Selección manual",
               tipo: "boolean",
               placeholder: "",
-              valorDefault: false,
+              valorDefault: true,
+              siempreOculto: true,
             },
           },
           {
@@ -1439,7 +1440,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 0061, 52; 8 0140-72",
               valorDefault: "",
-              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1511,7 +1511,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 0111",
               valorDefault: "",
-              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1523,7 +1522,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 38",
               valorDefault: "",
-              mostrarSi: { indice: 3, valor: true },
             },
           },
           {
@@ -1535,7 +1533,6 @@ var libreriaProcesos: LibreriaProcesos[] = [
               tipo: "texto",
               placeholder: "Ej: 007713172",
               valorDefault: "",
-              mostrarSi: { indice: 3, valor: true },
             },
           },
         ],

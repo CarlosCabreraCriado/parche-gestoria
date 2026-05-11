@@ -55,13 +55,37 @@ class ProcesosCertificados {
   }
 
   async certificadosSSITAATC(argumentos) {
-    return this.certificadosDeEstarAlCorriente(argumentos);
+    return this._ejecutarCertificados(argumentos, {
+      habilitarSS: true, habilitarAEAT: false, habilitarATC: true, habilitarITA: true, habilitarArt42: false,
+      nombreProceso: 'Certificados SS ITA ATC'
+    });
+  }
+
+  async certificadoAEAT(argumentos) {
+    return this._ejecutarCertificados(argumentos, {
+      habilitarSS: false, habilitarAEAT: true, habilitarATC: false, habilitarITA: false, habilitarArt42: false,
+      nombreProceso: 'Certificado AEAT'
+    });
+  }
+
+  async certificadoArt42(argumentos) {
+    return this._ejecutarCertificados(argumentos, {
+      habilitarSS: false, habilitarAEAT: false, habilitarATC: false, habilitarITA: false, habilitarArt42: true,
+      nombreProceso: 'Certificado Art 42'
+    });
   }
 
   async certificadosDeEstarAlCorriente(argumentos) {
+    return this._ejecutarCertificados(argumentos, {
+      habilitarSS: true, habilitarAEAT: true, habilitarATC: true, habilitarITA: true, habilitarArt42: false,
+      nombreProceso: 'Certificados Unificados'
+    });
+  }
+
+  async _ejecutarCertificados(argumentos, config) {
     return new Promise((resolve) => {
-      console.log("Certificados unificados — iniciando");
-      const nombreProceso = "Certificados Unificados";
+      console.log(`${config.nombreProceso} — iniciando`);
+      const nombreProceso = config.nombreProceso;
       let registrosProcesados = 0;
 
       const chromiumExecutablePath = path.normalize(
@@ -72,11 +96,11 @@ class ProcesosCertificados {
       const modoManual = !!argumentos.formularioControl[3];
       const codigosEmpresaInput = argumentos.formularioControl[4];
 
-      let runSS = !!argumentos.formularioControl[5];
-      let runTrib = !!argumentos.formularioControl[6];
-      let runATC = !!argumentos.formularioControl[7];
-      let runITA = !!argumentos.formularioControl[8];
-      let runArt42 = !!argumentos.formularioControl[9];
+      let runSS = config.habilitarSS && !!argumentos.formularioControl[5];
+      let runTrib = config.habilitarAEAT && !!argumentos.formularioControl[6];
+      let runATC = config.habilitarATC && !!argumentos.formularioControl[7];
+      let runITA = config.habilitarITA && !!argumentos.formularioControl[8];
+      let runArt42 = config.habilitarArt42 && !!argumentos.formularioControl[9];
 
       const empresaAutRegimen = String(argumentos.formularioControl[10] || "");
       const empresaAutTesoreria = String(
@@ -228,15 +252,15 @@ class ProcesosCertificados {
                 (codigosEmpresaObjetivo.size === 0 ||
                   codigosEmpresaObjetivo.has(codigoNormalizado));
 
-              const tieneAlgunFlag =
-                objetoCliente.flagSS ||
-                objetoCliente.flagAEAT ||
-                objetoCliente.flagATC ||
-                objetoCliente.flagITA;
+              const tieneAlgunFlagHabilitado =
+                (config.habilitarSS && objetoCliente.flagSS) ||
+                (config.habilitarAEAT && objetoCliente.flagAEAT) ||
+                (config.habilitarATC && objetoCliente.flagATC) ||
+                (config.habilitarITA && objetoCliente.flagITA);
 
               const debeProcesarse = modoManual
                 ? debeProcesarseManual
-                : codigoNormalizado !== "" && tieneAlgunFlag;
+                : codigoNormalizado !== "" && tieneAlgunFlagHabilitado;
 
               if (
                 debeProcesarse &&
@@ -275,13 +299,13 @@ class ProcesosCertificados {
             }
 
             if (!modoManual) {
-              runSS = clientes.some((c) => c.flagSS);
-              runTrib = clientes.some((c) => c.flagAEAT);
-              runATC = clientes.some((c) => c.flagATC);
-              runITA = clientes.some((c) => c.flagITA);
+              runSS = config.habilitarSS && clientes.some((c) => c.flagSS);
+              runTrib = config.habilitarAEAT && clientes.some((c) => c.flagAEAT);
+              runATC = config.habilitarATC && clientes.some((c) => c.flagATC);
+              runITA = config.habilitarITA && clientes.some((c) => c.flagITA);
               runArt42 = false;
 
-              if (!runSS && !runTrib && !runATC && !runITA) {
+              if (!runSS && !runTrib && !runATC && !runITA && !runArt42) {
                 console.log(
                   "No hay empresas con certificados marcados en el Excel. Nada que hacer.",
                 );
@@ -392,10 +416,10 @@ class ProcesosCertificados {
               console.log("Procesando cliente: " + i);
               console.log(clientes[i]);
 
-              const clientRunSS = modoManual ? runSS : clientes[i].flagSS;
-              const clientRunTrib = modoManual ? runTrib : clientes[i].flagAEAT;
-              const clientRunATC = modoManual ? runATC : clientes[i].flagATC;
-              const clientRunITA = modoManual ? runITA : clientes[i].flagITA;
+              const clientRunSS = modoManual ? runSS : (config.habilitarSS && clientes[i].flagSS);
+              const clientRunTrib = modoManual ? runTrib : (config.habilitarAEAT && clientes[i].flagAEAT);
+              const clientRunATC = modoManual ? runATC : (config.habilitarATC && clientes[i].flagATC);
+              const clientRunITA = modoManual ? runITA : (config.habilitarITA && clientes[i].flagITA);
               const clientRunArt42 = modoManual && runArt42;
 
               if (
