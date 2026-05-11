@@ -54,9 +54,9 @@ class ProcesosCertificados {
     throw ultimoError;
   }
 
-  _cargarCertificadoEmpresa(nif) {
-    const certsDir = path.join(this.pathToDbFolder, "certificados_digitales");
-    const configPath = path.join(certsDir, "config.json");
+  _cargarCertificadoEmpresa(nif, customCertsDir = null, customConfigPath = null) {
+    const certsDir = customCertsDir || path.join(this.pathToDbFolder, "certificados_digitales");
+    const configPath = customConfigPath || path.join(certsDir, "config.json");
     if (!fs.existsSync(configPath)) return null;
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const nifNorm = (nif || "").trim().toUpperCase();
@@ -119,6 +119,9 @@ class ProcesosCertificados {
         argumentos.formularioControl[11] || "",
       );
       const empresaAutCuenta = String(argumentos.formularioControl[12] || "");
+
+      const certDigitalesDir = argumentos.formularioControl[13] || null;
+      const certDigitalesConfig = argumentos.formularioControl[14] || null;
 
       console.log(
         `[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`,
@@ -401,6 +404,8 @@ class ProcesosCertificados {
                 runTrib,
                 runATC,
                 runArt42,
+                certDigitalesDir,
+                certDigitalesConfig,
               });
             } catch (e) {
               console.warn(
@@ -492,6 +497,8 @@ class ProcesosCertificados {
                     paths: paths.trib,
                     hoja,
                     colIdx,
+                    certDigitalesDir,
+                    certDigitalesConfig,
                   }),
                   "CERT TRIB",
                   page
@@ -628,13 +635,16 @@ class ProcesosCertificados {
     runTrib,
     runATC,
     runArt42,
+    certDigitalesDir = null,
+    certDigitalesConfig = null,
   }) {
     console.log(
       "[CERT INIT] Iniciando pre-selección de certificados digitales...",
     );
 
-    const certsConfigPath = path.join(this.pathToDbFolder, "certificados_digitales", "config.json");
-    const usarCertsPorEmpresa = fs.existsSync(certsConfigPath);
+    const resolvedCertsDir = certDigitalesDir || path.join(this.pathToDbFolder, "certificados_digitales");
+    const resolvedConfigPath = certDigitalesConfig || path.join(resolvedCertsDir, "config.json");
+    const usarCertsPorEmpresa = fs.existsSync(resolvedConfigPath);
 
     if (usarCertsPorEmpresa && runTrib) {
       console.log(
@@ -1057,7 +1067,16 @@ class ProcesosCertificados {
     }
   }
 
-  async _procesarCertificadoAEAT({ browser, page, cliente, paths, hoja, colIdx }) {
+  async _procesarCertificadoAEAT({
+    browser,
+    page,
+    cliente,
+    paths,
+    hoja,
+    colIdx,
+    certDigitalesDir = null,
+    certDigitalesConfig = null,
+  }) {
     if (cliente.flagDupeNIF) {
       hoja
         .cell(cliente.filaExcel, colIdx["LOG TRIB"])
@@ -1069,9 +1088,10 @@ class ProcesosCertificados {
       `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
-    const certData = this._cargarCertificadoEmpresa(cliente.nif);
-    const certsConfigPath = path.join(this.pathToDbFolder, "certificados_digitales", "config.json");
-    if (fs.existsSync(certsConfigPath) && !certData) {
+    const certData = this._cargarCertificadoEmpresa(cliente.nif, certDigitalesDir, certDigitalesConfig);
+    const resolvedCertsDir = certDigitalesDir || path.join(this.pathToDbFolder, "certificados_digitales");
+    const resolvedConfigPath = certDigitalesConfig || path.join(resolvedCertsDir, "config.json");
+    if (fs.existsSync(resolvedConfigPath) && !certData) {
       throw new Error(`No se encontró certificado .pfx para NIF ${cliente.nif}`);
     }
 
