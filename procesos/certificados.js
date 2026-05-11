@@ -54,6 +54,18 @@ class ProcesosCertificados {
     throw ultimoError;
   }
 
+  _cargarCertificadoEmpresa(nif) {
+    const certsDir = path.join(this.pathToDbFolder, "certificados_digitales");
+    const configPath = path.join(certsDir, "config.json");
+    if (!fs.existsSync(configPath)) return null;
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const nifNorm = (nif || "").trim().toUpperCase();
+    const passphrase = config[nifNorm];
+    const pfxPath = path.join(certsDir, `${nifNorm}.pfx`);
+    if (!fs.existsSync(pfxPath)) return null;
+    return { pfx: fs.readFileSync(pfxPath), passphrase: passphrase || "" };
+  }
+
   async certificadosSSITAATC(argumentos) {
     return this._ejecutarCertificados(argumentos, {
       habilitarSS: true, habilitarAEAT: false, habilitarATC: true, habilitarITA: true, habilitarArt42: false,
@@ -621,6 +633,15 @@ class ProcesosCertificados {
       "[CERT INIT] Iniciando pre-selección de certificados digitales...",
     );
 
+    const certsConfigPath = path.join(this.pathToDbFolder, "certificados_digitales", "config.json");
+    const usarCertsPorEmpresa = fs.existsSync(certsConfigPath);
+
+    if (usarCertsPorEmpresa && runTrib) {
+      console.log(
+        "[CERT INIT] TRIB — detectados certificados por empresa, saltando pre-inicialización de AEAT",
+      );
+    }
+
     if (runSS) {
       console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
       for (let intento = 1; intento <= 2; intento++) {
@@ -638,7 +659,7 @@ class ProcesosCertificados {
       console.log("[CERT INIT] SS listo.");
     }
 
-    if (runTrib) {
+    if (runTrib && !usarCertsPorEmpresa) {
       console.log(
         "[CERT INIT] TRIB — navegando para seleccionar certificado...",
       );
@@ -1048,121 +1069,146 @@ class ProcesosCertificados {
       `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
-    for (let intento = 1; intento <= 2; intento++) {
+    const certData = this._cargarCertificadoEmpresa(cliente.nif);
+    const certsConfigPath = path.join(this.pathToDbFolder, "certificados_digitales", "config.json");
+    if (fs.existsSync(certsConfigPath) && !certData) {
+      throw new Error(`No se encontró certificado .pfx para NIF ${cliente.nif}`);
+    }
+
+    let context = null;
+    let aeatPage = page;
+    if (certData) {
+      context = await browser.createBrowserContext();
+      aeatPage = await context.newPage();
+      await aeatPage.setClientCertificates([{
+        origin: "https://www1.agenciatributaria.gob.es",
+        pfx: certData.pfx,
+        passphrase: certData.passphrase,
+      }]);
+      aeatPage.on("dialog", async (dialog) => {
+        try { await dialog.accept(); } catch (_) {}
+      });
+    }
+
+    try {
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await aeatPage.goto(
+            "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          console.warn(
+            `[CERT TRIB] Fallo navegación (intento ${intento}):`,
+            e?.message || e,
+          );
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
+
       try {
-        await page.goto(
-          "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
-          { waitUntil: "networkidle0" },
+        const botonModal = await aeatPage.waitForSelector(
+          'button[data-dismiss="modal"]',
+          { timeout: 1000 },
         );
-        break;
+        if (botonModal) {
+          await botonModal.click();
+        }
+      } catch (_) {}
+
+      await aeatPage.locator(`input[id="fTipoRepresentacion1"]`).wait();
+      const radio1 = await aeatPage.$(`input[id="fTipoRepresentacion1"]`);
+      if (radio1) await radio1.click();
+
+      await aeatPage.locator('input[name="fNifT"]').wait();
+      await aeatPage.type('input[name="fNifT"]', String(cliente.nif));
+      await this.esperar(500);
+
+      await aeatPage.locator('input[name="fNombreT"]').wait();
+      await aeatPage.type('input[name="fNombreT"]', String(cliente.empresa));
+      await this.esperar(500);
+
+      await aeatPage.locator(`input[id="fTipoCertificado4"]`).wait();
+      const radio2 = await aeatPage.$(`input[id="fTipoCertificado4"]`);
+      if (radio2) await radio2.click();
+
+      await aeatPage.locator('input[id="validarSolicitud"]').click();
+      await aeatPage.waitForNavigation({ waitUntil: "load" });
+
+      await aeatPage.locator('input[value="Firmar Enviar"]').wait();
+
+      let firmaOk;
+      try {
+        [firmaOk] = await Promise.all([
+          new Promise((resolvePromise) => {
+            const onTargetCreated = async (target) => {
+              const newPage = await target.page();
+              await this.esperar(1000);
+              await newPage.locator('input[id="Conforme"]').wait();
+              await newPage.locator('input[id="Conforme"]').click();
+              await this.esperar(500);
+              await newPage.locator('input[name="Firmar"]').wait();
+              await newPage.locator('input[name="Firmar"]').click();
+              try {
+                await newPage.close();
+              } catch (_) {}
+              resolvePromise(true);
+            };
+            browser.once("targetcreated", onTargetCreated);
+            setTimeout(() => {
+              browser.off("targetcreated", onTargetCreated);
+              resolvePromise(false);
+            }, 10000);
+          }),
+          aeatPage.locator('input[value="Firmar Enviar"]').click(),
+        ]);
       } catch (e) {
-        console.warn(
-          `[CERT TRIB] Fallo navegación (intento ${intento}):`,
-          e?.message || e,
-        );
-        if (intento === 2) throw e;
-        await this.esperar(1500);
+        console.log("[CERT TRIB] Error firma: ", e?.message || e);
       }
-    }
 
-    try {
-      const botonModal = await page.waitForSelector(
-        'button[data-dismiss="modal"]',
-        { timeout: 1000 },
-      );
-      if (botonModal) {
-        await botonModal.click();
-      }
-    } catch (_) {}
+      await this.esperar(1000);
+      console.log("[CERT TRIB] Descargando...");
 
-    await page.locator(`input[id="fTipoRepresentacion1"]`).wait();
-    const radio1 = await page.$(`input[id="fTipoRepresentacion1"]`);
-    if (radio1) await radio1.click();
+      await aeatPage.locator('input[id="descarga"]').wait();
 
-    await page.locator('input[name="fNifT"]').wait();
-    await page.type('input[name="fNifT"]', String(cliente.nif));
-    await this.esperar(500);
-
-    await page.locator('input[name="fNombreT"]').wait();
-    await page.type('input[name="fNombreT"]', String(cliente.empresa));
-    await this.esperar(500);
-
-    await page.locator(`input[id="fTipoCertificado4"]`).wait();
-    const radio2 = await page.$(`input[id="fTipoCertificado4"]`);
-    if (radio2) await radio2.click();
-
-    await page.locator('input[id="validarSolicitud"]').click();
-    await page.waitForNavigation({ waitUntil: "load" });
-
-    await page.locator('input[value="Firmar Enviar"]').wait();
-
-    let firmaOk;
-    try {
-      [firmaOk] = await Promise.all([
-        new Promise((resolvePromise) => {
-          const onTargetCreated = async (target) => {
-            const newPage = await target.page();
-            await this.esperar(1000);
-            await newPage.locator('input[id="Conforme"]').wait();
-            await newPage.locator('input[id="Conforme"]').click();
-            await this.esperar(500);
-            await newPage.locator('input[name="Firmar"]').wait();
-            await newPage.locator('input[name="Firmar"]').click();
-            try {
-              await newPage.close();
-            } catch (_) {}
-            resolvePromise(true);
-          };
-          browser.once("targetcreated", onTargetCreated);
-          setTimeout(() => {
-            browser.off("targetcreated", onTargetCreated);
-            resolvePromise(false);
-          }, 10000);
-        }),
-        page.locator('input[value="Firmar Enviar"]').click(),
-      ]);
-    } catch (e) {
-      console.log("[CERT TRIB] Error firma: ", e?.message || e);
-    }
-
-    await this.esperar(1000);
-    console.log("[CERT TRIB] Descargando...");
-
-    await page.locator('input[id="descarga"]').wait();
-
-    const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
-    let nuevaPagina = await this._descargarPDF({
-      browser,
-      botonClick: () => page.locator('input[id="descarga"]').click(),
-      rutaArchivo: rutaTrib,
-      etiqueta: "TRIB",
-      timeoutMs: 15000,
-    });
-
-    if (!nuevaPagina) {
-      console.log("[CERT TRIB] Reintentando descarga...");
-      await this.esperar(3000);
-      nuevaPagina = await this._descargarPDF({
+      const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
+      let nuevaPagina = await this._descargarPDF({
         browser,
-        botonClick: () => page.locator('input[id="descarga"]').click(),
+        botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
         rutaArchivo: rutaTrib,
         etiqueta: "TRIB",
         timeoutMs: 15000,
       });
-    }
 
-    if (!nuevaPagina) {
-      console.log("[CERT TRIB] ERROR EN DESCARGA");
-      hoja
-        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
-        .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
-    } else {
-      hoja
-        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
-        .value("OK, resguardo de solicitud descargado.");
-      try {
-        await nuevaPagina.close();
-      } catch (_) {}
+      if (!nuevaPagina) {
+        console.log("[CERT TRIB] Reintentando descarga...");
+        await this.esperar(3000);
+        nuevaPagina = await this._descargarPDF({
+          browser,
+          botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+          rutaArchivo: rutaTrib,
+          etiqueta: "TRIB",
+          timeoutMs: 15000,
+        });
+      }
+
+      if (!nuevaPagina) {
+        console.log("[CERT TRIB] ERROR EN DESCARGA");
+        hoja
+          .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+          .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
+      } else {
+        hoja
+          .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+          .value("OK, resguardo de solicitud descargado.");
+        try {
+          await nuevaPagina.close();
+        } catch (_) {}
+      }
+    } finally {
+      if (context) await context.close();
     }
   }
 
