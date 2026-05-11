@@ -19,6 +19,45 @@ class ProcesosCertificados {
     });
   }
 
+  async _ejecutarConReintentos(fn, descripcion, page, maxReintentos = 2) {
+    let ultimoError;
+    for (let intento = 1; intento <= maxReintentos; intento++) {
+      try {
+        await fn();
+        return;
+      } catch (e) {
+        ultimoError = e;
+        if (intento < maxReintentos) {
+          console.warn(`[${descripcion}] Error (intento ${intento}/${maxReintentos}): ${e?.message || e}. Reintentando...`);
+          try {
+            await page.goto("about:blank");
+          } catch (_) {}
+          await this.esperar(2000);
+        }
+      }
+    }
+    throw ultimoError;
+  }
+
+  async _esperarSelector(page, selector, timeoutTotal = 60000, reintentos = 3) {
+    let ultimoError;
+    const timeoutPorIntento = Math.ceil(timeoutTotal / reintentos);
+    for (let i = 1; i <= reintentos; i++) {
+      try {
+        await page.waitForSelector(selector, { timeout: timeoutPorIntento });
+        return;
+      } catch (e) {
+        ultimoError = e;
+        if (i < reintentos) await this.esperar(1000);
+      }
+    }
+    throw ultimoError;
+  }
+
+  async certificadosSSITAATC(argumentos) {
+    return this.certificadosDeEstarAlCorriente(argumentos);
+  }
+
   async certificadosDeEstarAlCorriente(argumentos) {
     return new Promise((resolve) => {
       console.log("Certificados unificados — iniciando");
@@ -303,12 +342,9 @@ class ProcesosCertificados {
 
             const prepararPagina = async (pageObj) => {
               pageObj.on("dialog", async (dialog) => {
-                const tipo = dialog.type();
-                if (tipo === "beforeunload") {
-                  try {
-                    await dialog.accept();
-                  } catch (_) {}
-                }
+                try {
+                  await dialog.accept();
+                } catch (_) {}
               });
               await pageObj._client().send("Page.setDownloadBehavior", {
                 behavior: "allow",
@@ -393,88 +429,84 @@ class ProcesosCertificados {
               }
 
               if (clientRunSS) {
-                try {
-                  await this._procesarCertificadoSS({
+                await this._ejecutarConReintentos(
+                  () => this._procesarCertificadoSS({
                     browser,
                     page,
                     cliente: clientes[i],
                     paths: paths.ss,
                     hoja,
                     colIdx,
-                  });
-                } catch (e) {
-                  const msg = String(e?.message || e);
-                  console.warn("[CERT SS] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, colIdx["LOG SS"]).value("ERROR: " + msg);
-                  try {
-                    await page.goto("about:blank");
-                  } catch (_) {}
-                }
+                  }),
+                  "CERT SS",
+                  page
+                ).catch((e) => {
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG SS"])
+                    .value("ERROR: " + (e?.message || e));
+                });
               }
 
               if (clientRunTrib) {
-                try {
-                  await this._procesarCertificadoAEAT({
+                await this._ejecutarConReintentos(
+                  () => this._procesarCertificadoAEAT({
                     browser,
                     page,
                     cliente: clientes[i],
                     paths: paths.trib,
                     hoja,
                     colIdx,
-                  });
-                } catch (e) {
-                  const msg = String(e?.message || e);
-                  console.warn("[CERT TRIB] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, colIdx["LOG TRIB"]).value("ERROR: " + msg);
-                  try {
-                    await page.goto("about:blank");
-                  } catch (_) {}
-                }
+                  }),
+                  "CERT TRIB",
+                  page
+                ).catch((e) => {
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG TRIB"])
+                    .value("ERROR: " + (e?.message || e));
+                });
               }
 
               if (clientRunATC) {
-                try {
-                  await this._procesarCertificadoATC({
+                await this._ejecutarConReintentos(
+                  () => this._procesarCertificadoATC({
                     browser,
                     page,
                     cliente: clientes[i],
                     paths: paths.atc,
                     hoja,
                     colIdx,
-                  });
-                } catch (e) {
-                  const msg = String(e?.message || e);
-                  console.warn("[CERT ATC] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, colIdx["LOG ATC"]).value("ERROR: " + msg);
-                  try {
-                    await page.goto("about:blank");
-                  } catch (_) {}
-                }
+                  }),
+                  "CERT ATC",
+                  page
+                ).catch((e) => {
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ATC"])
+                    .value("ERROR: " + (e?.message || e));
+                });
               }
 
               if (clientRunITA) {
-                try {
-                  await this._procesarInformeITA({
+                await this._ejecutarConReintentos(
+                  () => this._procesarInformeITA({
                     browser,
                     page,
                     cliente: clientes[i],
                     paths: paths.ita,
                     hoja,
                     colIdx,
-                  });
-                } catch (e) {
-                  const msg = String(e?.message || e);
-                  console.warn("[ITA] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, colIdx["LOG ITA"]).value("ERROR: " + msg);
-                  try {
-                    await page.goto("about:blank");
-                  } catch (_) {}
-                }
+                  }),
+                  "[ITA]",
+                  page
+                ).catch((e) => {
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ITA"])
+                    .value("ERROR: " + (e?.message || e));
+                });
               }
 
               if (clientRunArt42) {
-                try {
-                  await this._procesarCertificadoArt42({
+                await this._ejecutarConReintentos(
+                  () => this._procesarCertificadoArt42({
                     browser,
                     page,
                     cliente: clientes[i],
@@ -484,15 +516,14 @@ class ProcesosCertificados {
                     empresaAutRegimen,
                     empresaAutTesoreria,
                     empresaAutCuenta,
-                  });
-                } catch (e) {
-                  const msg = String(e?.message || e);
-                  console.warn("[ART42] Error:", msg);
-                  hoja.cell(clientes[i].filaExcel, colIdx["LOG ART42"]).value("ERROR: " + msg);
-                  try {
-                    await page.goto("about:blank");
-                  } catch (_) {}
-                }
+                  }),
+                  "[ART42]",
+                  page
+                ).catch((e) => {
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ART42"])
+                    .value("ERROR: " + (e?.message || e));
+                });
               }
 
               console.log("Nuevo cliente");
@@ -747,10 +778,22 @@ class ProcesosCertificados {
     );
     const filePath = path.join(paths.resultados, cliente.nombreArchivoITA);
 
-    await page.goto(
-      "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
-      { waitUntil: "networkidle0" },
-    );
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(
+          `[ITA] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
     await this.esperar(1000);
 
     await page.locator('input[name="txt_SDFREG62_ayuda"]').wait();
@@ -865,6 +908,8 @@ class ProcesosCertificados {
       }
     }
 
+    await this.esperar(2000);
+
     try {
       await page.locator('a[id="enlace_316077"]').click();
     } catch (e) {
@@ -877,9 +922,7 @@ class ProcesosCertificados {
     }
 
     try {
-      await page.waitForSelector(`input[title="Buscar por CCC o NAF"]`, {
-        timeout: 60000,
-      });
+      await this._esperarSelector(page, `input[title="Buscar por CCC o NAF"]`, 60000, 3);
     } catch (e) {
       throw new Error(`[SS-Paso radio CCC/NAF] ${e.message}`);
     }
@@ -887,9 +930,7 @@ class ProcesosCertificados {
     if (radio) await radio.click();
 
     try {
-      await page.waitForSelector('input[name="criteriosBusquedaCccNaf"]', {
-        timeout: 60000,
-      });
+      await this._esperarSelector(page, 'input[name="criteriosBusquedaCccNaf"]', 60000, 3);
     } catch (e) {
       throw new Error(`[SS-Paso campo CCC] ${e.message}`);
     }
@@ -953,7 +994,7 @@ class ProcesosCertificados {
     if (!nuevaPagina) {
       console.log("[CERT SS] ERROR EN DESCARGA");
       hoja
-        .cell(cliente.filaExcel, 13)
+        .cell(cliente.filaExcel, colIdx["LOG SS"])
         .value("ERROR: No se ha podido descargar el certificado.");
     } else {
       hoja.cell(cliente.filaExcel, colIdx["LOG SS"]).value("OK, certificado descargado.");
