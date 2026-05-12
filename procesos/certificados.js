@@ -2,6 +2,8 @@ const path = require("path");
 const fs = require("fs");
 const XlsxPopulate = require("xlsx-populate");
 const { DateTime } = require("luxon");
+const { execSync } = require("child_process");
+const os = require("os");
 
 const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
 const puppeteer = require("puppeteer");
@@ -66,6 +68,44 @@ class ProcesosCertificados {
     const certPath = fs.existsSync(pfxPath) ? pfxPath : fs.existsSync(p12Path) ? p12Path : null;
     if (!certPath) return null;
     return { pfx: fs.readFileSync(certPath), passphrase: passphrase || "" };
+  }
+
+  _importarCertWindows(pfxPath, passphrase) {
+    const safePwd = (passphrase || "").replace(/'/g, "''");
+    const safeFile = pfxPath.replace(/\\/g, "\\\\").replace(/'/g, "''");
+    const out = execSync(
+      `powershell -Command "$p = ConvertTo-SecureString '${safePwd}' -AsPlainText -Force; $c = Import-PfxCertificate -FilePath '${safeFile}' -CertStoreLocation Cert:\\CurrentUser\\My -Password $p; Write-Output ($c.Thumbprint + '|' + $c.GetNameInfo('SimpleName', $false))"`,
+      { encoding: "utf8", timeout: 30000 }
+    ).trim();
+    const [thumbprint, cn] = out.split("|");
+    return { thumbprint, cn };
+  }
+
+  _eliminarCertWindows(thumbprint) {
+    try {
+      execSync(
+        `powershell -Command "Get-ChildItem Cert:\\CurrentUser\\My | Where-Object {$_.Thumbprint -eq '${thumbprint}'} | Remove-Item"`,
+        { encoding: "utf8", timeout: 10000 }
+      );
+    } catch (_) {}
+  }
+
+  _setAutoSelectPolicy(cn) {
+    const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter: { SUBJECT: { CN: cn } } });
+    const safePolicy = policy.replace(/'/g, "''");
+    execSync(
+      `powershell -Command "New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null; Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'"`,
+      { encoding: "utf8", timeout: 10000 }
+    );
+  }
+
+  _limpiarAutoSelectPolicy() {
+    try {
+      execSync(
+        `powershell -Command "Remove-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force -Recurse -ErrorAction SilentlyContinue"`,
+        { encoding: "utf8", timeout: 10000 }
+      );
+    } catch (_) {}
   }
 
   async certificadosSSITAATC(argumentos) {
@@ -414,6 +454,7 @@ class ProcesosCertificados {
                 "[CERT INIT] Error en pre-inicialización:",
                 e?.message || e,
               );
+              this._limpiarAutoSelectPolicy();
               try {
                 await browser.close();
               } catch (_) {}
@@ -574,6 +615,8 @@ class ProcesosCertificados {
               console.log("Nuevo cliente");
               await this.esperar(1000);
             }
+
+            this._limpiarAutoSelectPolicy();
 
             try {
               await browser.close();
@@ -1099,14 +1142,19 @@ class ProcesosCertificados {
 
     let context = null;
     let aeatPage = page;
+    let certThumbprint = null;
     if (certData) {
+      const tempPath = path.join(os.tmpdir(), `cert_aeat_${Date.now()}.pfx`);
+      fs.writeFileSync(tempPath, certData.pfx);
+      try {
+        const { thumbprint, cn } = this._importarCertWindows(tempPath, certData.passphrase);
+        certThumbprint = thumbprint;
+        this._setAutoSelectPolicy(cn);
+      } finally {
+        try { fs.unlinkSync(tempPath); } catch (_) {}
+      }
       context = await browser.createBrowserContext();
       aeatPage = await context.newPage();
-      await aeatPage.setClientCertificates([{
-        origin: "https://www1.agenciatributaria.gob.es",
-        pfx: certData.pfx,
-        passphrase: certData.passphrase,
-      }]);
       aeatPage.on("dialog", async (dialog) => {
         try { await dialog.accept(); } catch (_) {}
       });
@@ -1230,6 +1278,7 @@ class ProcesosCertificados {
         } catch (_) {}
       }
     } finally {
+      if (certThumbprint) this._eliminarCertWindows(certThumbprint);
       if (context) await context.close();
     }
   }
