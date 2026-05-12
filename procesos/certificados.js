@@ -69,9 +69,48 @@ class ProcesosCertificados {
     return { certNif };
   }
 
-  _setAutoSelectPolicy(cn) {
+  _obtenerCNcertificado(nif) {
+    const scriptPath = path.join(os.tmpdir(), `cert_lookup_${Date.now()}.ps1`);
+    const nifSafe = (nif || "").replace(/'/g, "''");
+    const script = `$nif = '${nifSafe}'
+$today = Get-Date
+$cert = Get-ChildItem Cert:\\CurrentUser\\My |
+  Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
+  Sort-Object NotAfter -Descending |
+  Select-Object -First 1
+if ($cert) {
+  $subjectCN = ($cert.Subject -split ',') |
+    Where-Object { $_.Trim().StartsWith('CN=') } |
+    Select-Object -First 1
+  $subjectCN = $subjectCN.Trim().Substring(3)
+  $issuerCN = ($cert.Issuer -split ',') |
+    Where-Object { $_.Trim().StartsWith('CN=') } |
+    Select-Object -First 1
+  $issuerCN = $issuerCN.Trim().Substring(3)
+  Write-Output "$subjectCN|||$issuerCN"
+} else {
+  Write-Output "NOT_FOUND"
+}`;
+    fs.writeFileSync(scriptPath, script, "utf8");
+    try {
+      const out = execSync(
+        `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+        { encoding: "utf8", timeout: 15000 }
+      ).trim();
+      if (!out || out === "NOT_FOUND") return null;
+      const [subjectCN, issuerCN] = out.split("|||");
+      return { subjectCN: subjectCN.trim(), issuerCN: issuerCN.trim() };
+    } finally {
+      try { fs.unlinkSync(scriptPath); } catch (_) {}
+    }
+  }
+
+  _setAutoSelectPolicy({ subjectCN, issuerCN }) {
     const scriptPath = path.join(os.tmpdir(), `cert_policy_${Date.now()}.ps1`);
-    const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter: { SUBJECT: { CN: cn || "" } } });
+    const filter = {};
+    if (issuerCN) filter.ISSUER = { CN: issuerCN };
+    if (subjectCN) filter.SUBJECT = { CN: subjectCN };
+    const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
     const safePolicy = policy.replace(/'/g, "''");
     const script = [
       `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
@@ -80,6 +119,7 @@ class ProcesosCertificados {
     fs.writeFileSync(scriptPath, script, "utf8");
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 30000 });
+      console.log(`[POLICY] AutoSelect policy set: ${policy}`);
     } finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
     }
@@ -1134,8 +1174,16 @@ class ProcesosCertificados {
     let aeatPage = page;
     if (certData) {
       // Certificado ya importado manualmente en almacén Windows
-      // Configurar auto-selección Chrome por CN del cert (NIF del representante, no CIF empresa)
-      this._setAutoSelectPolicy(certData.certNif);
+      // Obtener CN completo del certificado desde el almacén Windows
+      const certInfo = this._obtenerCNcertificado(certData.certNif);
+      if (!certInfo) {
+        throw new Error(
+          `No se encontró certificado válido en almacén Windows para NIF ${certData.certNif}`
+        );
+      }
+      console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
+      // Configurar auto-selección Chrome por CN real del cert
+      this._setAutoSelectPolicy(certInfo);
       certBrowser = await puppeteer.launch({ executablePath, headless: false });
       aeatPage = await certBrowser.newPage();
       await aeatPage.setViewport({ width: 1080, height: 1024 });
