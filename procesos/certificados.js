@@ -74,10 +74,13 @@ class ProcesosCertificados {
     const nifSafe = (nif || "").replace(/'/g, "''");
     const script = `$nif = '${nifSafe}'
 $today = Get-Date
-$cert = Get-ChildItem Cert:\\CurrentUser\\My |
+$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+$cert = $store.Certificates |
   Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
   Sort-Object NotAfter -Descending |
   Select-Object -First 1
+$store.Close()
 if ($cert) {
   $subjectCN = ($cert.Subject -split ',') |
     Where-Object { $_.Trim().StartsWith('CN=') } |
