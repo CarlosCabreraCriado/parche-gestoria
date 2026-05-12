@@ -60,52 +60,40 @@ class ProcesosCertificados {
     const certsDir = customCertsDir || path.join(this.pathToDbFolder, "certificados_digitales");
     const configPath = customConfigPath || path.join(certsDir, "config.json");
     if (!fs.existsSync(configPath)) return null;
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+
+    const mapping = JSON.parse(fs.readFileSync(configPath, "utf8"));
     const nifNorm = (nif || "").trim().toUpperCase();
-    const passphrase = config[nifNorm];
-    const pfxPath = path.join(certsDir, `${nifNorm}.pfx`);
-    const p12Path = path.join(certsDir, `${nifNorm}.p12`);
-    const certPath = fs.existsSync(pfxPath) ? pfxPath : fs.existsSync(p12Path) ? p12Path : null;
-    if (!certPath) return null;
-    return { pfx: fs.readFileSync(certPath), passphrase: passphrase || "" };
-  }
+    if (!(nifNorm in mapping)) return null;
 
-  _importarCertWindows(pfxPath, passphrase) {
-    const safePwd = (passphrase || "").replace(/'/g, "''");
-    const safeFile = pfxPath.replace(/\\/g, "\\\\").replace(/'/g, "''");
-    const out = execSync(
-      `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Security; $p = ConvertTo-SecureString '${safePwd}' -AsPlainText -Force; $c = Import-PfxCertificate -FilePath '${safeFile}' -CertStoreLocation Cert:\\CurrentUser\\My -Password $p; Write-Output ($c.Thumbprint + '|' + $c.GetNameInfo('SimpleName', $false))"`,
-      { encoding: "utf8", timeout: 30000 }
-    ).trim();
-    const [thumbprint, cn] = out.split("|");
-    return { thumbprint, cn };
-  }
-
-  _eliminarCertWindows(thumbprint) {
-    try {
-      execSync(
-        `powershell -Command "Get-ChildItem Cert:\\CurrentUser\\My | Where-Object {$_.Thumbprint -eq '${thumbprint}'} | Remove-Item"`,
-        { encoding: "utf8", timeout: 10000 }
-      );
-    } catch (_) {}
+    const certNif = (mapping[nifNorm] || nifNorm).trim().toUpperCase();
+    return { certNif };
   }
 
   _setAutoSelectPolicy(cn) {
-    const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter: { SUBJECT: { CN: cn } } });
+    const scriptPath = path.join(os.tmpdir(), `cert_policy_${Date.now()}.ps1`);
+    const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter: { SUBJECT: { CN: cn || "" } } });
     const safePolicy = policy.replace(/'/g, "''");
-    execSync(
-      `powershell -Command "New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null; Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'"`,
-      { encoding: "utf8", timeout: 10000 }
-    );
+    const script = [
+      `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
+      `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
+    ].join("\r\n");
+    fs.writeFileSync(scriptPath, script, "utf8");
+    try {
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 30000 });
+    } finally {
+      try { fs.unlinkSync(scriptPath); } catch (_) {}
+    }
   }
 
   _limpiarAutoSelectPolicy() {
+    const scriptPath = path.join(os.tmpdir(), `cert_policy_clean_${Date.now()}.ps1`);
+    const script = `Remove-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force -Recurse -ErrorAction SilentlyContinue`;
+    fs.writeFileSync(scriptPath, script, "utf8");
     try {
-      execSync(
-        `powershell -Command "Remove-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force -Recurse -ErrorAction SilentlyContinue"`,
-        { encoding: "utf8", timeout: 10000 }
-      );
-    } catch (_) {}
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 10000 });
+    } catch (_) {} finally {
+      try { fs.unlinkSync(scriptPath); } catch (_) {}
+    }
   }
 
   async certificadosSSITAATC(argumentos) {
@@ -542,6 +530,7 @@ class ProcesosCertificados {
                     colIdx,
                     certDigitalesDir,
                     certDigitalesConfig,
+                    executablePath: chromiumExecutablePath,
                   }),
                   "CERT TRIB",
                   page
@@ -1121,6 +1110,7 @@ class ProcesosCertificados {
     colIdx,
     certDigitalesDir = null,
     certDigitalesConfig = null,
+    executablePath = null,
   }) {
     if (cliente.flagDupeNIF) {
       hoja
@@ -1140,25 +1130,20 @@ class ProcesosCertificados {
       throw new Error(`No se encontró certificado .pfx para NIF ${cliente.nif}`);
     }
 
-    let context = null;
+    let certBrowser = null;
     let aeatPage = page;
-    let certThumbprint = null;
     if (certData) {
-      const tempPath = path.join(os.tmpdir(), `cert_aeat_${Date.now()}.pfx`);
-      fs.writeFileSync(tempPath, certData.pfx);
-      try {
-        const { thumbprint, cn } = this._importarCertWindows(tempPath, certData.passphrase);
-        certThumbprint = thumbprint;
-        this._setAutoSelectPolicy(cn);
-      } finally {
-        try { fs.unlinkSync(tempPath); } catch (_) {}
-      }
-      context = await browser.createBrowserContext();
-      aeatPage = await context.newPage();
+      // Certificado ya importado manualmente en almacén Windows
+      // Configurar auto-selección Chrome por CN del cert (NIF del representante, no CIF empresa)
+      this._setAutoSelectPolicy(certData.certNif);
+      certBrowser = await puppeteer.launch({ executablePath, headless: false });
+      aeatPage = await certBrowser.newPage();
+      await aeatPage.setViewport({ width: 1080, height: 1024 });
       aeatPage.on("dialog", async (dialog) => {
         try { await dialog.accept(); } catch (_) {}
       });
     }
+    const activeBrowser = certBrowser || browser;
 
     try {
       for (let intento = 1; intento <= 2; intento++) {
@@ -1226,9 +1211,9 @@ class ProcesosCertificados {
               } catch (_) {}
               resolvePromise(true);
             };
-            browser.once("targetcreated", onTargetCreated);
+            activeBrowser.once("targetcreated", onTargetCreated);
             setTimeout(() => {
-              browser.off("targetcreated", onTargetCreated);
+              activeBrowser.off("targetcreated", onTargetCreated);
               resolvePromise(false);
             }, 10000);
           }),
@@ -1245,7 +1230,7 @@ class ProcesosCertificados {
 
       const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
       let nuevaPagina = await this._descargarPDF({
-        browser,
+        browser: activeBrowser,
         botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
         rutaArchivo: rutaTrib,
         etiqueta: "TRIB",
@@ -1256,7 +1241,7 @@ class ProcesosCertificados {
         console.log("[CERT TRIB] Reintentando descarga...");
         await this.esperar(3000);
         nuevaPagina = await this._descargarPDF({
-          browser,
+          browser: activeBrowser,
           botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
           rutaArchivo: rutaTrib,
           etiqueta: "TRIB",
@@ -1278,8 +1263,7 @@ class ProcesosCertificados {
         } catch (_) {}
       }
     } finally {
-      if (certThumbprint) this._eliminarCertWindows(certThumbprint);
-      if (context) await context.close();
+      if (certBrowser) await certBrowser.close();
     }
   }
 
