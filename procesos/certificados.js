@@ -62,8 +62,10 @@ class ProcesosCertificados {
     const nifNorm = (nif || "").trim().toUpperCase();
     const passphrase = config[nifNorm];
     const pfxPath = path.join(certsDir, `${nifNorm}.pfx`);
-    if (!fs.existsSync(pfxPath)) return null;
-    return { pfx: fs.readFileSync(pfxPath), passphrase: passphrase || "" };
+    const p12Path = path.join(certsDir, `${nifNorm}.p12`);
+    const certPath = fs.existsSync(pfxPath) ? pfxPath : fs.existsSync(p12Path) ? p12Path : null;
+    if (!certPath) return null;
+    return { pfx: fs.readFileSync(certPath), passphrase: passphrase || "" };
   }
 
   async certificadosSSITAATC(argumentos) {
