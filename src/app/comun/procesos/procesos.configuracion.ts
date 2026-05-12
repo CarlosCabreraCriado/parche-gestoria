@@ -1386,11 +1386,11 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "texto",
             obligado: false,
-            identificador: "certDigitalesDir",
+            identificador: "certDigitalesConfig",
             formulario: {
-              titulo: "Carpeta de certificados digitales (opcional)",
-              tipo: "ruta",
-              placeholder: "Carpeta que contiene los archivos .pfx y config.json",
+              titulo: "Archivo de configuración de certificados (opcional)",
+              tipo: "archivo",
+              placeholder: "Archivo config.json con el mapeo NIF empresa → CN del certificado",
               valorDefault: "",
             },
           },

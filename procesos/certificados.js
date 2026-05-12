@@ -150,8 +150,8 @@ class ProcesosCertificados {
       );
       const empresaAutCuenta = String(argumentos.formularioControl[12] || "");
 
-      const certDigitalesDir = argumentos.formularioControl[13] || null;
-      const certDigitalesConfig = argumentos.formularioControl[14] || null;
+      const certDigitalesDir = null;
+      const certDigitalesConfig = argumentos.formularioControl[13] || null;
 
       console.log(
         `[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`,
