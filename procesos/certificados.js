@@ -74,7 +74,7 @@ class ProcesosCertificados {
     const safePwd = (passphrase || "").replace(/'/g, "''");
     const safeFile = pfxPath.replace(/\\/g, "\\\\").replace(/'/g, "''");
     const out = execSync(
-      `powershell -Command "$p = ConvertTo-SecureString '${safePwd}' -AsPlainText -Force; $c = Import-PfxCertificate -FilePath '${safeFile}' -CertStoreLocation Cert:\\CurrentUser\\My -Password $p; Write-Output ($c.Thumbprint + '|' + $c.GetNameInfo('SimpleName', $false))"`,
+      `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Security; $p = ConvertTo-SecureString '${safePwd}' -AsPlainText -Force; $c = Import-PfxCertificate -FilePath '${safeFile}' -CertStoreLocation Cert:\\CurrentUser\\My -Password $p; Write-Output ($c.Thumbprint + '|' + $c.GetNameInfo('SimpleName', $false))"`,
       { encoding: "utf8", timeout: 30000 }
     ).trim();
     const [thumbprint, cn] = out.split("|");
