@@ -101,16 +101,15 @@ if ($cert) {
     if (issuerCN) filter.ISSUER = { CN: issuerCN };
     if (subjectCN) filter.SUBJECT = { CN: subjectCN };
     const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
-    // Escapar non-ASCII: los CN del almacén Windows pueden tener acentos que PowerShell
-    // interpreta mal si lee el .ps1 como ANSI en lugar de UTF-8 (sin BOM, Windows PS 5.x)
-    const safePolicy = policy
-      .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
-      .replace(/'/g, "''");
+    const safePolicy = policy.replace(/'/g, "''");
     const script = [
       `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
       `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
     ].join("\r\n");
-    fs.writeFileSync(scriptPath, script, "utf8");
+    // BOM UTF-8 (﻿): PowerShell 5.x lee archivos sin BOM como ANSI, corrompiendo
+    // los caracteres acentuados de los CN. Con BOM los lee como UTF-8 y escribe los
+    // caracteres Unicode reales al registro, que Chrome compara directamente.
+    fs.writeFileSync(scriptPath, '﻿' + script, "utf8");
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 30000 });
       console.log(`[POLICY] AutoSelect policy set: ${policy}`);
