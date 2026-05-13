@@ -71,7 +71,31 @@
       "Bash(Format-Table -AutoSize)",
       "Bash(npm start *)",
       "Bash(npm run *)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(node -c procesos/certificados.js)",
+      "Bash(Select-Object FullName, Length, Extension)",
+      "Bash(dir \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\node_modules\\\\puppeteer-core\\\\lib\\\\cjs\\\\puppeteer\" /b)",
+      "Bash(Get-Content \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\node_modules\\\\puppeteer-core\\\\package.json\")",
+      "Bash(Select-String '\"version\"')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version',''\\)\\)\")",
+      "Bash(cat \"/c/Users/gonza/AppData/Local/Temp/claude/c--Users-gonza-OneDrive-Nodus-Proyectos-Nodus-app-parche-gestoria/cc6396db-d08f-49d0-9740-5497dab5595c/tasks/bi539us4l.output\" 2>/dev/null | head -30)",
+      "Read(//c/Users/gonza/AppData/Local/Temp/claude/c--Users-gonza-OneDrive-Nodus-Proyectos-Nodus-app-parche-gestoria/cc6396db-d08f-49d0-9740-5497dab5595c/tasks/**)",
+      "WebSearch",
+      "WebFetch(domain:jpassing.com)",
+      "WebFetch(domain:chromeenterprise.google)",
+      "WebFetch(domain:www.chromium.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:playwright.dev)",
+      "WebFetch(domain:chromium-discuss.chromium.narkive.com)",
+      "WebFetch(domain:copyprogramming.com)",
+      "WebFetch(domain:support.google.com)",
+      "WebFetch(domain:chromium.googlesource.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:admx.help)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import pandas; print\\('pandas ok'\\)\")",
+      "Bash(pip list *)",
+      "Bash(pip install *)"
     ]
   }
 }
