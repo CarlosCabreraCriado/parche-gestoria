@@ -101,7 +101,11 @@ if ($cert) {
     if (issuerCN) filter.ISSUER = { CN: issuerCN };
     if (subjectCN) filter.SUBJECT = { CN: subjectCN };
     const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
-    const safePolicy = policy.replace(/'/g, "''");
+    // Escapar non-ASCII: los CN del almacén Windows pueden tener acentos que PowerShell
+    // interpreta mal si lee el .ps1 como ANSI en lugar de UTF-8 (sin BOM, Windows PS 5.x)
+    const safePolicy = policy
+      .replace(/[^\x00-\x7F]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+      .replace(/'/g, "''");
     const script = [
       `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
       `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
@@ -1122,6 +1126,15 @@ if ($cert) {
     }
 
     console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
+
+    // Los certificados de representación llevan "(R:<NIF_REPRESENTADO>)" en el CN (norma FNMT)
+    if (!certInfo.subjectCN.includes('(R:')) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+        .value(`ERROR: Certificado personal (no de representación) para NIF ${cliente.nif}. Solicitar manualmente "en nombre propio".`);
+      return;
+    }
+
     // Configurar auto-selección Chrome por CN real del cert
     this._setAutoSelectPolicy(certInfo);
     const certBrowser = await puppeteer.launch({ executablePath, headless: false });
