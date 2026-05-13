@@ -95,10 +95,9 @@ if ($cert) {
     }
   }
 
-  _setAutoSelectPolicy({ subjectCN, issuerCN }) {
+  _setAutoSelectPolicy({ subjectCN }) {
     const scriptPath = path.join(os.tmpdir(), `cert_policy_${Date.now()}.ps1`);
     const filter = {};
-    if (issuerCN) filter.ISSUER = { CN: issuerCN };
     if (subjectCN) filter.SUBJECT = { CN: subjectCN };
     const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
     const safePolicy = policy.replace(/'/g, "''");
