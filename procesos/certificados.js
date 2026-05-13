@@ -56,19 +56,6 @@ class ProcesosCertificados {
     throw ultimoError;
   }
 
-  _cargarCertificadoEmpresa(nif, customCertsDir = null, customConfigPath = null) {
-    const certsDir = customCertsDir || path.join(this.pathToDbFolder, "certificados_digitales");
-    const configPath = customConfigPath || path.join(certsDir, "config.json");
-    if (!fs.existsSync(configPath)) return null;
-
-    const mapping = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const nifNorm = (nif || "").trim().toUpperCase();
-    if (!(nifNorm in mapping)) return null;
-
-    const certNif = (mapping[nifNorm] || nifNorm).trim().toUpperCase();
-    return { certNif };
-  }
-
   _obtenerCNcertificado(nif) {
     const scriptPath = path.join(os.tmpdir(), `cert_lookup_${Date.now()}.ps1`);
     const nifSafe = (nif || "").replace(/'/g, "''");
@@ -192,9 +179,6 @@ if ($cert) {
         argumentos.formularioControl[11] || "",
       );
       const empresaAutCuenta = String(argumentos.formularioControl[12] || "");
-
-      const certDigitalesDir = null;
-      const certDigitalesConfig = argumentos.formularioControl[13] || null;
 
       console.log(
         `[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`,
@@ -477,8 +461,6 @@ if ($cert) {
                 runTrib,
                 runATC,
                 runArt42,
-                certDigitalesDir,
-                certDigitalesConfig,
               });
             } catch (e) {
               console.warn(
@@ -571,8 +553,6 @@ if ($cert) {
                     paths: paths.trib,
                     hoja,
                     colIdx,
-                    certDigitalesDir,
-                    certDigitalesConfig,
                     executablePath: chromiumExecutablePath,
                   }),
                   "CERT TRIB",
@@ -712,22 +692,10 @@ if ($cert) {
     runTrib,
     runATC,
     runArt42,
-    certDigitalesDir = null,
-    certDigitalesConfig = null,
   }) {
     console.log(
       "[CERT INIT] Iniciando pre-selección de certificados digitales...",
     );
-
-    const resolvedCertsDir = certDigitalesDir || path.join(this.pathToDbFolder, "certificados_digitales");
-    const resolvedConfigPath = certDigitalesConfig || path.join(resolvedCertsDir, "config.json");
-    const usarCertsPorEmpresa = fs.existsSync(resolvedConfigPath);
-
-    if (usarCertsPorEmpresa && runTrib) {
-      console.log(
-        "[CERT INIT] TRIB — detectados certificados por empresa, saltando pre-inicialización de AEAT",
-      );
-    }
 
     if (runSS) {
       console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
@@ -746,30 +714,10 @@ if ($cert) {
       console.log("[CERT INIT] SS listo.");
     }
 
-    if (runTrib && !usarCertsPorEmpresa) {
+    if (runTrib) {
       console.log(
-        "[CERT INIT] TRIB — navegando para seleccionar certificado...",
+        "[CERT INIT] TRIB — Los certificados se seleccionarán automáticamente por empresa",
       );
-      for (let intento = 1; intento <= 2; intento++) {
-        try {
-          await page.goto(
-            "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
-            { waitUntil: "networkidle0" },
-          );
-          break;
-        } catch (e) {
-          if (intento === 2) throw e;
-          await this.esperar(1500);
-        }
-      }
-      try {
-        const botonModal = await page.waitForSelector(
-          'button[data-dismiss="modal"]',
-          { timeout: 1000 },
-        );
-        if (botonModal) await botonModal.click();
-      } catch (_) {}
-      console.log("[CERT INIT] TRIB listo.");
     }
 
     if (runATC) {
@@ -1151,8 +1099,6 @@ if ($cert) {
     paths,
     hoja,
     colIdx,
-    certDigitalesDir = null,
-    certDigitalesConfig = null,
     executablePath = null,
   }) {
     if (cliente.flagDupeNIF) {
@@ -1166,35 +1112,25 @@ if ($cert) {
       `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
-    const certData = this._cargarCertificadoEmpresa(cliente.nif, certDigitalesDir, certDigitalesConfig);
-    const resolvedCertsDir = certDigitalesDir || path.join(this.pathToDbFolder, "certificados_digitales");
-    const resolvedConfigPath = certDigitalesConfig || path.join(resolvedCertsDir, "config.json");
-    if (fs.existsSync(resolvedConfigPath) && !certData) {
-      throw new Error(`No se encontró certificado .pfx para NIF ${cliente.nif}`);
+    // Buscar certificado directamente en el almacén Windows por NIF del cliente
+    const certInfo = this._obtenerCNcertificado(cliente.nif);
+    if (!certInfo) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+        .value(`ERROR: No se encontró certificado en almacén Windows para NIF ${cliente.nif}`);
+      return;
     }
 
-    let certBrowser = null;
-    let aeatPage = page;
-    if (certData) {
-      // Certificado ya importado manualmente en almacén Windows
-      // Obtener CN completo del certificado desde el almacén Windows
-      const certInfo = this._obtenerCNcertificado(certData.certNif);
-      if (!certInfo) {
-        throw new Error(
-          `No se encontró certificado válido en almacén Windows para NIF ${certData.certNif}`
-        );
-      }
-      console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
-      // Configurar auto-selección Chrome por CN real del cert
-      this._setAutoSelectPolicy(certInfo);
-      certBrowser = await puppeteer.launch({ executablePath, headless: false });
-      aeatPage = await certBrowser.newPage();
-      await aeatPage.setViewport({ width: 1080, height: 1024 });
-      aeatPage.on("dialog", async (dialog) => {
-        try { await dialog.accept(); } catch (_) {}
-      });
-    }
-    const activeBrowser = certBrowser || browser;
+    console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
+    // Configurar auto-selección Chrome por CN real del cert
+    this._setAutoSelectPolicy(certInfo);
+    const certBrowser = await puppeteer.launch({ executablePath, headless: false });
+    const aeatPage = await certBrowser.newPage();
+    await aeatPage.setViewport({ width: 1080, height: 1024 });
+    aeatPage.on("dialog", async (dialog) => {
+      try { await dialog.accept(); } catch (_) {}
+    });
+    const activeBrowser = certBrowser;
 
     try {
       for (let intento = 1; intento <= 2; intento++) {
