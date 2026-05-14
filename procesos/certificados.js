@@ -13,116 +13,12 @@ class ProcesosCertificados {
     this.pathToDbFolder = pathToDbFolder;
     this.nombreProyecto = nombreProyecto;
     this.proyectoDB = proyectoDB;
-
-    // Selectores CSS por portal
-    // IMPORTANTE: Estos selectores son frágiles y pueden cambiar con actualizaciones del portal.
-    // Se han parametrizado aquí para facilitar futuros mantenimientos.
-    this.SELECTORS = {
-      SS: {
-        // Portal ARED (Seguridad Social)
-        enlaceAred: 'a[id="enlace_316077"]', // ID de sección ARED en portal SS
-        btnBuscarOAR: 'button[name="SPM.ACC.AC_BUSCAR_OAR"]',
-        radioCCC: 'input[title="Buscar por CCC o NAF"]',
-        campoCCC: 'input[name="criteriosBusquedaCccNaf"]',
-        btnBuscarCCC: 'button[name="SPM.ACC.AC_BUSCAR_OAR"]',
-        enlaceResultado: (ccc) => `a[id="enlace_${ccc}"]`, // Dinámico por CCC
-        btnContinuar: 'button[name="SPM.ACC.CONTINUAR"]',
-        btnImprimir: 'button[name="SPM.ACC.IMPRIMIR"]',
-        linkCertGenerico: 'a', // Buscado por texto "Certificado genérico"
-      },
-      AEAT: {
-        // Portal Agencia Tributaria
-        radioBuscadorTipo: 'input[id="fTipoRepresentacion0"]', // Tipo representación
-        radioCertificadoTipo: 'input[id="fTipoCertificado4"]', // Tipo certificado
-        btnValidarSolicitud: 'input[id="validarSolicitud"]',
-        btnFirmarEnviar: 'input[value="Firmar Enviar"]',
-        btnConforme: 'input[id="Conforme"]', // En popup de firma
-        btnFirmar: 'input[name="Firmar"]', // En popup de firma
-        btnDescarga: 'input[id="descarga"]',
-      },
-      ATC: {
-        // Sede de Canarias (Autoridad Tributaria Canaria)
-        imgCertDigital: 'img[alt="img_dig1"], img[src*="certificadoDigital"]',
-        btnValidar: 'input[id="btnValidar"]',
-        btnSolicitarInicial: 'input[id="btnSolicitar"]',
-        selectTipoCertificado: 'select[name="tiposCertificado"]',
-        radioTipoTerceros: 'input[id="id_tipo_terceros"]',
-        campNifTitular: 'input[id="idNifTitular"]',
-        campNombreTitular: 'input[id="idNombreTitular"]',
-        btnSolicitar: 'input[id="btnSolicitar"]',
-        btnDescargar: 'input[id="btnDescargar"]',
-      },
-      ITA: {
-        // SS Informe de Trabajadores Activos (SGIRED)
-        campRegimen: 'input[name="txt_SDFREG62_ayuda"]',
-        campTesoreria: 'input[name="txt_SDFTESO62"]',
-        campNumero: 'input[name="txt_SDFNUM62"]',
-        selectTipoImpresion: 'select[name="cbo_ListaTipoImpresion"]',
-        btnSubmit: 'input[name="btn_Sub2207601004"]',
-      },
-      ART42: {
-        // SS Autorización Certificado Art.42
-        campRegimen: '#SDFREGIMEN',
-        campProvincia: '#SDFPROVINCIA',
-        campNISS: '#SDFNISS',
-        selectOpcion: '#SDFOPCION',
-        btnContinuar1: '#Sub2207001004_35',
-        campRegKemsoCGK: '#SDFREGKCGK',
-        campTesoreriaCGK: '#SDFTESCCGK',
-        campCuentaCGK: '#SDFCCONCGK9',
-        btnContinuar2: '#Sub2207001004_75',
-        btnConfirmar: '#Sub2204701006_74',
-      },
-    };
-
-    // Nombre de la hoja de datos en Excel
-    this.NOMBRE_HOJA_DATOS = "BASE DE DATOS (NO TOCAR)";
   }
 
   async esperar(tiempo) {
     return new Promise((resolve) => {
       setTimeout(resolve, tiempo);
     });
-  }
-
-  _validarInputs(argumentos) {
-    if (!argumentos || !argumentos.formularioControl || !Array.isArray(argumentos.formularioControl)) {
-      throw new Error("Argumentos inválidos: esperado argumentos.formularioControl como array");
-    }
-
-    const fc = argumentos.formularioControl;
-
-    // Solo las 3 rutas son obligatorias y deben existir
-    if (!fc[0]) throw new Error("Ruta de Chromium no proporcionada (índice 0)");
-    if (!fc[1]) throw new Error("Ruta del archivo Excel no proporcionada (índice 1)");
-    if (!fc[2]) throw new Error("Carpeta base no proporcionada (índice 2)");
-
-    if (!fs.existsSync(fc[0])) {
-      throw new Error(`Ejecutable Chromium no encontrado: ${fc[0]}`);
-    }
-    if (!fs.existsSync(fc[1])) {
-      throw new Error(`Archivo Excel no encontrado: ${fc[1]}`);
-    }
-    if (!fs.existsSync(fc[2])) {
-      throw new Error(`Carpeta base no encontrada: ${fc[2]}`);
-    }
-
-    return {
-      chromiumExecutablePath: fc[0],
-      pathArchivoEtiquetas: fc[1],
-      pathBase: fc[2],
-      modoManual: !!fc[3],
-      codigosEmpresaInput: fc[4],
-      // Flags opcionales: solo los presentes en el array
-      runSS: !!fc[5],
-      runAEAT: !!fc[6],
-      runATC: !!fc[7],
-      runITA: !!fc[8],
-      runArt42: !!fc[9],
-      empresaAutRegimen: fc[10] ?? "",
-      empresaAutTesoreria: fc[11] ?? "",
-      empresaAutCuenta: fc[12] ?? "",
-    };
   }
 
   async _ejecutarConReintentos(fn, descripcion, page, maxReintentos = 2) {
@@ -158,67 +54,6 @@ class ProcesosCertificados {
       }
     }
     throw ultimoError;
-  }
-
-  async _navegarConReintentos(page, url, maxReintentos = 2) {
-    let ultimoError;
-    for (let intento = 1; intento <= maxReintentos; intento++) {
-      try {
-        await page.goto(url, { waitUntil: "networkidle0" });
-        return;
-      } catch (e) {
-        ultimoError = e;
-        if (intento < maxReintentos) {
-          await this.esperar(1500);
-        }
-      }
-    }
-    throw ultimoError;
-  }
-
-  async _descargaPDFConReintento(pdfOptions) {
-    let nuevaPagina = await this._descargarPDF(pdfOptions);
-    if (!nuevaPagina) {
-      console.log(`[${pdfOptions.etiqueta}] Reintentando descarga...`);
-      await this.esperar(3000);
-      nuevaPagina = await this._descargarPDF(pdfOptions);
-    }
-    return nuevaPagina;
-  }
-
-  async _procesarLoginATC(page) {
-    try {
-      await page.waitForSelector(
-        this.SELECTORS.ATC.imgCertDigital,
-        { timeout: 3000 },
-      );
-      await page.evaluate(() => {
-        const img =
-          document.querySelector('img[alt="img_dig1"]') ||
-          document.querySelector('img[src*="certificadoDigital"]');
-        if (img?.parentElement?.tagName === "A") img.parentElement.click();
-      });
-      await page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
-        .catch(() => {});
-      await this.esperar(1000);
-    } catch (_) {}
-
-    if (page.url().includes("/publico/validacion/")) {
-      try {
-        const botonEntrar = await page.waitForSelector(
-          this.SELECTORS.ATC.btnValidar,
-          { timeout: 5000 },
-        );
-        if (botonEntrar) await botonEntrar.click();
-      } catch (_) {}
-
-      await page.waitForFunction(
-        () => !window.location.href.includes("/publico/validacion/"),
-        { timeout: 0 },
-      );
-      await this.esperar(2000);
-    }
   }
 
   _obtenerCNcertificado(nif) {
@@ -328,29 +163,25 @@ if ($cert) {
       const nombreProceso = config.nombreProceso;
       let registrosProcesados = 0;
 
-      let validacion;
-      try {
-        validacion = this._validarInputs(argumentos);
-      } catch (e) {
-        console.error(`[CERT] Error en validación de entrada: ${e.message}`);
-        return resolve(false);
-      }
+      const chromiumExecutablePath = path.normalize(
+        argumentos.formularioControl[0],
+      );
+      const pathArchivoEtiquetas = argumentos.formularioControl[1];
+      const pathBase = argumentos.formularioControl[2];
+      const modoManual = !!argumentos.formularioControl[3];
+      const codigosEmpresaInput = argumentos.formularioControl[4];
 
-      const chromiumExecutablePath = path.normalize(validacion.chromiumExecutablePath);
-      const pathArchivoEtiquetas = validacion.pathArchivoEtiquetas;
-      const pathBase = validacion.pathBase;
-      const modoManual = validacion.modoManual;
-      const codigosEmpresaInput = validacion.codigosEmpresaInput;
+      let runSS = config.habilitarSS && !!argumentos.formularioControl[5];
+      let runTrib = config.habilitarAEAT && !!argumentos.formularioControl[6];
+      let runATC = config.habilitarATC && !!argumentos.formularioControl[7];
+      let runITA = config.habilitarITA && !!argumentos.formularioControl[8];
+      let runArt42 = config.habilitarArt42 && !!argumentos.formularioControl[9];
 
-      let runSS = config.habilitarSS && validacion.runSS;
-      let runTrib = config.habilitarAEAT && validacion.runAEAT;
-      let runATC = config.habilitarATC && validacion.runATC;
-      let runITA = config.habilitarITA && validacion.runITA;
-      let runArt42 = config.habilitarArt42 && validacion.runArt42;
-
-      const empresaAutRegimen = String(validacion.empresaAutRegimen || "");
-      const empresaAutTesoreria = String(validacion.empresaAutTesoreria || "");
-      const empresaAutCuenta = String(validacion.empresaAutCuenta || "");
+      const empresaAutRegimen = String(argumentos.formularioControl[10] || "");
+      const empresaAutTesoreria = String(
+        argumentos.formularioControl[11] || "",
+      );
+      const empresaAutCuenta = String(argumentos.formularioControl[12] || "");
 
       console.log(
         `[MODO] ${modoManual ? "Manual (form-driven)" : "Automático (Excel-driven)"}`,
@@ -390,10 +221,10 @@ if ($cert) {
           .then(async (workbook) => {
             console.log("Excel cargado (certificados unificados)");
             const archivo = workbook;
-            const hoja = archivo.sheet(this.NOMBRE_HOJA_DATOS);
+            const hoja = archivo.sheet("BASE DE DATOS (NO TOCAR)");
             if (!hoja) {
               console.warn(
-                `[CERT] Hoja '${this.NOMBRE_HOJA_DATOS}' no encontrada en el Excel.`,
+                "[CERT] Hoja 'BASE DE DATOS (NO TOCAR)' no encontrada en el Excel.",
               );
               return resolve(false);
             }
@@ -409,19 +240,17 @@ if ($cert) {
 
             // Mapa dinámico: nombre de cabecera → índice de columna (1-based)
             const colIdx = {};
-            let nextColIdx = 1;
             cabeceras.forEach((h, i) => {
               if (h !== undefined && h !== null) {
                 colIdx[String(h).trim()] = i + 1;
-                nextColIdx = Math.max(nextColIdx, i + 2);
               }
             });
 
             // Añadir columnas LOG al final, de forma dinámica
             const addLogCol = (nombre) => {
-              hoja.cell(1, nextColIdx).value(nombre);
-              colIdx[nombre] = nextColIdx;
-              nextColIdx++;
+              const nextCol = Object.keys(colIdx).length + 1;
+              hoja.cell(1, nextCol).value(nombre);
+              colIdx[nombre] = nextCol;
             };
             addLogCol("LOG SS");
             addLogCol("LOG ATC");
@@ -656,6 +485,36 @@ if ($cert) {
               const clientRunITA = modoManual ? runITA : (config.habilitarITA && clientes[i].flagITA);
               const clientRunArt42 = modoManual && runArt42;
 
+              if (
+                clientes[i].ccc === "" ||
+                clientes[i].ccc === null ||
+                clientes[i].ccc === undefined
+              ) {
+                clientes[i].errores = ["Campo CCC no definidos."];
+
+                if (clientRunSS)
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG SS"])
+                    .value("ERROR: Campo CCC no definido.");
+                if (clientRunTrib)
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG AEAT"])
+                    .value("ERROR: Campo CCC no definido.");
+                if (clientRunATC)
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ATC"])
+                    .value("ERROR: Campo CCC no definido.");
+                if (clientRunITA)
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ITA"])
+                    .value("ERROR: Campo CCC no definido.");
+                if (clientRunArt42)
+                  hoja
+                    .cell(clientes[i].filaExcel, colIdx["LOG ART42"])
+                    .value("ERROR: Campo CCC no definido.");
+                continue;
+              }
+
               if (clientRunSS) {
                 if (clientes[i].flagDupeNIF) {
                   hoja
@@ -854,7 +713,18 @@ if ($cert) {
 
     if (runSS) {
       console.log("[CERT INIT] SS — navegando para seleccionar certificado...");
-      await this._navegarConReintentos(page, "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
       console.log("[CERT INIT] SS listo.");
     }
 
@@ -868,10 +738,58 @@ if ($cert) {
       console.log(
         "[CERT INIT] ATC — navegando para seleccionar certificado...",
       );
-      await this._navegarConReintentos(page, "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto(
+            "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
       await this.esperar(1000);
 
-      await this._procesarLoginATC(page);
+      try {
+        await page.waitForSelector(
+          'img[alt="img_dig1"], img[src*="certificadoDigital"]',
+          { timeout: 3000 },
+        );
+        await page.evaluate(() => {
+          const img =
+            document.querySelector('img[alt="img_dig1"]') ||
+            document.querySelector('img[src*="certificadoDigital"]');
+          if (img?.parentElement?.tagName === "A") img.parentElement.click();
+        });
+        await page
+          .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
+          .catch(() => {});
+        await this.esperar(1000);
+      } catch (_) {}
+
+      if (page.url().includes("/publico/validacion/")) {
+        try {
+          const botonEntrar = await page.waitForSelector(
+            'input[id="btnValidar"]',
+            { timeout: 5000 },
+          );
+          if (botonEntrar) await botonEntrar.click();
+        } catch (_) {}
+
+        try {
+          await page.waitForFunction(
+            () => !window.location.href.includes("/publico/validacion/"),
+            { timeout: 120000 },
+          );
+        } catch (_) {
+          throw new Error(
+            "Tiempo de autenticación ATC agotado en la fase de inicialización.",
+          );
+        }
+        await this.esperar(2000);
+      }
       console.log("[CERT INIT] ATC listo.");
     }
 
@@ -879,7 +797,17 @@ if ($cert) {
       console.log(
         "[CERT INIT] ART42 — navegando para seleccionar certificado digital...",
       );
-      await this._navegarConReintentos(page, "https://w2.seg-social.es/fs/indexframes.html");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await page.goto("https://w2.seg-social.es/fs/indexframes.html", {
+            waitUntil: "networkidle0",
+          });
+          break;
+        } catch (e) {
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
       console.log("[CERT INIT] ART42 listo.");
     }
 
@@ -894,20 +822,9 @@ if ($cert) {
     rutaArchivo,
     etiqueta,
     timeoutMs = 15000,
-    isPDFResponse = null,
   }) {
     let resuelto = false;
     let timeoutId = null;
-
-    if (!isPDFResponse) {
-      isPDFResponse = (response) => {
-        const contentType = response.headers()["content-type"] || "";
-        return (
-          response.url().startsWith("chrome-extension://") &&
-          contentType.includes("application/pdf")
-        );
-      };
-    }
 
     const resultado = await new Promise((resolve) => {
       const finalizar = (valor) => {
@@ -925,7 +842,11 @@ if ($cert) {
           if (!newPage) return;
           newPage.on("response", async (response) => {
             if (resuelto) return;
-            if (isPDFResponse(response)) {
+            const contentType = response.headers()["content-type"] || "";
+            if (
+              response.url().startsWith("chrome-extension://") &&
+              contentType.includes("application/pdf")
+            ) {
               console.log(`PDF detectado (${etiqueta}):`, response.url());
               const pdfBuffer = await response.buffer();
               fs.writeFileSync(rutaArchivo, pdfBuffer);
@@ -951,39 +872,82 @@ if ($cert) {
     );
     const filePath = path.join(paths.resultados, cliente.nombreArchivoITA);
 
-    await this._navegarConReintentos(page, "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR");
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://w2.seg-social.es/Xhtml?JacadaApplicationName=SGIRED&TRANSACCION=ATR64&E=I&AP=AFIR",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(
+          `[ITA] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
     await this.esperar(1000);
 
-    await page.locator(this.SELECTORS.ITA.campRegimen).wait();
-    await page.type(this.SELECTORS.ITA.campRegimen, String(cliente.ccc1));
-    await page.locator(this.SELECTORS.ITA.campTesoreria).wait();
-    await page.type(this.SELECTORS.ITA.campTesoreria, String(cliente.ccc2));
-    await page.locator(this.SELECTORS.ITA.campNumero).wait();
-    await page.type(this.SELECTORS.ITA.campNumero, String(cliente.ccc3));
+    await page.locator('input[name="txt_SDFREG62_ayuda"]').wait();
+    await page.type('input[name="txt_SDFREG62_ayuda"]', String(cliente.ccc1));
+    await page.locator('input[name="txt_SDFTESO62"]').wait();
+    await page.type('input[name="txt_SDFTESO62"]', String(cliente.ccc2));
+    await page.locator('input[name="txt_SDFNUM62"]').wait();
+    await page.type('input[name="txt_SDFNUM62"]', String(cliente.ccc3));
 
     await this.esperar(1000);
-    await page.select(this.SELECTORS.ITA.selectTipoImpresion, "OnLine");
+    await page.select('select[name="cbo_ListaTipoImpresion"]', "OnLine");
     await this.esperar(1000);
 
-    const itaPDFFilter = (response) => {
-      return (
-        !response.url().endsWith(".js") &&
-        !response.url().endsWith(".css") &&
-        response.url().startsWith("chrome-extension://")
-      );
-    };
+    let tabITA;
+    try {
+      tabITA = await new Promise(async (resolvePromise) => {
+        let resuelto = false;
+        let timeoutId = null;
 
-    const tabITA = await this._descargarPDF({
-      browser,
-      botonClick: async () => {
-        await page.locator(this.SELECTORS.ITA.btnSubmit).wait();
-        await page.locator(this.SELECTORS.ITA.btnSubmit).click();
-      },
-      rutaArchivo: filePath,
-      etiqueta: "ITA",
-      timeoutMs: 15000,
-      isPDFResponse: itaPDFFilter,
-    });
+        const finalizar = (resultado) => {
+          if (resuelto) return;
+          resuelto = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          browser.off("targetcreated", onTargetCreated);
+          resolvePromise(resultado);
+        };
+
+        const onTargetCreated = async (target) => {
+          if (resuelto) return;
+          try {
+            const newPage = await target.page();
+            if (!newPage) return;
+            newPage.on("response", async (response) => {
+              if (resuelto) return;
+              if (
+                !response.url().endsWith(".js") &&
+                !response.url().endsWith(".css") &&
+                response.url().startsWith("chrome-extension://")
+              ) {
+                console.log("[ITA] PDF detectado:", response.url());
+                const pdfBuffer = await response.buffer();
+                fs.writeFileSync(filePath, pdfBuffer);
+                console.log("[ITA] PDF descargado en:", filePath);
+                finalizar(newPage);
+              }
+            });
+          } catch (_) {}
+        };
+
+        browser.on("targetcreated", onTargetCreated);
+        timeoutId = setTimeout(() => finalizar(false), 15000);
+
+        await page.locator('input[name="btn_Sub2207601004"]').wait();
+        await page.locator('input[name="btn_Sub2207601004"]').click();
+      });
+    } catch (e) {
+      console.log("[ITA] Error en descarga de PDF:", e);
+    }
+
+    if (!tabITA && fs.existsSync(filePath)) tabITA = true;
 
     let descargaOk = !!tabITA || fs.existsSync(filePath);
 
@@ -1006,7 +970,7 @@ if ($cert) {
       console.warn("[ITA] Error en descarga:", mensajeError);
     } else {
       hoja.cell(cliente.filaExcel, colIdx["LOG ITA"]).value("OK");
-      if (tabITA) {
+      if (tabITA && typeof tabITA.close === "function") {
         try {
           await tabITA.close();
         } catch (_) {}
@@ -1021,7 +985,22 @@ if ($cert) {
     );
     const ccc = String(cliente.ccc);
 
-    await this._navegarConReintentos(page, "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001");
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://w2.seg-social.es/ProsaInternet/OnlineAccess?ARQ.SPM.ACTION=LOGIN&ARQ.SPM.APPTYPE=SERVICE&ARQ.IDAPP=XV21F001",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(
+          `[CERT SS] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
 
     await this.esperar(2000);
 
@@ -1034,41 +1013,41 @@ if ($cert) {
     } catch (_) {}
 
     try {
-      await page.locator(this.SELECTORS.SS.enlaceAred).click();
+      await page.locator('a[id="enlace_316077"]').click();
     } catch (e) {
       throw new Error(`[SS-Paso enlace ARED] ${e.message}`);
     }
     try {
-      await page.locator(this.SELECTORS.SS.btnBuscarOAR).click();
+      await page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click();
     } catch (e) {
       throw new Error(`[SS-Paso botón buscar inicial] ${e.message}`);
     }
 
     try {
-      await this._esperarSelector(page, this.SELECTORS.SS.radioCCC, 60000, 3);
+      await this._esperarSelector(page, `input[title="Buscar por CCC o NAF"]`, 60000, 3);
     } catch (e) {
       throw new Error(`[SS-Paso radio CCC/NAF] ${e.message}`);
     }
-    const radio = await page.$(this.SELECTORS.SS.radioCCC);
+    const radio = await page.$(`input[title="Buscar por CCC o NAF"]`);
     if (radio) await radio.click();
 
     try {
-      await this._esperarSelector(page, this.SELECTORS.SS.campoCCC, 60000, 3);
+      await this._esperarSelector(page, 'input[name="criteriosBusquedaCccNaf"]', 60000, 3);
     } catch (e) {
       throw new Error(`[SS-Paso campo CCC] ${e.message}`);
     }
-    await page.type(this.SELECTORS.SS.campoCCC, ccc);
+    await page.type('input[name="criteriosBusquedaCccNaf"]', ccc);
     await this.esperar(1000);
     try {
       await Promise.all([
         page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }).catch(() => {}),
-        page.locator(this.SELECTORS.SS.btnBuscarCCC).click(),
+        page.locator('button[name="SPM.ACC.AC_BUSCAR_OAR"]').click(),
       ]);
     } catch (e) {
       throw new Error(`[SS-Paso botón buscar CCC] ${e.message}`);
     }
 
-    const selectorResultado = this.SELECTORS.SS.enlaceResultado(ccc);
+    const selectorResultado = 'a[id="enlace_' + String(Number(ccc)) + '"]';
     const enlaceResultado = await page
       .waitForSelector(selectorResultado, { timeout: 30000 })
       .catch(() => null);
@@ -1085,12 +1064,12 @@ if ($cert) {
       enlaceResultado.click(),
     ]);
 
-    await page.locator(this.SELECTORS.SS.btnContinuar).wait();
-    await page.locator(this.SELECTORS.SS.btnContinuar).click();
-    await page.locator(this.SELECTORS.SS.btnImprimir).wait();
+    await page.locator('button[name="SPM.ACC.CONTINUAR"]').wait();
+    await page.locator('button[name="SPM.ACC.CONTINUAR"]').click();
+    await page.locator('button[name="SPM.ACC.IMPRIMIR"]').wait();
     await Promise.all([
       page.waitForNavigation({ waitUntil: "load" }),
-      page.locator(this.SELECTORS.SS.btnImprimir).click(),
+      page.locator('button[name="SPM.ACC.IMPRIMIR"]').click(),
     ]);
 
     const enlaces = await page.$$("a");
@@ -1107,13 +1086,25 @@ if ($cert) {
     }
 
     const rutaSS = path.join(paths.resultados, cliente.nombreArchivoSS);
-    const nuevaPagina = await this._descargaPDFConReintento({
+    let nuevaPagina = await this._descargarPDF({
       browser,
       botonClick: () => enlaceEncontrado.click(),
       rutaArchivo: rutaSS,
       etiqueta: "SS",
       timeoutMs: 15000,
     });
+
+    if (!nuevaPagina) {
+      console.log("[CERT SS] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => enlaceEncontrado.click(),
+        rutaArchivo: rutaSS,
+        etiqueta: "SS",
+        timeoutMs: 15000,
+      });
+    }
 
     await this.esperar(1000);
 
@@ -1139,6 +1130,13 @@ if ($cert) {
     colIdx,
     executablePath = null,
   }) {
+    if (cliente.flagDupeNIF) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
+        .value("WARNING: Solicitud evitada por duplicidad en NIF.");
+      return;
+    }
+
     console.log(
       `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
@@ -1166,7 +1164,22 @@ if ($cert) {
     const activeBrowser = certBrowser;
 
     try {
-      await this._navegarConReintentos(aeatPage, "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet");
+      for (let intento = 1; intento <= 2; intento++) {
+        try {
+          await aeatPage.goto(
+            "https://www1.agenciatributaria.gob.es/wlpl/EMCE-JDIT/ECOTInternetCiudadanosServlet",
+            { waitUntil: "networkidle0" },
+          );
+          break;
+        } catch (e) {
+          console.warn(
+            `[CERT TRIB] Fallo navegación (intento ${intento}):`,
+            e?.message || e,
+          );
+          if (intento === 2) throw e;
+          await this.esperar(1500);
+        }
+      }
 
       try {
         const botonModal = await aeatPage.waitForSelector(
@@ -1178,19 +1191,19 @@ if ($cert) {
         }
       } catch (_) {}
 
-      await aeatPage.locator(this.SELECTORS.AEAT.radioBuscadorTipo).wait();
-      const radio1 = await aeatPage.$(this.SELECTORS.AEAT.radioBuscadorTipo);
+      await aeatPage.locator(`input[id="fTipoRepresentacion0"]`).wait();
+      const radio1 = await aeatPage.$(`input[id="fTipoRepresentacion0"]`);
       if (radio1) await radio1.click();
       await this.esperar(500);
 
-      await aeatPage.locator(this.SELECTORS.AEAT.radioCertificadoTipo).wait();
-      const radio2 = await aeatPage.$(this.SELECTORS.AEAT.radioCertificadoTipo);
+      await aeatPage.locator(`input[id="fTipoCertificado4"]`).wait();
+      const radio2 = await aeatPage.$(`input[id="fTipoCertificado4"]`);
       if (radio2) await radio2.click();
 
-      await aeatPage.locator(this.SELECTORS.AEAT.btnValidarSolicitud).click();
+      await aeatPage.locator('input[id="validarSolicitud"]').click();
       await aeatPage.waitForNavigation({ waitUntil: "load" });
 
-      await aeatPage.locator(this.SELECTORS.AEAT.btnFirmarEnviar).wait();
+      await aeatPage.locator('input[value="Firmar Enviar"]').wait();
 
       let firmaOk;
       try {
@@ -1199,11 +1212,11 @@ if ($cert) {
             const onTargetCreated = async (target) => {
               const newPage = await target.page();
               await this.esperar(1000);
-              await newPage.locator(this.SELECTORS.AEAT.btnConforme).wait();
-              await newPage.locator(this.SELECTORS.AEAT.btnConforme).click();
+              await newPage.locator('input[id="Conforme"]').wait();
+              await newPage.locator('input[id="Conforme"]').click();
               await this.esperar(500);
-              await newPage.locator(this.SELECTORS.AEAT.btnFirmar).wait();
-              await newPage.locator(this.SELECTORS.AEAT.btnFirmar).click();
+              await newPage.locator('input[name="Firmar"]').wait();
+              await newPage.locator('input[name="Firmar"]').click();
               try {
                 await newPage.close();
               } catch (_) {}
@@ -1224,16 +1237,28 @@ if ($cert) {
       await this.esperar(1000);
       console.log("[CERT TRIB] Descargando...");
 
-      await aeatPage.locator(this.SELECTORS.AEAT.btnDescarga).wait();
+      await aeatPage.locator('input[id="descarga"]').wait();
 
       const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
-      const nuevaPagina = await this._descargaPDFConReintento({
+      let nuevaPagina = await this._descargarPDF({
         browser: activeBrowser,
-        botonClick: () => aeatPage.locator(this.SELECTORS.AEAT.btnDescarga).click(),
+        botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
         rutaArchivo: rutaTrib,
         etiqueta: "TRIB",
         timeoutMs: 15000,
       });
+
+      if (!nuevaPagina) {
+        console.log("[CERT TRIB] Reintentando descarga...");
+        await this.esperar(3000);
+        nuevaPagina = await this._descargarPDF({
+          browser: activeBrowser,
+          botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+          rutaArchivo: rutaTrib,
+          etiqueta: "TRIB",
+          timeoutMs: 15000,
+        });
+      }
 
       if (!nuevaPagina) {
         console.log("[CERT TRIB] ERROR EN DESCARGA");
@@ -1254,16 +1279,82 @@ if ($cert) {
   }
 
   async _procesarCertificadoATC({ browser, page, cliente, paths, hoja, colIdx }) {
+    if (cliente.flagDupeNIF) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG ATC"])
+        .value("WARNING: Solicitud evitada por duplicidad en NIF.");
+      return;
+    }
+
     console.log(
       `[CERT ATC] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
-    await this._navegarConReintentos(page, "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp");
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto(
+          "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp",
+          { waitUntil: "networkidle0" },
+        );
+        break;
+      } catch (e) {
+        console.warn(
+          `[CERT ATC] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
     await this.esperar(1000);
+
+    // PASO 1: Página selectora de login (cert vs clave)
+    // Detecta por la imagen del certificado digital, no por URL
+    try {
+      await page.waitForSelector(
+        'img[alt="img_dig1"], img[src*="certificadoDigital"]',
+        { timeout: 3000 },
+      );
+      await page.evaluate(() => {
+        const img =
+          document.querySelector('img[alt="img_dig1"]') ||
+          document.querySelector('img[src*="certificadoDigital"]');
+        if (img?.parentElement?.tagName === "A") img.parentElement.click();
+      });
+      await page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 10000 })
+        .catch(() => {});
+      await this.esperar(1000);
+    } catch (_) {
+      // Ya autenticado o página no encontrada, se continúa
+    }
+
+    // PASO 2: valida.jsp — clicar "Entrar" y esperar selección de certificado
+    if (page.url().includes("/publico/validacion/")) {
+      try {
+        const botonEntrar = await page.waitForSelector(
+          'input[id="btnValidar"]',
+          { timeout: 5000 },
+        );
+        if (botonEntrar) await botonEntrar.click();
+      } catch (_) {}
+
+      try {
+        await page.waitForFunction(
+          () => !window.location.href.includes("/publico/validacion/"),
+          { timeout: 120000 },
+        );
+      } catch (_) {
+        throw new Error(
+          "Tiempo de autenticación ATC agotado. Seleccione el certificado cuando se le pida.",
+        );
+      }
+      await this.esperar(2000);
+    }
 
     try {
       const botonSolicitar = await page.waitForSelector(
-        this.SELECTORS.ATC.btnSolicitarInicial,
+        'input[id="btnSolicitar"]',
         { timeout: 60000 },
       );
       if (botonSolicitar) {
@@ -1273,35 +1364,40 @@ if ($cert) {
       throw new Error("No se localizó el botón Solicitar inicial (ATC).");
     }
 
-    await page.locator(this.SELECTORS.ATC.selectTipoCertificado).wait();
+    await page.locator(`select[name="tiposCertificado"]`).wait();
     await this.esperar(500);
-    await page.select(this.SELECTORS.ATC.selectTipoCertificado, "AS");
+    await page.select('select[name="tiposCertificado"]', "AS");
 
-    await page.locator(this.SELECTORS.ATC.radioTipoTerceros).wait();
-    const radio = await page.$(this.SELECTORS.ATC.radioTipoTerceros);
+    await page.locator(`input[id="id_tipo_terceros"]`).wait();
+    const radio = await page.$(`input[id="id_tipo_terceros"]`);
     if (radio) await radio.click();
 
     await this.esperar(1000);
 
-    await page.locator(this.SELECTORS.ATC.campNifTitular).wait();
-    await page.type(this.SELECTORS.ATC.campNifTitular, String(cliente.nif));
+    await page.locator('input[id="idNifTitular"]').wait();
+    await page.type('input[id="idNifTitular"]', String(cliente.nif));
     await this.esperar(500);
 
-    await page.locator(this.SELECTORS.ATC.campNombreTitular).wait();
-    await page.type(this.SELECTORS.ATC.campNombreTitular, String(cliente.empresa));
+    await page.locator('input[id="idNombreTitular"]').wait();
+    await page.type('input[id="idNombreTitular"]', String(cliente.empresa));
     await this.esperar(500);
 
-    await page.locator(this.SELECTORS.ATC.btnSolicitar).wait();
-    await page.locator(this.SELECTORS.ATC.btnSolicitar).click();
+    await page.locator('input[id="btnSolicitar"]').wait();
+    await page.locator('input[id="btnSolicitar"]').click();
 
     if ((await page.evaluate(() => document.readyState)) !== "complete") {
       await page.waitForNavigation({ waitUntil: "load" });
     }
 
-    console.log("[CERT ATC] Solicitud realizada y cargado");
+    console.log("[CERT ATC] Solicitud realizada");
+
+    if ((await page.evaluate(() => document.readyState)) !== "complete") {
+      await page.waitForNavigation({ waitUntil: "load" });
+    }
+
     console.log("[CERT ATC] Descargando...");
     try {
-      await page.waitForSelector(this.SELECTORS.ATC.btnDescargar, {
+      await page.waitForSelector('input[id="btnDescargar"]', {
         timeout: 40000,
       });
     } catch (_) {
@@ -1314,13 +1410,25 @@ if ($cert) {
     await this.esperar(1000);
 
     const rutaATC = path.join(paths.resultados, cliente.nombreArchivoATC);
-    const nuevaPagina = await this._descargaPDFConReintento({
+    let nuevaPagina = await this._descargarPDF({
       browser,
-      botonClick: () => page.locator(this.SELECTORS.ATC.btnDescargar).click(),
+      botonClick: () => page.locator('input[id="btnDescargar"]').click(),
       rutaArchivo: rutaATC,
       etiqueta: "ATC",
       timeoutMs: 20000,
     });
+
+    if (!nuevaPagina) {
+      console.log("[CERT ATC] Reintentando descarga...");
+      await this.esperar(3000);
+      nuevaPagina = await this._descargarPDF({
+        browser,
+        botonClick: () => page.locator('input[id="btnDescargar"]').click(),
+        rutaArchivo: rutaATC,
+        etiqueta: "ATC",
+        timeoutMs: 20000,
+      });
+    }
 
     if (!nuevaPagina) {
       console.log("[CERT ATC] ERROR ABRIENDO DESCARGA");
@@ -1352,7 +1460,21 @@ if ($cert) {
       `[ART42] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
-    await this._navegarConReintentos(page, "https://w2.seg-social.es/fs/indexframes.html");
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        await page.goto("https://w2.seg-social.es/fs/indexframes.html", {
+          waitUntil: "networkidle0",
+        });
+        break;
+      } catch (e) {
+        console.warn(
+          `[ART42] Fallo navegación (intento ${intento}):`,
+          e?.message || e,
+        );
+        if (intento === 2) throw e;
+        await this.esperar(1500);
+      }
+    }
     await this.esperar(200);
 
     const getFrame = () => page.mainFrame().childFrames()[0];
@@ -1412,15 +1534,15 @@ if ($cert) {
       throw new Error(`[ART42] #SDFREGIMEN no apareció: ${e.message}`);
     }
 
-    await frame.type(this.SELECTORS.ART42.campRegimen, String(cliente.ccc1));
-    await frame.type(this.SELECTORS.ART42.campProvincia, String(cliente.ccc2));
-    await frame.type(this.SELECTORS.ART42.campNISS, String(cliente.ccc3));
+    await frame.type("#SDFREGIMEN", String(cliente.ccc1));
+    await frame.type("#SDFPROVINCIA", String(cliente.ccc2));
+    await frame.type("#SDFNISS", String(cliente.ccc3));
 
     try {
-      await frame.select(this.SELECTORS.ART42.selectOpcion, "Alta");
+      await frame.select("#SDFOPCION", "Alta");
     } catch (e) {
       throw new Error(
-        `[ART42] Error seleccionando Alta en ${this.SELECTORS.ART42.selectOpcion}: ${e.message}`,
+        `[ART42] Error seleccionando Alta en #SDFOPCION: ${e.message}`,
       );
     }
 
@@ -1428,7 +1550,7 @@ if ($cert) {
       page
         .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
         .catch(() => {}),
-      frame.click(this.SELECTORS.ART42.btnContinuar1),
+      frame.click("#Sub2207001004_35"),
     ]);
 
     frame = getFrame();
@@ -1436,14 +1558,14 @@ if ($cert) {
       throw new Error("[ART42] No se encontró el frame tras Continuar 1.");
 
     try {
-      await frame.waitForSelector(this.SELECTORS.ART42.campRegKemsoCGK, { timeout: 15000 });
+      await frame.waitForSelector("#SDFREGKCGK", { timeout: 15000 });
     } catch (e) {
-      throw new Error(`[ART42] ${this.SELECTORS.ART42.campRegKemsoCGK} no apareció: ${e.message}`);
+      throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
-    await frame.type(this.SELECTORS.ART42.campRegKemsoCGK, empresaAutRegimen);
-    await frame.type(this.SELECTORS.ART42.campTesoreriaCGK, empresaAutTesoreria);
-    await frame.type(this.SELECTORS.ART42.campCuentaCGK, empresaAutCuenta);
+    await frame.type("#SDFREGKCGK", empresaAutRegimen);
+    await frame.type("#SDFTESCCGK", empresaAutTesoreria);
+    await frame.type("#SDFCCONCGK9", empresaAutCuenta);
 
     const ahora = DateTime.now().setZone("Europe/Madrid");
     const hasta = ahora.plus({ years: 1 });
@@ -1459,7 +1581,7 @@ if ($cert) {
       page
         .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
         .catch(() => {}),
-      frame.click(this.SELECTORS.ART42.btnContinuar2),
+      frame.click("#Sub2207001004_75"),
     ]);
 
     frame = getFrame();
@@ -1467,7 +1589,7 @@ if ($cert) {
       throw new Error("[ART42] No se encontró el frame tras Continuar 2.");
 
     try {
-      await frame.waitForSelector(this.SELECTORS.ART42.btnConfirmar, { timeout: 15000 });
+      await frame.waitForSelector("#Sub2204701006_74", { timeout: 15000 });
     } catch (e) {
       throw new Error(`[ART42] Botón Confirmar no apareció: ${e.message}`);
     }
@@ -1487,7 +1609,7 @@ if ($cert) {
       page
         .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
         .catch(() => {}),
-      frame.click(this.SELECTORS.ART42.btnConfirmar),
+      frame.click("#Sub2204701006_74"),
     ]);
 
     hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización generada.");
