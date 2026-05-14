@@ -1125,14 +1125,6 @@ if ($cert) {
 
     console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
 
-    // Los certificados de representación llevan "(R:<NIF_REPRESENTADO>)" en el CN (norma FNMT)
-    if (!certInfo.subjectCN.includes('(R:')) {
-      hoja
-        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
-        .value(`ERROR: Certificado personal (no de representación) para NIF ${cliente.nif}. Solicitar manualmente "en nombre propio".`);
-      return;
-    }
-
     // Configurar auto-selección Chrome por CN real del cert
     this._setAutoSelectPolicy(certInfo);
     const certBrowser = await puppeteer.launch({ executablePath, headless: false });
