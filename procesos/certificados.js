@@ -213,14 +213,10 @@ class ProcesosCertificados {
         if (botonEntrar) await botonEntrar.click();
       } catch (_) {}
 
-      try {
-        await page.waitForFunction(
-          () => !window.location.href.includes("/publico/validacion/"),
-          { timeout: 120000 },
-        );
-      } catch (_) {
-        throw new Error("Timeout esperando autenticación ATC (seleccionar certificado cuando se pida)");
-      }
+      await page.waitForFunction(
+        () => !window.location.href.includes("/publico/validacion/"),
+        { timeout: 0 },
+      );
       await this.esperar(2000);
     }
   }
@@ -586,7 +582,7 @@ if ($cert) {
 
             const downloadPathInicial = carpetaRaiz;
 
-            if (runTrib || runATC) {
+            if (runSS || runTrib || runATC || runArt42) {
               const vistos = new Set();
               clientes = clientes.map((obj) => {
                 const nifKey = String(obj.nif || "").trim();
@@ -674,61 +670,79 @@ if ($cert) {
               const clientRunArt42 = modoManual && runArt42;
 
               if (clientRunSS) {
-                await this._ejecutarConReintentos(
-                  () => this._procesarCertificadoSS({
-                    browser,
-                    page,
-                    cliente: clientes[i],
-                    paths: paths.ss,
-                    hoja,
-                    colIdx,
-                  }),
-                  "CERT SS",
-                  page
-                ).catch((e) => {
+                if (clientes[i].flagDupeNIF) {
                   hoja
                     .cell(clientes[i].filaExcel, colIdx["LOG SS"])
-                    .value("ERROR: " + (e?.message || e));
-                });
+                    .value(`SKIP: ya procesado para esta empresa (NIF: ${clientes[i].nif}).`);
+                } else {
+                  await this._ejecutarConReintentos(
+                    () => this._procesarCertificadoSS({
+                      browser,
+                      page,
+                      cliente: clientes[i],
+                      paths: paths.ss,
+                      hoja,
+                      colIdx,
+                    }),
+                    "CERT SS",
+                    page
+                  ).catch((e) => {
+                    hoja
+                      .cell(clientes[i].filaExcel, colIdx["LOG SS"])
+                      .value("ERROR: " + (e?.message || e));
+                  });
+                }
               }
 
               if (clientRunTrib) {
-                await this._ejecutarConReintentos(
-                  () => this._procesarCertificadoAEAT({
-                    browser,
-                    page,
-                    cliente: clientes[i],
-                    paths: paths.trib,
-                    hoja,
-                    colIdx,
-                    executablePath: chromiumExecutablePath,
-                  }),
-                  "CERT TRIB",
-                  page
-                ).catch((e) => {
+                if (clientes[i].flagDupeNIF) {
                   hoja
                     .cell(clientes[i].filaExcel, colIdx["LOG AEAT"])
-                    .value("ERROR: " + (e?.message || e));
-                });
+                    .value(`SKIP: ya procesado para esta empresa (NIF: ${clientes[i].nif}).`);
+                } else {
+                  await this._ejecutarConReintentos(
+                    () => this._procesarCertificadoAEAT({
+                      browser,
+                      page,
+                      cliente: clientes[i],
+                      paths: paths.trib,
+                      hoja,
+                      colIdx,
+                      executablePath: chromiumExecutablePath,
+                    }),
+                    "CERT TRIB",
+                    page
+                  ).catch((e) => {
+                    hoja
+                      .cell(clientes[i].filaExcel, colIdx["LOG AEAT"])
+                      .value("ERROR: " + (e?.message || e));
+                  });
+                }
               }
 
               if (clientRunATC) {
-                await this._ejecutarConReintentos(
-                  () => this._procesarCertificadoATC({
-                    browser,
-                    page,
-                    cliente: clientes[i],
-                    paths: paths.atc,
-                    hoja,
-                    colIdx,
-                  }),
-                  "CERT ATC",
-                  page
-                ).catch((e) => {
+                if (clientes[i].flagDupeNIF) {
                   hoja
                     .cell(clientes[i].filaExcel, colIdx["LOG ATC"])
-                    .value("ERROR: " + (e?.message || e));
-                });
+                    .value(`SKIP: ya procesado para esta empresa (NIF: ${clientes[i].nif}).`);
+                } else {
+                  await this._ejecutarConReintentos(
+                    () => this._procesarCertificadoATC({
+                      browser,
+                      page,
+                      cliente: clientes[i],
+                      paths: paths.atc,
+                      hoja,
+                      colIdx,
+                    }),
+                    "CERT ATC",
+                    page
+                  ).catch((e) => {
+                    hoja
+                      .cell(clientes[i].filaExcel, colIdx["LOG ATC"])
+                      .value("ERROR: " + (e?.message || e));
+                  });
+                }
               }
 
               if (clientRunITA) {
@@ -751,25 +765,31 @@ if ($cert) {
               }
 
               if (clientRunArt42) {
-                await this._ejecutarConReintentos(
-                  () => this._procesarCertificadoArt42({
-                    browser,
-                    page,
-                    cliente: clientes[i],
-                    paths: paths.art42,
-                    hoja,
-                    colIdx,
-                    empresaAutRegimen,
-                    empresaAutTesoreria,
-                    empresaAutCuenta,
-                  }),
-                  "[ART42]",
-                  page
-                ).catch((e) => {
+                if (clientes[i].flagDupeNIF) {
                   hoja
                     .cell(clientes[i].filaExcel, colIdx["LOG ART42"])
-                    .value("ERROR: " + (e?.message || e));
-                });
+                    .value(`SKIP: ya procesado para esta empresa (NIF: ${clientes[i].nif}).`);
+                } else {
+                  await this._ejecutarConReintentos(
+                    () => this._procesarCertificadoArt42({
+                      browser,
+                      page,
+                      cliente: clientes[i],
+                      paths: paths.art42,
+                      hoja,
+                      colIdx,
+                      empresaAutRegimen,
+                      empresaAutTesoreria,
+                      empresaAutCuenta,
+                    }),
+                    "[ART42]",
+                    page
+                  ).catch((e) => {
+                    hoja
+                      .cell(clientes[i].filaExcel, colIdx["LOG ART42"])
+                      .value("ERROR: " + (e?.message || e));
+                  });
+                }
               }
 
               console.log("Nuevo cliente");
@@ -864,11 +884,7 @@ if ($cert) {
       await this._navegarConReintentos(page, "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp");
       await this.esperar(1000);
 
-      try {
-        await this._procesarLoginATC(page);
-      } catch (e) {
-        console.warn("[CERT INIT ATC] Error en login:", e?.message || e);
-      }
+      await this._procesarLoginATC(page);
       console.log("[CERT INIT] ATC listo.");
     }
 
@@ -1121,13 +1137,6 @@ if ($cert) {
     colIdx,
     executablePath = null,
   }) {
-    if (cliente.flagDupeNIF) {
-      hoja
-        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
-        .value("WARNING: Solicitud evitada por duplicidad en NIF.");
-      return;
-    }
-
     console.log(
       `[CERT TRIB] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
@@ -1243,21 +1252,12 @@ if ($cert) {
   }
 
   async _procesarCertificadoATC({ browser, page, cliente, paths, hoja, colIdx }) {
-    if (cliente.flagDupeNIF) {
-      hoja
-        .cell(cliente.filaExcel, colIdx["LOG ATC"])
-        .value("WARNING: Solicitud evitada por duplicidad en NIF.");
-      return;
-    }
-
     console.log(
       `[CERT ATC] Iniciando para cliente: ${cliente.codigo} - ${cliente.empresa}`,
     );
 
     await this._navegarConReintentos(page, "https://sede.gobiernodecanarias.org/tributos/ov/seguro/certificados/individual/listado.jsp");
     await this.esperar(1000);
-
-    await this._procesarLoginATC(page);
 
     try {
       const botonSolicitar = await page.waitForSelector(
