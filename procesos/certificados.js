@@ -91,29 +91,12 @@ class ProcesosCertificados {
     }
 
     const fc = argumentos.formularioControl;
-    const expectedIndices = [
-      { idx: 0, name: "chromiumExecutablePath", type: "string" },
-      { idx: 1, name: "pathArchivoEtiquetas", type: "string" },
-      { idx: 2, name: "pathBase", type: "string" },
-      { idx: 3, name: "modoManual", type: "boolean-or-truthy" },
-      { idx: 4, name: "codigosEmpresaInput", type: "string-or-empty" },
-      { idx: 5, name: "runSS", type: "boolean-or-truthy" },
-      { idx: 6, name: "runAEAT", type: "boolean-or-truthy" },
-      { idx: 7, name: "runATC", type: "boolean-or-truthy" },
-      { idx: 8, name: "runITA", type: "boolean-or-truthy" },
-      { idx: 9, name: "runArt42", type: "boolean-or-truthy" },
-      { idx: 10, name: "empresaAutRegimen", type: "string-or-empty" },
-      { idx: 11, name: "empresaAutTesoreria", type: "string-or-empty" },
-      { idx: 12, name: "empresaAutCuenta", type: "string-or-empty" },
-    ];
 
-    for (const { idx, name } of expectedIndices) {
-      if (fc.length <= idx || fc[idx] === undefined) {
-        throw new Error(`Argumento faltante en índice ${idx} (${name})`);
-      }
-    }
+    // Solo las 3 rutas son obligatorias y deben existir
+    if (!fc[0]) throw new Error("Ruta de Chromium no proporcionada (índice 0)");
+    if (!fc[1]) throw new Error("Ruta del archivo Excel no proporcionada (índice 1)");
+    if (!fc[2]) throw new Error("Carpeta base no proporcionada (índice 2)");
 
-    // Validar que las rutas existen
     if (!fs.existsSync(fc[0])) {
       throw new Error(`Ejecutable Chromium no encontrado: ${fc[0]}`);
     }
@@ -130,14 +113,15 @@ class ProcesosCertificados {
       pathBase: fc[2],
       modoManual: !!fc[3],
       codigosEmpresaInput: fc[4],
+      // Flags opcionales: solo los presentes en el array
       runSS: !!fc[5],
       runAEAT: !!fc[6],
       runATC: !!fc[7],
       runITA: !!fc[8],
       runArt42: !!fc[9],
-      empresaAutRegimen: fc[10],
-      empresaAutTesoreria: fc[11],
-      empresaAutCuenta: fc[12],
+      empresaAutRegimen: fc[10] ?? "",
+      empresaAutTesoreria: fc[11] ?? "",
+      empresaAutCuenta: fc[12] ?? "",
     };
   }
 
