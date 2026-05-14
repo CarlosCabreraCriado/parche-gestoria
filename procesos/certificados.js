@@ -1351,7 +1351,7 @@ if ($cert) {
     );
 
     await this._navegarConReintentos(page, "https://w2.seg-social.es/fs/indexframes.html");
-    await this.esperar(1000);
+    await this.esperar(200);
 
     const getFrame = () => page.mainFrame().childFrames()[0];
 
@@ -1372,7 +1372,6 @@ if ($cert) {
     if (!clickedGestion) {
       throw new Error('[ART42] Enlace "Gestión de Deuda" no encontrado.');
     }
-    await this.esperar(1000);
 
     frame = getFrame();
     if (!frame) {
@@ -1400,7 +1399,6 @@ if ($cert) {
     await page
       .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
       .catch(() => {});
-    await this.esperar(500);
 
     frame = getFrame();
     if (!frame)
@@ -1430,7 +1428,6 @@ if ($cert) {
         .catch(() => {}),
       frame.click(this.SELECTORS.ART42.btnContinuar1),
     ]);
-    await this.esperar(500);
 
     frame = getFrame();
     if (!frame)
@@ -1462,7 +1459,6 @@ if ($cert) {
         .catch(() => {}),
       frame.click(this.SELECTORS.ART42.btnContinuar2),
     ]);
-    await this.esperar(500);
 
     frame = getFrame();
     if (!frame)
@@ -1473,14 +1469,6 @@ if ($cert) {
     } catch (e) {
       throw new Error(`[ART42] Botón Confirmar no apareció: ${e.message}`);
     }
-
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
-        .catch(() => {}),
-      frame.click(this.SELECTORS.ART42.btnConfirmar),
-    ]);
-    await this.esperar(1000);
 
     const rutaScreenshot = path.join(
       paths.resultados,
@@ -1493,8 +1481,14 @@ if ($cert) {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
+    await Promise.all([
+      page
+        .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
+        .catch(() => {}),
+      frame.click(this.SELECTORS.ART42.btnConfirmar),
+    ]);
+
     hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización generada.");
-    await this.esperar(1000);
   }
 }
 
