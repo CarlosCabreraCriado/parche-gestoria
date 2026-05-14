@@ -1163,8 +1163,8 @@ if ($cert) {
         }
       } catch (_) {}
 
-      await aeatPage.locator(`input[id="fTipoRepresentacion1"]`).wait();
-      const radio1 = await aeatPage.$(`input[id="fTipoRepresentacion1"]`);
+      await aeatPage.locator(`input[id="fTipoRepresentacion0"]`).wait();
+      const radio1 = await aeatPage.$(`input[id="fTipoRepresentacion0"]`);
       if (radio1) await radio1.click();
 
       await aeatPage.locator('input[name="fNifT"]').wait();
