@@ -1166,13 +1166,6 @@ if ($cert) {
       await aeatPage.locator(`input[id="fTipoRepresentacion0"]`).wait();
       const radio1 = await aeatPage.$(`input[id="fTipoRepresentacion0"]`);
       if (radio1) await radio1.click();
-
-      await aeatPage.locator('input[name="fNifT"]').wait();
-      await aeatPage.type('input[name="fNifT"]', String(cliente.nif));
-      await this.esperar(500);
-
-      await aeatPage.locator('input[name="fNombreT"]').wait();
-      await aeatPage.type('input[name="fNombreT"]', String(cliente.empresa));
       await this.esperar(500);
 
       await aeatPage.locator(`input[id="fTipoCertificado4"]`).wait();
