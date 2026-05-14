@@ -59,7 +59,8 @@ class ProcesosCertificados {
   _obtenerCNcertificado(nif) {
     const scriptPath = path.join(os.tmpdir(), `cert_lookup_${Date.now()}.ps1`);
     const nifSafe = (nif || "").replace(/'/g, "''");
-    const script = `$nif = '${nifSafe}'
+    const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$nif = '${nifSafe}'
 $today = Get-Date
 $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
 $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
@@ -81,7 +82,7 @@ if ($cert) {
 } else {
   Write-Output "NOT_FOUND"
 }`;
-    fs.writeFileSync(scriptPath, script, "utf8");
+    fs.writeFileSync(scriptPath, '﻿' + script, "utf8");
     try {
       const out = execSync(
         `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
@@ -1130,6 +1131,7 @@ if ($cert) {
     const certBrowser = await puppeteer.launch({ executablePath, headless: false });
     const aeatPage = await certBrowser.newPage();
     await aeatPage.setViewport({ width: 1080, height: 1024 });
+    aeatPage.setDefaultTimeout(60000);
     aeatPage.on("dialog", async (dialog) => {
       try { await dialog.accept(); } catch (_) {}
     });

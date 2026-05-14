@@ -95,7 +95,9 @@
       "Bash(python -c ' *)",
       "Bash(python -c \"import pandas; print\\('pandas ok'\\)\")",
       "Bash(pip list *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Filter \"*.md\" -Recurse)",
+      "Bash(Select-Object FullName)"
     ]
   }
 }
