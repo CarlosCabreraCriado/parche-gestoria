@@ -1060,23 +1060,38 @@ if ($cert) {
     await page.type(this.SELECTORS.SS.campoCCC, ccc);
     await this.esperar(1000);
     try {
-      await page.locator(this.SELECTORS.SS.btnBuscarCCC).click();
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }).catch(() => {}),
+        page.locator(this.SELECTORS.SS.btnBuscarCCC).click(),
+      ]);
     } catch (e) {
       throw new Error(`[SS-Paso botón buscar CCC] ${e.message}`);
     }
 
     const selectorResultado = this.SELECTORS.SS.enlaceResultado(ccc);
     const enlaceResultado = await page
-      .waitForSelector(selectorResultado, { timeout: 10000 })
+      .waitForSelector(selectorResultado, { timeout: 30000 })
       .catch(() => null);
     if (!enlaceResultado) {
+      try {
+        const screenshotPath = path.join(paths.resultados, `SS_debug_${ccc}_${Date.now()}.png`);
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        console.warn(`[CERT SS] Screenshot de diagnóstico guardado en: ${screenshotPath}`);
+      } catch (_) {}
       throw new Error("CCC no encontrado en el sistema ARED: " + ccc);
     }
-    await enlaceResultado.click();
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 }).catch(() => {}),
+      enlaceResultado.click(),
+    ]);
 
+    await page.locator(this.SELECTORS.SS.btnContinuar).wait();
     await page.locator(this.SELECTORS.SS.btnContinuar).click();
-    await page.locator(this.SELECTORS.SS.btnImprimir).click();
-    await page.waitForNavigation({ waitUntil: "load" });
+    await page.locator(this.SELECTORS.SS.btnImprimir).wait();
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "load" }),
+      page.locator(this.SELECTORS.SS.btnImprimir).click(),
+    ]);
 
     const enlaces = await page.$$("a");
     let enlaceEncontrado = null;
