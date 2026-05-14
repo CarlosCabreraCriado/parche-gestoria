@@ -518,28 +518,15 @@ if ($cert) {
                   .setZone("Europe/Madrid")
                   .toFormat("ddMMyy");
                 objetoCliente.nombreArchivoSS =
-                  objetoCliente.codigo +
-                  " CERTIFICADO ESTAR AL CORRIENTE SS " +
-                  objetoCliente.empresa +
-                  " " +
-                  fechaHoy +
-                  ".pdf";
+                  `${objetoCliente.codigo} CERT CORRIENTE SS ${objetoCliente.empresa} ${fechaHoy}.pdf`;
                 objetoCliente.nombreArchivoTrib =
-                  objetoCliente.codigo +
-                  " CERTIFICADO ESTAR AL CORRIENTE AEAT " +
-                  objetoCliente.empresa +
-                  " " +
-                  fechaHoy +
-                  ".pdf";
+                  `${objetoCliente.codigo} CERT CORRIENTE AEAT ${objetoCliente.empresa} ${fechaHoy}.pdf`;
                 objetoCliente.nombreArchivoATC =
-                  objetoCliente.codigo +
-                  " CERTIFICADO ESTAR AL CORRIENTE ATC " +
-                  objetoCliente.empresa +
-                  " " +
-                  fechaHoy +
-                  ".pdf";
-                objetoCliente.nombreArchivoITA = `${objetoCliente.codigo} CERTIFICADO ESTAR AL CORRIENTE ITA ${objetoCliente.empresa} ${fechaHoy}.pdf`;
-                objetoCliente.nombreArchivoArt42 = `${objetoCliente.codigo} CERTIFICADO ESTAR AL CORRIENTE ART42 ${objetoCliente.empresa} ${fechaHoy}.png`;
+                  `${objetoCliente.codigo} CERT CORRIENTE ATC ${objetoCliente.empresa} ${fechaHoy}.pdf`;
+                objetoCliente.nombreArchivoITA =
+                  `${objetoCliente.codigo} CERT CORRIENTE ITA ${objetoCliente.ccc} ${objetoCliente.empresa} ${fechaHoy}.pdf`;
+                objetoCliente.nombreArchivoArt42 =
+                  `${objetoCliente.codigo} CERT CORRIENTE ART42 ${objetoCliente.ccc} ${objetoCliente.empresa} ${fechaHoy}.png`;
                 clientes.push(Object.assign({}, objetoCliente));
               }
             }
