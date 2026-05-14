@@ -428,9 +428,9 @@ if ($cert) {
               nextColIdx++;
             };
             addLogCol("LOG SS");
-            addLogCol("LOG TRIB");
             addLogCol("LOG ATC");
             addLogCol("LOG ITA");
+            addLogCol("LOG AEAT");
             addLogCol("LOG ART42");
             console.log("Índices de columnas dinámicos:", colIdx);
 
@@ -707,7 +707,7 @@ if ($cert) {
                   page
                 ).catch((e) => {
                   hoja
-                    .cell(clientes[i].filaExcel, colIdx["LOG TRIB"])
+                    .cell(clientes[i].filaExcel, colIdx["LOG AEAT"])
                     .value("ERROR: " + (e?.message || e));
                 });
               }
@@ -1123,7 +1123,7 @@ if ($cert) {
   }) {
     if (cliente.flagDupeNIF) {
       hoja
-        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
         .value("WARNING: Solicitud evitada por duplicidad en NIF.");
       return;
     }
@@ -1136,7 +1136,7 @@ if ($cert) {
     const certInfo = this._obtenerCNcertificado(cliente.nif);
     if (!certInfo) {
       hoja
-        .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
         .value(`ERROR: No se encontró certificado en almacén Windows para NIF ${cliente.nif}`);
       return;
     }
@@ -1227,11 +1227,11 @@ if ($cert) {
       if (!nuevaPagina) {
         console.log("[CERT TRIB] ERROR EN DESCARGA");
         hoja
-          .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+          .cell(cliente.filaExcel, colIdx["LOG AEAT"])
           .value("ERROR: No se ha podido generar el resguardo de la solicitud.");
       } else {
         hoja
-          .cell(cliente.filaExcel, colIdx["LOG TRIB"])
+          .cell(cliente.filaExcel, colIdx["LOG AEAT"])
           .value("OK, resguardo de solicitud descargado.");
         try {
           await nuevaPagina.close();
