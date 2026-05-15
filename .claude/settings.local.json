@@ -101,7 +101,13 @@
       "Bash(git reset *)",
       "Bash(git revert *)",
       "Bash(git checkout *)",
-      "Bash(node --check procesos/certificados.js)"
+      "Bash(node --check procesos/certificados.js)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Recurse -Include \"*.html\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Recurse -Filter \"procesos.configuracion.ts\")",
+      "Bash(Select-Object -First 5)",
+      "Bash(grep -E \"\\\\.js$|main\\\\.js\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/certificados.js src/app/comun/procesos/procesos.configuracion.ts)"
     ]
   }
 }

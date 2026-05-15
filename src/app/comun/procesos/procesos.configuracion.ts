@@ -1136,6 +1136,18 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "boolean",
             obligado: false,
+            identificador: "_placeholder_trib",
+            formulario: {
+              titulo: "",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+              mostrarSi: { indice: 999, valor: true },
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
             identificador: "certATC",
             formulario: {
               titulo: "Subvenciones ATC",
@@ -1565,7 +1577,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
     categoria: "Facturacion",
     tipo: "directorio",
     descripcion: "Reportes de facturación por empresa",
-    oculto:true,
+    oculto:false,
     subCategoria: [
       {
         nombre: "Reporte de Facturación",

@@ -52,6 +52,7 @@ class ProcesosAsesoria {
 
     let ccc = null;
     let hasVacaciones = false;
+    let tipoDocumento = "TC1";
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].startsWith("Código de Cuenta de Cotización:")) {
         const nextLine = lines[i + 4]?.replace(/\s+/g, "") || "";
@@ -68,11 +69,24 @@ class ProcesosAsesoria {
       }
     }
 
+    if (!ccc) {
+      tipoDocumento = "TC2";
+      if (/L13/.test(data.text)) hasVacaciones = true;
+      for (const line of lines) {
+        const stripped = line.replace(/\s+/g, "");
+        if (/^\d{15}$/.test(stripped)) {
+          ccc = stripped.slice(-11);
+          break;
+        }
+      }
+    }
+
     console.log("CCC: ", ccc);
     console.log("Vacaciones: ", hasVacaciones);
+    console.log("Tipo documento: ", tipoDocumento);
     if (!ccc) return null;
 
-    return { filePath, ccc, hasVacaciones };
+    return { filePath, ccc, hasVacaciones, tipoDocumento };
   }
 
   async formatearRecibosDeLiquidacion(argumentos) {
@@ -198,17 +212,21 @@ class ProcesosAsesoria {
                 empresas,
                 autonomos,
               );
+              if (!codigoEmpresa) {
+                console.warn(`Sin coincidencia en Excel para CCC ${info.ccc} - omitido: ${file}`);
+                continue;
+              }
               info["codigo"] = codigoEmpresa;
 
-              if (!groupedByCCC[info["codigo"]])
-                groupedByCCC[info["codigo"]] = [];
-              groupedByCCC[info["codigo"]].push(info);
+              const groupKey = `${codigoEmpresa}_${info.tipoDocumento}`;
+              if (!groupedByCCC[groupKey]) groupedByCCC[groupKey] = [];
+              groupedByCCC[groupKey].push(info);
             }
 
             console.log("Agrupados: ", groupedByCCC);
 
-            for (const codigo in groupedByCCC) {
-              const files = groupedByCCC[codigo];
+            for (const groupKey in groupedByCCC) {
+              const files = groupedByCCC[groupKey];
               const outputPdf = await pdfLib.PDFDocument.create();
 
               let hasVacaciones = false;
@@ -249,7 +267,9 @@ class ProcesosAsesoria {
                 hasVacaciones = false;
               }
 
-              const fileName = `${codigo} TC1 ${nombreMesAnterior} ${año}${hasVacaciones ? " Vacaciones" : ""}.pdf`;
+              const tipoDoc = files[0]?.tipoDocumento || "TC1";
+              const codigoArchivo = files[0].codigo;
+              const fileName = `${codigoArchivo} ${tipoDoc} ${nombreMesAnterior} ${año}${hasVacaciones ? " Vacaciones" : ""}.pdf`;
               const outputPath = path.join(pathGuardarPDFs, fileName);
               const finalPdfBytes = await outputPdf.save();
               await fsExtra.writeFile(outputPath, finalPdfBytes);
