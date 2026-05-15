@@ -97,7 +97,11 @@
       "Bash(pip list *)",
       "Bash(pip install *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Filter \"*.md\" -Recurse)",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(git reset *)",
+      "Bash(git revert *)",
+      "Bash(git checkout *)",
+      "Bash(node --check procesos/certificados.js)"
     ]
   }
 }
