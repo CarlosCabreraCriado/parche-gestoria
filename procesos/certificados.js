@@ -137,10 +137,25 @@ if ($cert) {
   }
 
   async certificadoAEAT(argumentos) {
-    return this._ejecutarCertificados(argumentos, {
-      habilitarSS: false, habilitarAEAT: true, habilitarATC: false, habilitarITA: false, habilitarArt42: false,
-      nombreProceso: 'Certificado AEAT'
-    });
+    // El formulario standalone tiene: [0]=chrome, [1]=excel, [2]=outDir, [3]=modoManual, [4]=codigosEmpresa, [5]=certTributario
+    // _ejecutarCertificados espera runTrib en [6], no en [5]
+    const fc = argumentos.formularioControl;
+    const remapped = [
+      fc[0],  // [0] chrome
+      fc[1],  // [1] excel
+      fc[2],  // [2] outDir
+      fc[3],  // [3] modoManual
+      fc[4],  // [4] codigosEmpresa
+      false,  // [5] runSS (habilitarSS=false, no aplica)
+      fc[5],  // [6] certTributario → runTrib
+      false,  // [7] runATC
+      false,  // [8] runITA
+      false,  // [9] runArt42
+    ];
+    return this._ejecutarCertificados(
+      { ...argumentos, formularioControl: remapped },
+      { habilitarSS: false, habilitarAEAT: true, habilitarATC: false, habilitarITA: false, habilitarArt42: false, nombreProceso: 'Certificado AEAT' }
+    );
   }
 
   async certificadoArt42(argumentos) {
