@@ -1136,6 +1136,18 @@ var libreriaProcesos: LibreriaProcesos[] = [
           {
             tipo: "boolean",
             obligado: false,
+            identificador: "_placeholder_trib",
+            formulario: {
+              titulo: "",
+              tipo: "boolean",
+              placeholder: "",
+              valorDefault: false,
+              mostrarSi: { indice: 999, valor: true },
+            },
+          },
+          {
+            tipo: "boolean",
+            obligado: false,
             identificador: "certATC",
             formulario: {
               titulo: "Subvenciones ATC",
