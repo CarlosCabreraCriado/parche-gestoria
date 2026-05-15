@@ -144,10 +144,28 @@ if ($cert) {
   }
 
   async certificadoArt42(argumentos) {
-    return this._ejecutarCertificados(argumentos, {
-      habilitarSS: false, habilitarAEAT: false, habilitarATC: false, habilitarITA: false, habilitarArt42: true,
-      nombreProceso: 'Certificado Art 42'
-    });
+    // El formulario standalone tiene: [0]=chrome, [1]=excel, [2]=outDir, [3]=codigoEmpresa, [4]=regimen, [5]=tesoreria, [6]=cuenta
+    // _ejecutarCertificados espera:   [0]=chrome, [1]=excel, [2]=outDir, [3]=modoManual, [4]=codigosEmpresa, [9]=certArt42, [10]=regimen, [11]=tesoreria, [12]=cuenta
+    const fc = argumentos.formularioControl;
+    const remapped = [
+      fc[0],  // [0] chrome
+      fc[1],  // [1] excel
+      fc[2],  // [2] outDir
+      true,   // [3] modoManual (siempre manual en proceso standalone)
+      fc[3],  // [4] codigosEmpresa (filtro opcional)
+      false,  // [5] runSS
+      false,  // [6] runTrib
+      false,  // [7] runATC
+      false,  // [8] runITA
+      true,   // [9] certArt42 (activa el proceso)
+      fc[4],  // [10] art42EmpresaRegimen
+      fc[5],  // [11] art42EmpresaTesoreria
+      fc[6],  // [12] art42EmpresaCuenta
+    ];
+    return this._ejecutarCertificados(
+      { ...argumentos, formularioControl: remapped },
+      { habilitarSS: false, habilitarAEAT: false, habilitarATC: false, habilitarITA: false, habilitarArt42: true, nombreProceso: 'Certificado Art 42' }
+    );
   }
 
   async certificadosDeEstarAlCorriente(argumentos) {
