@@ -2035,7 +2035,13 @@ class ProcesosFie {
 
               await fillTextWithRetry(formFrame, "#regimen", regimen);
               await pause(200);
-              await fillTextWithRetry(formFrame, "#ccc", cccResto);
+              if (cccResto) {
+                await fillIfPresent(formFrame, "#ccc", cccResto);
+              } else {
+                logDebug(
+                  "[FIE_2] Sin CCC (probable régimen autónomo). Omito #ccc.",
+                );
+              }
               await pause(200);
               await fillTextWithRetry(formFrame, "#naf", naf);
               await pause(200);
