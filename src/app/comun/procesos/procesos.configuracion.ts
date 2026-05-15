@@ -1577,7 +1577,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
     categoria: "Facturacion",
     tipo: "directorio",
     descripcion: "Reportes de facturación por empresa",
-    oculto:true,
+    oculto:false,
     subCategoria: [
       {
         nombre: "Reporte de Facturación",

@@ -708,7 +708,7 @@ if ($cert) {
               registrarEjecucion({
                 nombreProceso,
                 registrosProcesados: registrosProcesados,
-                empresas: agruparPorEmpresa(clientes),
+                empresas: agruparPorEmpresa(clientes, ["codigo"], ["empresa"]),
               });
             } catch (_) {}
             console.log("Fin del procesamiento (certificados unificados)");
