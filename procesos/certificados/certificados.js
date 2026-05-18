@@ -913,10 +913,15 @@ if ($cert) {
               contentType.includes("application/pdf")
             ) {
               console.log(`PDF detectado (${etiqueta}):`, response.url());
-              const pdfBuffer = await response.buffer();
-              fs.writeFileSync(rutaArchivo, pdfBuffer);
-              console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
-              finalizar(newPage);
+              try {
+                const pdfBuffer = await response.buffer();
+                fs.writeFileSync(rutaArchivo, pdfBuffer);
+                console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
+                finalizar(newPage);
+              } catch (err) {
+                console.warn(`PDF ${etiqueta} - error al leer buffer:`, err?.message);
+                finalizar(false);
+              }
             }
           });
         } catch (_) {}
@@ -1307,7 +1312,7 @@ if ($cert) {
       const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
       let nuevaPagina = await this._descargarPDF({
         browser: activeBrowser,
-        botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+        botonClick: () => aeatPage.$('input[id="descarga"]').then(el => el?.click()),
         rutaArchivo: rutaTrib,
         etiqueta: "TRIB",
         timeoutMs: 15000,
@@ -1318,7 +1323,7 @@ if ($cert) {
         await this.esperar(3000);
         nuevaPagina = await this._descargarPDF({
           browser: activeBrowser,
-          botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+          botonClick: () => aeatPage.$('input[id="descarga"]').then(el => el?.click()),
           rutaArchivo: rutaTrib,
           etiqueta: "TRIB",
           timeoutMs: 15000,
