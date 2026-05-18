@@ -80,9 +80,12 @@ function buildTexto(grupo, adjuntosInfo) {
 
   return `Buenos días,
 
-Les informamos que hemos generado los siguientes certificados de estar al corriente de sus obligaciones para la empresa ${empresa} (expediente ${codigo}):
+Indicarles que adjuntamos la documentación solicitada en este mensaje. Cualquier documentación adicional que necesiten por favor, hacédnoslo saber y la remitiremos a la mayor brevedad.
 
+${empresa} (expediente ${codigo}):
 ${lineas.join("\n")}
+
+Quedamos a su disposición para cualquier consulta o gestión adicional que pueda necesitar.
 
 Atentamente,
 Susasesores.com
