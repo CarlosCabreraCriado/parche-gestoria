@@ -5,7 +5,7 @@ const { DateTime } = require("luxon");
 const { execSync } = require("child_process");
 const os = require("os");
 
-const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../../metricas");
 const puppeteer = require("puppeteer");
 
 class ProcesosCertificados {
@@ -347,6 +347,9 @@ if ($cert) {
                           .trim()
                           .toLowerCase() === "x";
                       break;
+                    case "EMAIL":
+                      objetoCliente.email = String(cellVal || "").trim();
+                      break;
                   }
                 }
               }
@@ -680,6 +683,35 @@ if ($cert) {
             try {
               await browser.close();
             } catch (_) {}
+
+            // Generar borradores de correo (.eml) agrupados por expediente
+            try {
+              const { generarEmailCertificados } = require("./emails");
+              const carpetaCorreos = path.join(carpetaRaiz, "Correos");
+              if (!fs.existsSync(carpetaCorreos)) fs.mkdirSync(carpetaCorreos, { recursive: true });
+
+              const gruposPorExpediente = {};
+              for (const cliente of clientes) {
+                const key = String(cliente.codigo || "").trim();
+                if (!key) continue;
+                if (!gruposPorExpediente[key]) gruposPorExpediente[key] = [];
+                gruposPorExpediente[key].push(cliente);
+              }
+
+              for (const codigo of Object.keys(gruposPorExpediente)) {
+                const grupo = gruposPorExpediente[codigo];
+                const emailRaw = (grupo.find((c) => c.email) || {}).email || "";
+                const correos = emailRaw.split(/[;,]/).map((e) => e.trim()).filter(Boolean);
+                if (correos.length === 0) continue;
+                try {
+                  await generarEmailCertificados(grupo, carpetaRaiz, correos, carpetaCorreos);
+                } catch (e) {
+                  console.warn(`[EMAIL] Error generando .eml para expediente ${codigo}:`, e?.message || e);
+                }
+              }
+            } catch (e) {
+              console.warn("[EMAIL] Error en generación de borradores:", e?.message || e);
+            }
 
             const excelOutBase = runSS
               ? paths.ss.excel

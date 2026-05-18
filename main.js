@@ -1961,7 +1961,7 @@ const ProcesosKPIs = require("./procesos/kpis.js");
 const ProcesosDuplicados = require("./procesos/duplicados.js");
 const ProcesosAutonomos = require("./procesos/autonomos.js");
 const ProcesosPipeline = require("./procesos/pipeline.js");
-const ProcesosCertificados = require("./procesos/certificados.js");
+const ProcesosCertificados = require("./procesos/certificados/certificados.js");
 
 
 const PlantillaExcel = require("./plantillas/excel.js");
