@@ -157,6 +157,11 @@ async function generarEmailCertificados(grupo, carpetaRaiz, correos, carpetaCorr
     }
   }
 
+  if (adjuntosInfo.length === 0) {
+    console.log(`[EMAIL] Sin certificados descargados para expediente ${codigo}, omitiendo correo.`);
+    return null;
+  }
+
   // Cargar plantilla HTML e inyectar filas
   const templatePath = path.join(__dirname, "certificado.html");
   let html = fs.readFileSync(templatePath, "utf-8");
