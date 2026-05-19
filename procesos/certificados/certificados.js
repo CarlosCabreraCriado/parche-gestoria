@@ -1573,7 +1573,12 @@ if ($cert) {
         "[ART42] No se encontró el iframe tras expandir Gestión de Deuda.",
       );
     }
-    await frame.waitForSelector("a", { timeout: 10000 });
+    await frame.waitForFunction(
+      () => Array.from(document.querySelectorAll("a")).some((a) =>
+        a.textContent.includes("Autorización Certificado Art.42"),
+      ),
+      { timeout: 10000 },
+    );
     const clickedArt42 = await frame.evaluate(() => {
       const link = Array.from(document.querySelectorAll("a")).find((a) =>
         a.textContent.includes("Autorización Certificado Art.42"),
@@ -1590,10 +1595,6 @@ if ($cert) {
       );
     }
 
-    await page
-      .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-      .catch(() => {});
-
     frame = getFrame();
     if (!frame)
       throw new Error("[ART42] No se encontró el frame del formulario.");
@@ -1604,24 +1605,15 @@ if ($cert) {
       throw new Error(`[ART42] #SDFREGIMEN no apareció: ${e.message}`);
     }
 
-    await frame.type("#SDFREGIMEN", String(cliente.ccc1));
-    await frame.type("#SDFPROVINCIA", String(cliente.ccc2));
-    await frame.type("#SDFNISS", String(cliente.ccc3));
+    await frame.evaluate((ccc1, ccc2, ccc3) => {
+      const set = (sel, val) => { const el = document.querySelector(sel); if (el) el.value = val; };
+      set('#SDFREGIMEN', ccc1);
+      set('#SDFPROVINCIA', ccc2);
+      set('#SDFNISS', ccc3);
+      set('#SDFOPCION', 'Alta');
+    }, String(cliente.ccc1), String(cliente.ccc2), String(cliente.ccc3));
 
-    try {
-      await frame.select("#SDFOPCION", "Alta");
-    } catch (e) {
-      throw new Error(
-        `[ART42] Error seleccionando Alta en #SDFOPCION: ${e.message}`,
-      );
-    }
-
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-        .catch(() => {}),
-      frame.click("#Sub2207001004_35"),
-    ]);
+    await frame.click("#Sub2207001004_35");
 
     frame = getFrame();
     if (!frame)
@@ -1633,26 +1625,27 @@ if ($cert) {
       throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
-    await frame.type("#SDFREGKCGK", empresaAutRegimen);
-    await frame.type("#SDFTESCCGK", empresaAutTesoreria);
-    await frame.type("#SDFCCONCGK9", empresaAutCuenta);
-
     const ahora = DateTime.now().setZone("Europe/Madrid");
     const hasta = ahora.plus({ years: 1 });
 
-    await frame.type("#SDFDIADESDE", ahora.toFormat("dd"));
-    await frame.type("#SDFMESDESDE", ahora.toFormat("MM"));
-    await frame.type("#SDFAODESDE", ahora.toFormat("yyyy"));
-    await frame.type("#SDFDIAHASTA", hasta.toFormat("dd"));
-    await frame.type("#SDFMESHASTA", hasta.toFormat("MM"));
-    await frame.type("#SDFAOHASTA", hasta.toFormat("yyyy"));
+    await frame.evaluate((reg, tes, cta, diaD, mesD, anyoD, diaH, mesH, anyoH) => {
+      const set = (sel, val) => { const el = document.querySelector(sel); if (el) el.value = val; };
+      set('#SDFREGKCGK', reg);
+      set('#SDFTESCCGK', tes);
+      set('#SDFCCONCGK9', cta);
+      set('#SDFDIADESDE', diaD);
+      set('#SDFMESDESDE', mesD);
+      set('#SDFAODESDE', anyoD);
+      set('#SDFDIAHASTA', diaH);
+      set('#SDFMESHASTA', mesH);
+      set('#SDFAOHASTA', anyoH);
+    },
+      empresaAutRegimen, empresaAutTesoreria, empresaAutCuenta,
+      ahora.toFormat("dd"), ahora.toFormat("MM"), ahora.toFormat("yyyy"),
+      hasta.toFormat("dd"), hasta.toFormat("MM"), hasta.toFormat("yyyy"),
+    );
 
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-        .catch(() => {}),
-      frame.click("#Sub2207001004_75"),
-    ]);
+    await frame.click("#Sub2207001004_75");
 
     frame = getFrame();
     if (!frame)
@@ -1675,12 +1668,7 @@ if ($cert) {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
-        .catch(() => {}),
-      frame.click("#Sub2204701006_74"),
-    ]);
+    await frame.click("#Sub2204701006_74");
 
     hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización generada.");
   }
