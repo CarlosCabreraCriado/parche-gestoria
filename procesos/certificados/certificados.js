@@ -62,13 +62,24 @@ class ProcesosCertificados {
     const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $nif = '${nifSafe}'
 $today = Get-Date
-$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
-$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
-$cert = $store.Certificates |
-  Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
-  Sort-Object NotAfter -Descending |
-  Select-Object -First 1
-$store.Close()
+$cert = $null
+$locations = @(
+  [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser,
+  [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine
+)
+foreach ($loc in $locations) {
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', $loc)
+  try {
+    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+    $found = $store.Certificates |
+      Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
+      Sort-Object NotAfter -Descending |
+      Select-Object -First 1
+    if ($found) { $cert = $found; break }
+  } finally {
+    $store.Close()
+  }
+}
 if ($cert) {
   $subjectCN = ($cert.Subject -split ',') |
     Where-Object { $_.Trim().StartsWith('CN=') } |

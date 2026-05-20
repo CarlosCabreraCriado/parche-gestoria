@@ -107,7 +107,22 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Recurse -Filter \"procesos.configuracion.ts\")",
       "Bash(Select-Object -First 5)",
       "Bash(grep -E \"\\\\.js$|main\\\\.js\")",
-      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/certificados.js src/app/comun/procesos/procesos.configuracion.ts)"
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/certificados.js src/app/comun/procesos/procesos.configuracion.ts)",
+      "PowerShell(head -50)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" -Recurse -Directory | Where-Object {$_.Name -match \"factur|reporte|informe\"} | Select-Object FullName)",
+      "PowerShell(ls -R \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\" 2>$null)",
+      "PowerShell(ls -R \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\Nodus-Backend\\\\src\" 2>$null)",
+      "Bash(mysql --host=mainline.proxy.rlwy.net --port=42067 --user=root --password=JONkMLYLMvkEEraAQbjoqhakewqwJCPg --database=nodus -e \"SELECT * FROM metricas_provisionales ORDER BY fecha_ejecucion DESC LIMIT 20;\")",
+      "Bash(node -e ' *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\gonza\\\\.claude\\\\projects\\\\c--Users-gonza-OneDrive-Nodus-Proyectos-Nodus-app-parche-gestoria\\\\ad8cd3d6-30bd-4ebb-b4b4-8a0800a42036\\\\tool-results\\\\toolu_01DgmdpK3VbGWi6n1gpzCpnC.txt\" -TotalCount 100)",
+      "Bash(grep -A 20 \"const { registrarEjecucion, agruparPorEmpresa }\" \"c:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/parche-gestoria/metricas.js\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" -Recurse -Directory)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff --stat HEAD)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add main.js procesos/certificados/)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" rm procesos/certificados.js)",
+      "Bash(start \"\" \"C:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\\\\procesos\\\\certificados\\\\certificado_preview.html\")",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" diff procesos/certificados/certificados.js)",
+      "Bash(git -C \"c:\\\\Users\\\\gonza\\\\OneDrive\\\\Nodus\\\\Proyectos\\\\Nodus-app\\\\parche-gestoria\" add procesos/certificados/certificados.js)"
     ]
   }
 }
