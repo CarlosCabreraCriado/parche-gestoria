@@ -114,6 +114,7 @@ if ($cert) {
     const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
     const safePolicy = policy.replace(/'/g, "''");
     const script = [
+      `$ErrorActionPreference = 'Stop'`,
       `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
       `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
     ].join("\r\n");
@@ -124,6 +125,10 @@ if ($cert) {
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 30000 });
       console.log(`[POLICY] AutoSelect policy set: ${policy}`);
+      return true;
+    } catch (e) {
+      console.warn(`[POLICY] No se pudo escribir la política de auto-selección en el registro (el usuario deberá seleccionar el certificado manualmente): ${e?.message || e}`);
+      return false;
     } finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
     }
@@ -1234,7 +1239,12 @@ if ($cert) {
     console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
 
     // Configurar auto-selección Chrome por CN real del cert
-    this._setAutoSelectPolicy(certInfo);
+    const policyOk = this._setAutoSelectPolicy(certInfo);
+    if (!policyOk) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
+        .value(`WARNING: Selecciona manualmente el certificado "${certInfo.subjectCN}" en el diálogo de Chrome.`);
+    }
     const certBrowser = await puppeteer.launch({ executablePath, headless: false });
     const aeatPage = await certBrowser.newPage();
     await aeatPage.setViewport({ width: 1080, height: 1024 });
