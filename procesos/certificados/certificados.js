@@ -515,6 +515,62 @@ if ($cert) {
               console.log(`La carpeta ya existe: ${carpetaRaiz}`);
             }
 
+            // Si ya existe un output previo del mismo día, restaurar sus logs
+            const rutaOutputExistente = path.join(carpetaRaiz, "Certificados-Procesado.xlsx");
+            if (fs.existsSync(rutaOutputExistente)) {
+              try {
+                const wbPrevio = await XlsxPopulate.fromFileAsync(rutaOutputExistente);
+                const hojaPrev = wbPrevio.sheet("BASE DE DATOS (NO TOCAR)");
+                if (hojaPrev) {
+                  const colsPrev = hojaPrev.usedRange()._numColumns;
+                  const filasPrev = hojaPrev.usedRange()._numRows;
+                  const cabPrev = [];
+                  for (let i = 1; i <= colsPrev; i++) cabPrev.push(hojaPrev.cell(1, i).value());
+                  const idxPrev = {};
+                  cabPrev.forEach((h, i) => { if (h != null) idxPrev[String(h).trim()] = i + 1; });
+
+                  const logCols = ["LOG SS", "LOG ATC", "LOG ITA", "LOG AEAT", "LOG ART42"];
+                  const expColPrev = idxPrev["Expediente"];
+                  const cccColPrev = idxPrev["Código Cuenta Cotización (CCC)"];
+
+                  if (expColPrev && cccColPrev) {
+                    const logMap = {};
+                    for (let i = 2; i <= filasPrev; i++) {
+                      const cod = String(hojaPrev.cell(i, expColPrev).value() || "").replace(/\D/g, "").padStart(4, "0");
+                      const ccc = String(hojaPrev.cell(i, cccColPrev).value() || "").trim();
+                      if (!cod || !ccc) continue;
+                      logMap[`${cod}_${ccc}`] = {};
+                      for (const logCol of logCols) {
+                        if (idxPrev[logCol]) {
+                          const v = hojaPrev.cell(i, idxPrev[logCol]).value();
+                          if (v != null) logMap[`${cod}_${ccc}`][logCol] = v;
+                        }
+                      }
+                    }
+
+                    const expCol = colIdx["Expediente"];
+                    const cccCol = colIdx["Código Cuenta Cotización (CCC)"];
+                    if (expCol && cccCol) {
+                      for (let i = 2; i <= filas; i++) {
+                        const cod = String(hoja.cell(i, expCol).value() || "").replace(/\D/g, "").padStart(4, "0");
+                        const ccc = String(hoja.cell(i, cccCol).value() || "").trim();
+                        const prev = logMap[`${cod}_${ccc}`];
+                        if (!prev) continue;
+                        for (const logCol of logCols) {
+                          if (prev[logCol] != null && colIdx[logCol]) {
+                            hoja.cell(i, colIdx[logCol]).value(prev[logCol]);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                console.log("[LOG] Logs previos restaurados desde archivo existente.");
+              } catch (e) {
+                console.warn("[LOG] No se pudo leer el archivo de output previo:", e?.message || e);
+              }
+            }
+
             const downloadPathInicial = carpetaRaiz;
 
             if (runSS || runTrib || runATC || runArt42) {
