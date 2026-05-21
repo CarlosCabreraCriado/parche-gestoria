@@ -127,8 +127,20 @@ if ($cert) {
       console.log(`[POLICY] AutoSelect policy set: ${policy}`);
       return true;
     } catch (e) {
-      console.warn(`[POLICY] No se pudo escribir la política de auto-selección en el registro (el usuario deberá seleccionar el certificado manualmente): ${e?.message || e}`);
-      return false;
+      console.warn(`[POLICY] Escritura normal fallida, intentando con elevación UAC...`);
+      try {
+        // Lanza el mismo script con privilegios de administrador (muestra diálogo UAC al usuario).
+        // -Wait hace que este proceso espere a que el elevado termine antes de continuar.
+        execSync(
+          `powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${scriptPath}\\"' -Verb RunAs -Wait"`,
+          { encoding: "utf8", timeout: 60000 }
+        );
+        console.log(`[POLICY] AutoSelect policy set (elevado): ${policy}`);
+        return true;
+      } catch (e2) {
+        console.warn(`[POLICY] No se pudo escribir la política ni con elevación (el usuario deberá seleccionar el certificado manualmente): ${e2?.message || e2}`);
+        return false;
+      }
     } finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
     }
@@ -136,7 +148,9 @@ if ($cert) {
 
   _limpiarAutoSelectPolicy() {
     const scriptPath = path.join(os.tmpdir(), `cert_policy_clean_${Date.now()}.ps1`);
-    const script = `Remove-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force -Recurse -ErrorAction SilentlyContinue`;
+    // Solo borra el valor "1" dentro de la clave, no la clave en sí.
+    // Así la clave persiste entre ejecuciones y no hace falta crearla (con admin) cada vez.
+    const script = `Remove-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -ErrorAction SilentlyContinue`;
     fs.writeFileSync(scriptPath, script, "utf8");
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 10000 });
