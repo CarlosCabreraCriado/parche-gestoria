@@ -115,8 +115,9 @@ if ($cert) {
     const safePolicy = policy.replace(/'/g, "''");
     const script = [
       `$ErrorActionPreference = 'Stop'`,
-      `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
-      `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
+      `$kp = 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `Set-ItemProperty -Path $kp -Name '1' -Value '${safePolicy}'`,
     ].join("\r\n");
     // BOM UTF-8 (﻿): PowerShell 5.x lee archivos sin BOM como ANSI, corrompiendo
     // los caracteres acentuados de los CN. Con BOM los lee como UTF-8 y escribe los
@@ -156,6 +157,58 @@ if ($cert) {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 10000 });
     } catch (_) {} finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
+    }
+  }
+
+  // Garantiza que el usuario actual puede escribir en la clave del registro sin elevar.
+  // Si no puede, hace UNA sola elevación UAC que crea la clave y concede FullControl.
+  // Llamar una vez al inicio (pre-inicialización TRIB) para que el bucle de clientes
+  // nunca necesite elevar.
+  _garantizarPermisoRegistroCerts() {
+    const kp = 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls';
+    const testScript = [
+      `$ErrorActionPreference = 'Stop'`,
+      `$kp = '${kp}'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `Set-ItemProperty -Path $kp -Name '__test__' -Value '1'`,
+      `Remove-ItemProperty -Path $kp -Name '__test__' -ErrorAction SilentlyContinue`,
+    ].join("\r\n");
+    const testPath = path.join(os.tmpdir(), `cert_regtest_${Date.now()}.ps1`);
+    fs.writeFileSync(testPath, '﻿' + testScript, "utf8");
+    try {
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${testPath}"`, { encoding: "utf8", timeout: 15000 });
+      console.log("[POLICY] Permisos de registro OK (sin elevación).");
+      return true;
+    } catch (_) { /* continúa con elevación */ }
+    finally { try { fs.unlinkSync(testPath); } catch (_) {} }
+
+    console.log("[POLICY] Sin permisos directos — elevando UNA vez para configurar clave del registro...");
+    const elevScript = [
+      `$ErrorActionPreference = 'Stop'`,
+      `$kp = '${kp}'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `$acl = Get-Acl $kp`,
+      `$rule = New-Object System.Security.AccessControl.RegistryAccessRule(`,
+      `  [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,`,
+      `  'FullControl', 'Allow'`,
+      `)`,
+      `$acl.SetAccessRule($rule)`,
+      `Set-Acl -Path $kp -AclObject $acl`,
+    ].join("\r\n");
+    const elevPath = path.join(os.tmpdir(), `cert_reginit_${Date.now()}.ps1`);
+    fs.writeFileSync(elevPath, '﻿' + elevScript, "utf8");
+    try {
+      execSync(
+        `powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${elevPath}\\"' -Verb RunAs -Wait"`,
+        { encoding: "utf8", timeout: 60000 }
+      );
+      console.log("[POLICY] Clave de registro inicializada con permisos correctos.");
+      return true;
+    } catch (e) {
+      console.warn("[POLICY] No se pudo inicializar la clave del registro:", e?.message || e);
+      return false;
+    } finally {
+      try { fs.unlinkSync(elevPath); } catch (_) {}
     }
   }
 
@@ -824,6 +877,7 @@ if ($cert) {
     }
 
     if (runTrib) {
+      this._garantizarPermisoRegistroCerts();
       console.log(
         "[CERT INIT] TRIB — Los certificados se seleccionarán automáticamente por empresa",
       );
