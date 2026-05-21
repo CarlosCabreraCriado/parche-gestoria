@@ -5,7 +5,7 @@ const { DateTime } = require("luxon");
 const { execSync } = require("child_process");
 const os = require("os");
 
-const { registrarEjecucion, agruparPorEmpresa } = require("../metricas");
+const { registrarEjecucion, agruparPorEmpresa } = require("../../metricas");
 const puppeteer = require("puppeteer");
 
 class ProcesosCertificados {
@@ -62,13 +62,24 @@ class ProcesosCertificados {
     const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $nif = '${nifSafe}'
 $today = Get-Date
-$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
-$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
-$cert = $store.Certificates |
-  Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
-  Sort-Object NotAfter -Descending |
-  Select-Object -First 1
-$store.Close()
+$cert = $null
+$locations = @(
+  [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser,
+  [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine
+)
+foreach ($loc in $locations) {
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('My', $loc)
+  try {
+    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+    $found = $store.Certificates |
+      Where-Object { $_.Subject -match [regex]::Escape($nif) -and $_.NotAfter -gt $today } |
+      Sort-Object NotAfter -Descending |
+      Select-Object -First 1
+    if ($found) { $cert = $found; break }
+  } finally {
+    $store.Close()
+  }
+}
 if ($cert) {
   $subjectCN = ($cert.Subject -split ',') |
     Where-Object { $_.Trim().StartsWith('CN=') } |
@@ -103,8 +114,10 @@ if ($cert) {
     const policy = JSON.stringify({ pattern: "https://[*.]agenciatributaria.gob.es", filter });
     const safePolicy = policy.replace(/'/g, "''");
     const script = [
-      `New-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force | Out-Null`,
-      `Set-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -Value '${safePolicy}'`,
+      `$ErrorActionPreference = 'Stop'`,
+      `$kp = 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `Set-ItemProperty -Path $kp -Name '1' -Value '${safePolicy}'`,
     ].join("\r\n");
     // BOM UTF-8 (﻿): PowerShell 5.x lee archivos sin BOM como ANSI, corrompiendo
     // los caracteres acentuados de los CN. Con BOM los lee como UTF-8 y escribe los
@@ -113,6 +126,22 @@ if ($cert) {
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 30000 });
       console.log(`[POLICY] AutoSelect policy set: ${policy}`);
+      return true;
+    } catch (e) {
+      console.warn(`[POLICY] Escritura normal fallida, intentando con elevación UAC...`);
+      try {
+        // Lanza el mismo script con privilegios de administrador (muestra diálogo UAC al usuario).
+        // -Wait hace que este proceso espere a que el elevado termine antes de continuar.
+        execSync(
+          `powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${scriptPath}\\"' -Verb RunAs -Wait"`,
+          { encoding: "utf8", timeout: 60000 }
+        );
+        console.log(`[POLICY] AutoSelect policy set (elevado): ${policy}`);
+        return true;
+      } catch (e2) {
+        console.warn(`[POLICY] No se pudo escribir la política ni con elevación (el usuario deberá seleccionar el certificado manualmente): ${e2?.message || e2}`);
+        return false;
+      }
     } finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
     }
@@ -120,12 +149,66 @@ if ($cert) {
 
   _limpiarAutoSelectPolicy() {
     const scriptPath = path.join(os.tmpdir(), `cert_policy_clean_${Date.now()}.ps1`);
-    const script = `Remove-Item -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Force -Recurse -ErrorAction SilentlyContinue`;
+    // Solo borra el valor "1" dentro de la clave, no la clave en sí.
+    // Así la clave persiste entre ejecuciones y no hace falta crearla (con admin) cada vez.
+    const script = `Remove-ItemProperty -Path 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls' -Name '1' -ErrorAction SilentlyContinue`;
     fs.writeFileSync(scriptPath, script, "utf8");
     try {
       execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, { encoding: "utf8", timeout: 10000 });
     } catch (_) {} finally {
       try { fs.unlinkSync(scriptPath); } catch (_) {}
+    }
+  }
+
+  // Garantiza que el usuario actual puede escribir en la clave del registro sin elevar.
+  // Si no puede, hace UNA sola elevación UAC que crea la clave y concede FullControl.
+  // Llamar una vez al inicio (pre-inicialización TRIB) para que el bucle de clientes
+  // nunca necesite elevar.
+  _garantizarPermisoRegistroCerts() {
+    const kp = 'HKCU:\\Software\\Policies\\Google\\Chrome\\AutoSelectCertificateForUrls';
+    const testScript = [
+      `$ErrorActionPreference = 'Stop'`,
+      `$kp = '${kp}'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `Set-ItemProperty -Path $kp -Name '__test__' -Value '1'`,
+      `Remove-ItemProperty -Path $kp -Name '__test__' -ErrorAction SilentlyContinue`,
+    ].join("\r\n");
+    const testPath = path.join(os.tmpdir(), `cert_regtest_${Date.now()}.ps1`);
+    fs.writeFileSync(testPath, '﻿' + testScript, "utf8");
+    try {
+      execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${testPath}"`, { encoding: "utf8", timeout: 15000 });
+      console.log("[POLICY] Permisos de registro OK (sin elevación).");
+      return true;
+    } catch (_) { /* continúa con elevación */ }
+    finally { try { fs.unlinkSync(testPath); } catch (_) {} }
+
+    console.log("[POLICY] Sin permisos directos — elevando UNA vez para configurar clave del registro...");
+    const elevScript = [
+      `$ErrorActionPreference = 'Stop'`,
+      `$kp = '${kp}'`,
+      `if (-not (Test-Path $kp)) { New-Item -Path $kp -Force | Out-Null }`,
+      `$acl = Get-Acl $kp`,
+      `$rule = New-Object System.Security.AccessControl.RegistryAccessRule(`,
+      `  [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,`,
+      `  'FullControl', 'Allow'`,
+      `)`,
+      `$acl.SetAccessRule($rule)`,
+      `Set-Acl -Path $kp -AclObject $acl`,
+    ].join("\r\n");
+    const elevPath = path.join(os.tmpdir(), `cert_reginit_${Date.now()}.ps1`);
+    fs.writeFileSync(elevPath, '﻿' + elevScript, "utf8");
+    try {
+      execSync(
+        `powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${elevPath}\\"' -Verb RunAs -Wait"`,
+        { encoding: "utf8", timeout: 60000 }
+      );
+      console.log("[POLICY] Clave de registro inicializada con permisos correctos.");
+      return true;
+    } catch (e) {
+      console.warn("[POLICY] No se pudo inicializar la clave del registro:", e?.message || e);
+      return false;
+    } finally {
+      try { fs.unlinkSync(elevPath); } catch (_) {}
     }
   }
 
@@ -346,6 +429,9 @@ if ($cert) {
                         String(cellVal || "")
                           .trim()
                           .toLowerCase() === "x";
+                      break;
+                    case "EMAIL":
+                      objetoCliente.email = String(cellVal || "").trim();
                       break;
                   }
                 }
@@ -681,6 +767,35 @@ if ($cert) {
               await browser.close();
             } catch (_) {}
 
+            // Generar borradores de correo (.eml) agrupados por expediente
+            try {
+              const { generarEmailCertificados } = require("./emails");
+              const carpetaCorreos = path.join(carpetaRaiz, "Correos");
+              if (!fs.existsSync(carpetaCorreos)) fs.mkdirSync(carpetaCorreos, { recursive: true });
+
+              const gruposPorExpediente = {};
+              for (const cliente of clientes) {
+                const key = String(cliente.codigo || "").trim();
+                if (!key) continue;
+                if (!gruposPorExpediente[key]) gruposPorExpediente[key] = [];
+                gruposPorExpediente[key].push(cliente);
+              }
+
+              for (const codigo of Object.keys(gruposPorExpediente)) {
+                const grupo = gruposPorExpediente[codigo];
+                const emailRaw = (grupo.find((c) => c.email) || {}).email || "";
+                const correos = emailRaw.split(/[;,]/).map((e) => e.trim()).filter(Boolean);
+                if (correos.length === 0) continue;
+                try {
+                  await generarEmailCertificados(grupo, carpetaRaiz, correos, carpetaCorreos);
+                } catch (e) {
+                  console.warn(`[EMAIL] Error generando .eml para expediente ${codigo}:`, e?.message || e);
+                }
+              }
+            } catch (e) {
+              console.warn("[EMAIL] Error en generación de borradores:", e?.message || e);
+            }
+
             const excelOutBase = runSS
               ? paths.ss.excel
               : runTrib
@@ -762,6 +877,7 @@ if ($cert) {
     }
 
     if (runTrib) {
+      this._garantizarPermisoRegistroCerts();
       console.log(
         "[CERT INIT] TRIB — Los certificados se seleccionarán automáticamente por empresa",
       );
@@ -881,10 +997,15 @@ if ($cert) {
               contentType.includes("application/pdf")
             ) {
               console.log(`PDF detectado (${etiqueta}):`, response.url());
-              const pdfBuffer = await response.buffer();
-              fs.writeFileSync(rutaArchivo, pdfBuffer);
-              console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
-              finalizar(newPage);
+              try {
+                const pdfBuffer = await response.buffer();
+                fs.writeFileSync(rutaArchivo, pdfBuffer);
+                console.log(`PDF ${etiqueta} descargado en:`, rutaArchivo);
+                finalizar(newPage);
+              } catch (err) {
+                console.warn(`PDF ${etiqueta} - error al leer buffer:`, err?.message);
+                finalizar(false);
+              }
             }
           });
         } catch (_) {}
@@ -1186,7 +1307,12 @@ if ($cert) {
     console.log(`[CERT TRIB] Certificado encontrado: CN="${certInfo.subjectCN}", ISSUER="${certInfo.issuerCN}"`);
 
     // Configurar auto-selección Chrome por CN real del cert
-    this._setAutoSelectPolicy(certInfo);
+    const policyOk = this._setAutoSelectPolicy(certInfo);
+    if (!policyOk) {
+      hoja
+        .cell(cliente.filaExcel, colIdx["LOG AEAT"])
+        .value(`WARNING: Selecciona manualmente el certificado "${certInfo.subjectCN}" en el diálogo de Chrome.`);
+    }
     const certBrowser = await puppeteer.launch({ executablePath, headless: false });
     const aeatPage = await certBrowser.newPage();
     await aeatPage.setViewport({ width: 1080, height: 1024 });
@@ -1275,7 +1401,7 @@ if ($cert) {
       const rutaTrib = path.join(paths.resultados, cliente.nombreArchivoTrib);
       let nuevaPagina = await this._descargarPDF({
         browser: activeBrowser,
-        botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+        botonClick: () => aeatPage.$('input[id="descarga"]').then(el => el?.click()),
         rutaArchivo: rutaTrib,
         etiqueta: "TRIB",
         timeoutMs: 15000,
@@ -1286,7 +1412,7 @@ if ($cert) {
         await this.esperar(3000);
         nuevaPagina = await this._descargarPDF({
           browser: activeBrowser,
-          botonClick: () => aeatPage.locator('input[id="descarga"]').click(),
+          botonClick: () => aeatPage.$('input[id="descarga"]').then(el => el?.click()),
           rutaArchivo: rutaTrib,
           etiqueta: "TRIB",
           timeoutMs: 15000,
@@ -1536,7 +1662,12 @@ if ($cert) {
         "[ART42] No se encontró el iframe tras expandir Gestión de Deuda.",
       );
     }
-    await frame.waitForSelector("a", { timeout: 10000 });
+    await frame.waitForFunction(
+      () => Array.from(document.querySelectorAll("a")).some((a) =>
+        a.textContent.includes("Autorización Certificado Art.42"),
+      ),
+      { timeout: 10000 },
+    );
     const clickedArt42 = await frame.evaluate(() => {
       const link = Array.from(document.querySelectorAll("a")).find((a) =>
         a.textContent.includes("Autorización Certificado Art.42"),
@@ -1553,10 +1684,6 @@ if ($cert) {
       );
     }
 
-    await page
-      .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-      .catch(() => {});
-
     frame = getFrame();
     if (!frame)
       throw new Error("[ART42] No se encontró el frame del formulario.");
@@ -1567,24 +1694,15 @@ if ($cert) {
       throw new Error(`[ART42] #SDFREGIMEN no apareció: ${e.message}`);
     }
 
-    await frame.type("#SDFREGIMEN", String(cliente.ccc1));
-    await frame.type("#SDFPROVINCIA", String(cliente.ccc2));
-    await frame.type("#SDFNISS", String(cliente.ccc3));
+    await frame.evaluate((ccc1, ccc2, ccc3) => {
+      const set = (sel, val) => { const el = document.querySelector(sel); if (el) el.value = val; };
+      set('#SDFREGIMEN', ccc1);
+      set('#SDFPROVINCIA', ccc2);
+      set('#SDFNISS', ccc3);
+      set('#SDFOPCION', 'Alta');
+    }, String(cliente.ccc1), String(cliente.ccc2), String(cliente.ccc3));
 
-    try {
-      await frame.select("#SDFOPCION", "Alta");
-    } catch (e) {
-      throw new Error(
-        `[ART42] Error seleccionando Alta en #SDFOPCION: ${e.message}`,
-      );
-    }
-
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-        .catch(() => {}),
-      frame.click("#Sub2207001004_35"),
-    ]);
+    await frame.click("#Sub2207001004_35");
 
     frame = getFrame();
     if (!frame)
@@ -1596,26 +1714,27 @@ if ($cert) {
       throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
-    await frame.type("#SDFREGKCGK", empresaAutRegimen);
-    await frame.type("#SDFTESCCGK", empresaAutTesoreria);
-    await frame.type("#SDFCCONCGK9", empresaAutCuenta);
-
     const ahora = DateTime.now().setZone("Europe/Madrid");
     const hasta = ahora.plus({ years: 1 });
 
-    await frame.type("#SDFDIADESDE", ahora.toFormat("dd"));
-    await frame.type("#SDFMESDESDE", ahora.toFormat("MM"));
-    await frame.type("#SDFAODESDE", ahora.toFormat("yyyy"));
-    await frame.type("#SDFDIAHASTA", hasta.toFormat("dd"));
-    await frame.type("#SDFMESHASTA", hasta.toFormat("MM"));
-    await frame.type("#SDFAOHASTA", hasta.toFormat("yyyy"));
+    await frame.evaluate((reg, tes, cta, diaD, mesD, anyoD, diaH, mesH, anyoH) => {
+      const set = (sel, val) => { const el = document.querySelector(sel); if (el) el.value = val; };
+      set('#SDFREGKCGK', reg);
+      set('#SDFTESCCGK', tes);
+      set('#SDFCCONCGK9', cta);
+      set('#SDFDIADESDE', diaD);
+      set('#SDFMESDESDE', mesD);
+      set('#SDFAODESDE', anyoD);
+      set('#SDFDIAHASTA', diaH);
+      set('#SDFMESHASTA', mesH);
+      set('#SDFAOHASTA', anyoH);
+    },
+      empresaAutRegimen, empresaAutTesoreria, empresaAutCuenta,
+      ahora.toFormat("dd"), ahora.toFormat("MM"), ahora.toFormat("yyyy"),
+      hasta.toFormat("dd"), hasta.toFormat("MM"), hasta.toFormat("yyyy"),
+    );
 
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 })
-        .catch(() => {}),
-      frame.click("#Sub2207001004_75"),
-    ]);
+    await frame.click("#Sub2207001004_75");
 
     frame = getFrame();
     if (!frame)
@@ -1638,12 +1757,7 @@ if ($cert) {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
-    await Promise.all([
-      page
-        .waitForNavigation({ waitUntil: "networkidle0", timeout: 30000 })
-        .catch(() => {}),
-      frame.click("#Sub2204701006_74"),
-    ]);
+    await frame.click("#Sub2204701006_74");
 
     hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización generada.");
   }
