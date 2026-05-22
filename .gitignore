@@ -98,3 +98,6 @@ compilado/*
 dist/
 
 2
+
+# Claude Code local config (puede contener credenciales en permisos)
+.claude/settings.local.json
