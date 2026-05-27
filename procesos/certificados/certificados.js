@@ -472,7 +472,7 @@ if ($cert) {
                 objetoCliente.nombreArchivoATC =
                   `${objetoCliente.codigo} CERT CORRIENTE ATC ${objetoCliente.empresa} ${fechaHoy}.pdf`;
                 objetoCliente.nombreArchivoITA =
-                  `${objetoCliente.codigo} CERT CORRIENTE ITA ${objetoCliente.ccc} ${objetoCliente.empresa} ${fechaHoy}.pdf`;
+                  `${objetoCliente.codigo} Informe ITA ${objetoCliente.ccc} ${objetoCliente.empresa} ${fechaHoy}.pdf`;
                 objetoCliente.nombreArchivoArt42 =
                   `${objetoCliente.codigo} CERT CORRIENTE ART42 ${objetoCliente.ccc} ${objetoCliente.empresa} ${fechaHoy}.png`;
                 clientes.push(Object.assign({}, objetoCliente));
