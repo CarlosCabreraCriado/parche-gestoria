@@ -314,8 +314,8 @@ class ProcesosAsesoria {
               return null;
             }
             const empresasMetrica = [
-              ...agruparPorEmpresa(empresas, ["codigo"], ["codigo"]),
-              ...agruparPorEmpresa(autonomos, ["codigo"], ["codigo"]),
+              ...agruparPorEmpresa(empresas, ["codigo"], ["EMPRESA"]),
+              ...agruparPorEmpresa(autonomos, ["codigo"], ["EMPRESA"]),
             ];
             registrarEjecucion({
               nombreProceso,
