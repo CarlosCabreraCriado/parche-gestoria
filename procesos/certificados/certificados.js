@@ -1767,6 +1767,10 @@ if ($cert) {
     try {
       await frame.waitForSelector("#SDFREGKCGK", { timeout: 15000 });
     } catch (e) {
+      const dilPag1 = await frame.$eval('#DIL', el => el.textContent.trim()).catch(() => null);
+      if (dilPag1) {
+        throw new Error(`[ART42] Error en página de entrada (CCC): "${dilPag1}"`);
+      }
       throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
@@ -1843,12 +1847,18 @@ if ($cert) {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
-    const navPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 30000 });
     await frame.click("#Sub2204701006_74");
     try {
-      await navPromise;
+      await frame.waitForFunction(
+        () => {
+          const el = document.querySelector('#DIL');
+          const text = el && el.textContent.trim();
+          return text && !text.includes('3342');
+        },
+        { timeout: 30000 }
+      );
     } catch (e) {
-      console.warn(`[ART42] Timeout esperando navegación post-confirmación: ${e.message} — verificando resultado en DIL...`);
+      console.warn(`[ART42] Timeout esperando cambio en DIL post-confirmación: ${e.message} — continuando...`);
     }
 
     frame = getFrame();
