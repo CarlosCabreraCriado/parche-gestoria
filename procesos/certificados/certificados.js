@@ -1815,8 +1815,15 @@ if ($cert) {
       console.warn(`[ART42] #DIL previo sin contenido tras esperar: ${e.message} | html actual: "${htmlActual}"`);
     }
 
-    if (msgDil1 && !msgDil1.text.includes('3342')) {
-      throw new Error(`[ART42] Error de validación del servidor: "${msgDil1.text}"`);
+    if (msgDil1) {
+      if (msgDil1.text.includes('4574') || msgDil1.text.toLowerCase().includes('solapamiento')) {
+        console.log(`[ART42] Alta ya realizada previamente (solapamiento detectado): "${msgDil1.text}"`);
+        hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización ya existente (alta previa confirmada).");
+        return;
+      }
+      if (!msgDil1.text.includes('3342')) {
+        throw new Error(`[ART42] Error de validación del servidor: "${msgDil1.text}"`);
+      }
     }
 
     try {
@@ -1836,9 +1843,13 @@ if ($cert) {
       throw new Error(`[ART42] Error guardando screenshot: ${e.message}`);
     }
 
-    const navPromise = page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 });
+    const navPromise = page.waitForNavigation({ waitUntil: 'load', timeout: 30000 });
     await frame.click("#Sub2204701006_74");
-    await navPromise;
+    try {
+      await navPromise;
+    } catch (e) {
+      console.warn(`[ART42] Timeout esperando navegación post-confirmación: ${e.message} — verificando resultado en DIL...`);
+    }
 
     frame = getFrame();
     if (!frame)
