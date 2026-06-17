@@ -1767,6 +1767,10 @@ if ($cert) {
     try {
       await frame.waitForSelector("#SDFREGKCGK", { timeout: 15000 });
     } catch (e) {
+      const dilPag1 = await frame.$eval('#DIL', el => el.textContent.trim()).catch(() => null);
+      if (dilPag1) {
+        throw new Error(`[ART42] Error en página de entrada (CCC): "${dilPag1}"`);
+      }
       throw new Error(`[ART42] #SDFREGKCGK no apareció: ${e.message}`);
     }
 
@@ -1796,6 +1800,36 @@ if ($cert) {
     if (!frame)
       throw new Error("[ART42] No se encontró el frame tras Continuar 2.");
 
+    let msgDil1 = null;
+    try {
+      await frame.waitForFunction(
+        () => {
+          const el = document.querySelector('#DIL');
+          return el && el.textContent.trim().length > 0;
+        },
+        { timeout: 10000 },
+      );
+      msgDil1 = await frame.$eval('#DIL', el => ({
+        text: el.textContent.trim(),
+        html: el.innerHTML.trim(),
+      }));
+      console.log(`[ART42] DIL previo a Confirmar — texto: "${msgDil1.text}" | html: "${msgDil1.html}"`);
+    } catch (e) {
+      const htmlActual = await frame.$eval('#DIL', el => el.innerHTML.trim()).catch(() => '(no encontrado)');
+      console.warn(`[ART42] #DIL previo sin contenido tras esperar: ${e.message} | html actual: "${htmlActual}"`);
+    }
+
+    if (msgDil1) {
+      if (msgDil1.text.includes('4574') || msgDil1.text.toLowerCase().includes('solapamiento')) {
+        console.log(`[ART42] Alta ya realizada previamente (solapamiento detectado): "${msgDil1.text}"`);
+        hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización ya existente (alta previa confirmada).");
+        return;
+      }
+      if (!msgDil1.text.includes('3342')) {
+        throw new Error(`[ART42] Error de validación del servidor: "${msgDil1.text}"`);
+      }
+    }
+
     try {
       await frame.waitForSelector("#Sub2204701006_74", { timeout: 15000 });
     } catch (e) {
@@ -1814,6 +1848,45 @@ if ($cert) {
     }
 
     await frame.click("#Sub2204701006_74");
+    try {
+      await frame.waitForFunction(
+        () => {
+          const el = document.querySelector('#DIL');
+          const text = el && el.textContent.trim();
+          return text && !text.includes('3342');
+        },
+        { timeout: 30000 }
+      );
+    } catch (e) {
+      console.warn(`[ART42] Timeout esperando cambio en DIL post-confirmación: ${e.message} — continuando...`);
+    }
+
+    frame = getFrame();
+    if (!frame)
+      throw new Error("[ART42] No se encontró el frame de resultado.");
+
+    try {
+      await frame.waitForFunction(
+        () => {
+          const el = document.querySelector('#DIL');
+          return el && el.textContent.trim().length > 0;
+        },
+        { timeout: 15000 },
+      );
+    } catch (e) {
+      const htmlActual = await frame.$eval('#DIL', el => el.innerHTML.trim()).catch(() => '(no encontrado)');
+      throw new Error(`[ART42] #DIL de resultado sin contenido: ${e.message} | html actual: "${htmlActual}"`);
+    }
+
+    const msgResultado = await frame.$eval('#DIL', el => ({
+      text: el.textContent.trim(),
+      html: el.innerHTML.trim(),
+    }));
+    console.log(`[ART42] DIL resultado — texto: "${msgResultado.text}" | html: "${msgResultado.html}"`);
+
+    if (!msgResultado.text.includes('ALTA REALIZADA')) {
+      throw new Error(`[ART42] Resultado inesperado: "${msgResultado.text}"`);
+    }
 
     hoja.cell(cliente.filaExcel, colIdx["LOG ART42"]).value("OK, autorización generada.");
   }
