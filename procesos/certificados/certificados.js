@@ -1278,19 +1278,26 @@ if ($cert) {
     await page.locator('button[name="SPM.ACC.CONTINUAR"]').click();
     await page.locator('button[name="SPM.ACC.IMPRIMIR"]').wait();
     await Promise.all([
-      page.waitForNavigation({ waitUntil: "load" }),
+      page.waitForNavigation({ waitUntil: "networkidle0" }),
       page.locator('button[name="SPM.ACC.IMPRIMIR"]').click(),
     ]);
 
-    const enlaces = await page.$$("a");
     let enlaceEncontrado = null;
-    for (const enlace of enlaces) {
-      const texto = await page.evaluate((el) => el.innerText, enlace);
-      if (texto.includes("Certificado genérico")) {
-        enlaceEncontrado = enlace;
-        break;
+    try {
+      enlaceEncontrado = await page.waitForSelector('a[data-pc_tipo="documento"]', { timeout: 15000 });
+    } catch (_) {}
+
+    if (!enlaceEncontrado) {
+      const todosEnlaces = await page.$$("a");
+      for (const enlace of todosEnlaces) {
+        const texto = await page.evaluate((el) => el.innerText, enlace);
+        if (texto.includes("Certificado genérico")) {
+          enlaceEncontrado = enlace;
+          break;
+        }
       }
     }
+
     if (!enlaceEncontrado) {
       throw new Error("No se encontró el enlace 'Certificado genérico'.");
     }
