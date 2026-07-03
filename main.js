@@ -39,6 +39,7 @@ var procesosDuplicados;
 var procesosAutonomos;
 var procesosPipeline;
 var procesosCertificados;
+var procesosImportarFacturacion;
 
 
 var procesarPlantillaDocx;
@@ -939,6 +940,11 @@ ipc.on("abrirProyecto", function (event, nombreProy) {
   procesosDuplicados = new ProcesosDuplicados(pathToDbFolder, nombreProyecto, proyecto);
   procesosAutonomos = new ProcesosAutonomos(pathToDbFolder, nombreProyecto, proyecto);
   procesosPipeline = new ProcesosPipeline(pathToDbFolder, nombreProyecto, proyecto);
+  procesosImportarFacturacion = new ProcesosImportarFacturacion(
+    pathToDbFolder,
+    nombreProyecto,
+    proyecto,
+  );
 
   //Creacion de instancia de ejecucion de procesos:
   procesarPlantillaExcel = new PlantillaExcel(
@@ -1255,6 +1261,17 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
       result = await procesosPipeline[identificador](argumentos);
       break;
       case "facturacion": {
+        // Procesos "Importar facturación" (NÓMINAS / NOTIFICACIONES / TRÁMITES)
+        // se identifican por su identificador camelizado y se delegan a la
+        // clase ProcesosImportarFacturacion.
+        if (
+          identificador === "importarNominas" ||
+          identificador === "importarNotificaciones" ||
+          identificador === "importarTramites"
+        ) {
+          result = await procesosImportarFacturacion[identificador](argumentos);
+          break;
+        }
         const desde = argumentos.formularioControl[0];
         const hasta = argumentos.formularioControl[1];
         if (!desde || !hasta) {
@@ -1962,6 +1979,7 @@ const ProcesosDuplicados = require("./procesos/duplicados.js");
 const ProcesosAutonomos = require("./procesos/autonomos.js");
 const ProcesosPipeline = require("./procesos/pipeline.js");
 const ProcesosCertificados = require("./procesos/certificados/certificados.js");
+const ProcesosImportarFacturacion = require("./procesos/importarFacturacion.js");
 
 
 const PlantillaExcel = require("./plantillas/excel.js");

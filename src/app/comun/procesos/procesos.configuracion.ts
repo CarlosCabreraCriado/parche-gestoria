@@ -1613,6 +1613,225 @@ var libreriaProcesos: LibreriaProcesos[] = [
         opciones: null,
         salida: [{ tipo: "boolean", valor: false }],
       },
+      {
+        nombre: "Importar facturación",
+        categoria: "Facturacion",
+        tipo: "directorio",
+        descripcion:
+          "Importa Excel de cliente (NÓMINAS / NOTIFICACIONES / TRÁMITES) y genera CSVs + XLSX de traspaso listo para A3GES.",
+        subCategoria: [
+          {
+            nombre: "Importar Nóminas",
+            categoria: "Facturacion",
+            tipo: "proceso",
+            descripcion:
+              "Transforma NOMINAS.xlsx del cliente en conceptos facturables y genera la plantilla A3.",
+            autor: "Integración A3",
+            argumentos: [
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "archivoInput",
+                formulario: {
+                  titulo: "Archivo NÓMINAS del cliente",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Selecciona NOMINAS.xlsx",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "rutaSalida",
+                formulario: {
+                  titulo: "Directorio de salida",
+                  tipo: "ruta",
+                  placeholder: "Carpeta donde escribir CSVs y XLSX",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "fecha",
+                obligado: false,
+                identificador: "fechaFactura",
+                formulario: {
+                  titulo: "Fecha por defecto",
+                  tipo: "fecha",
+                  placeholder: "Fecha a aplicar si el archivo no la trae",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "carpetaMapeos",
+                formulario: {
+                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
+                  tipo: "ruta",
+                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "rutaPlantillaA3",
+                formulario: {
+                  titulo: "Plantilla A3 (XLSX)",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Ruta a la plantilla oficial de A3GES",
+                  valorDefault:
+                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                },
+              },
+            ],
+            opciones: null,
+            salida: [{ tipo: "boolean", valor: false }],
+          },
+          {
+            nombre: "Importar Notificaciones",
+            categoria: "Facturacion",
+            tipo: "proceso",
+            descripcion:
+              "Transforma FACT NOTIFICACIONES.xlsx del cliente en conceptos facturables y genera la plantilla A3.",
+            autor: "Integración A3",
+            argumentos: [
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "archivoInput",
+                formulario: {
+                  titulo: "Archivo NOTIFICACIONES del cliente",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Selecciona FACT NOTIFICACIONES.xlsx",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "rutaSalida",
+                formulario: {
+                  titulo: "Directorio de salida",
+                  tipo: "ruta",
+                  placeholder: "Carpeta donde escribir CSVs y XLSX",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "fecha",
+                obligado: false,
+                identificador: "fechaFactura",
+                formulario: {
+                  titulo: "Fecha por defecto",
+                  tipo: "fecha",
+                  placeholder: "Fecha a aplicar si el archivo no la trae",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "carpetaMapeos",
+                formulario: {
+                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
+                  tipo: "ruta",
+                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "rutaPlantillaA3",
+                formulario: {
+                  titulo: "Plantilla A3 (XLSX)",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Ruta a la plantilla oficial de A3GES",
+                  valorDefault:
+                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                },
+              },
+            ],
+            opciones: null,
+            salida: [{ tipo: "boolean", valor: false }],
+          },
+          {
+            nombre: "Importar Trámites",
+            categoria: "Facturacion",
+            tipo: "proceso",
+            descripcion:
+              "Transforma TRAMITES LABORAL.xlsx del cliente en conceptos facturables y genera la plantilla A3.",
+            autor: "Integración A3",
+            argumentos: [
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "archivoInput",
+                formulario: {
+                  titulo: "Archivo TRÁMITES del cliente",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Selecciona TRAMITES LABORAL.xlsx",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "rutaSalida",
+                formulario: {
+                  titulo: "Directorio de salida",
+                  tipo: "ruta",
+                  placeholder: "Carpeta donde escribir CSVs y XLSX",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "fecha",
+                obligado: false,
+                identificador: "fechaFactura",
+                formulario: {
+                  titulo: "Fecha por defecto",
+                  tipo: "fecha",
+                  placeholder: "Fecha a aplicar si el archivo no la trae",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "carpetaMapeos",
+                formulario: {
+                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
+                  tipo: "ruta",
+                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: false,
+                identificador: "rutaPlantillaA3",
+                formulario: {
+                  titulo: "Plantilla A3 (XLSX)",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder: "Ruta a la plantilla oficial de A3GES",
+                  valorDefault:
+                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                },
+              },
+            ],
+            opciones: null,
+            salida: [{ tipo: "boolean", valor: false }],
+          },
+        ],
+      },
     ],
   },
 ];
