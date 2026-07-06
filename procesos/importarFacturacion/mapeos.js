@@ -2,16 +2,19 @@ const path = require("path");
 const XlsxPopulate = require("xlsx-populate");
 const { _str, _toInt, readAbsoluteRows } = require("./utils");
 
-const FILE_CLIENTES_EXPTES = "mapeo_clientesxexptes.xlsx";
-const FILE_CONCEPTOS = "mapeo_conceptosfacturables.xlsx";
-const FILE_EMPRESAS = "mapeo_Empresas a las que no se le facturan.xlsx";
+const SHEET_CLIENTES_EXPTES = "ClientesXExptes";
+const SHEET_CONCEPTOS_FACTURABLES = "ConceptosFacturables";
+const SHEET_EMPRESAS_NO_FACTURABLES = "EmpresasNoFacturables";
 
-const SHEET_CONCEPTOS_PLANO = "NUEVOS 06-02-2026";
 const REDIRECT_NADA = "NADA";
 
 function readSheetRows(workbook, sheetName) {
   const sheet = workbook.sheet(sheetName);
-  if (!sheet) return [];
+  if (!sheet) {
+    throw new Error(
+      `Hoja '${sheetName}' no encontrada en el archivo de mapeos. Hojas requeridas: ${SHEET_CLIENTES_EXPTES}, ${SHEET_CONCEPTOS_FACTURABLES}, ${SHEET_EMPRESAS_NO_FACTURABLES}.`
+    );
+  }
   return readAbsoluteRows(sheet).rows;
 }
 
@@ -21,12 +24,9 @@ class ExpteShortLookup {
     this.warnings = [];
   }
 
-  static async fromXlsx(filePath) {
+  static fromWorkbook(workbook) {
     const obj = new ExpteShortLookup();
-    const workbook = await XlsxPopulate.fromFileAsync(path.normalize(filePath));
-    const sheetNames = workbook.sheets().map((s) => s.name());
-    const sheetName = sheetNames.includes("Hoja1") ? "Hoja1" : sheetNames[0];
-    const rows = readSheetRows(workbook, sheetName);
+    const rows = readSheetRows(workbook, SHEET_CLIENTES_EXPTES);
     for (const { rowIndex, cells } of rows) {
       if (rowIndex < 2) continue; // saltar cabecera
       if (!cells || cells[0] === undefined || cells[0] === null) continue;
@@ -74,14 +74,9 @@ class TarifaCatalog {
     this.warnings = [];
   }
 
-  static async fromXlsx(filePath, sheet = SHEET_CONCEPTOS_PLANO) {
+  static fromWorkbook(workbook) {
     const obj = new TarifaCatalog();
-    const workbook = await XlsxPopulate.fromFileAsync(path.normalize(filePath));
-    const sheetNames = workbook.sheets().map((s) => s.name());
-    if (!sheetNames.includes(sheet)) {
-      throw new Error(`Hoja '${sheet}' no encontrada en ${path.basename(filePath)}`);
-    }
-    const rows = readSheetRows(workbook, sheet);
+    const rows = readSheetRows(workbook, SHEET_CONCEPTOS_FACTURABLES);
     const seen = new Map();
     for (const { rowIndex, cells } of rows) {
       if (rowIndex < 2) continue;
@@ -155,12 +150,9 @@ class ClienteRedirect {
     this.warnings = [];
   }
 
-  static async fromXlsx(filePath) {
+  static fromWorkbook(workbook) {
     const obj = new ClienteRedirect();
-    const workbook = await XlsxPopulate.fromFileAsync(path.normalize(filePath));
-    const sheetNames = workbook.sheets().map((s) => s.name());
-    const sheetName = sheetNames.includes("Hoja1") ? "Hoja1" : sheetNames[0];
-    const rows = readSheetRows(workbook, sheetName);
+    const rows = readSheetRows(workbook, SHEET_EMPRESAS_NO_FACTURABLES);
     for (const { rowIndex, cells } of rows) {
       if (rowIndex < 2) continue;
       if (!cells || cells.length < 3) continue;
@@ -220,13 +212,11 @@ class Mapeos {
     this.redirect = redirect;
   }
 
-  static async fromDir(baseDir) {
-    const base = path.normalize(baseDir);
-    const [exptes, tarifas, redirect] = await Promise.all([
-      ExpteShortLookup.fromXlsx(path.join(base, FILE_CLIENTES_EXPTES)),
-      TarifaCatalog.fromXlsx(path.join(base, FILE_CONCEPTOS)),
-      ClienteRedirect.fromXlsx(path.join(base, FILE_EMPRESAS)),
-    ]);
+  static async fromFile(filePath) {
+    const workbook = await XlsxPopulate.fromFileAsync(path.normalize(filePath));
+    const exptes = ExpteShortLookup.fromWorkbook(workbook);
+    const tarifas = TarifaCatalog.fromWorkbook(workbook);
+    const redirect = ClienteRedirect.fromWorkbook(workbook);
     return new Mapeos(exptes, tarifas, redirect);
   }
 
@@ -256,4 +246,7 @@ module.exports = {
   ClienteRedirect,
   Mapeos,
   REDIRECT_NADA,
+  SHEET_CLIENTES_EXPTES,
+  SHEET_CONCEPTOS_FACTURABLES,
+  SHEET_EMPRESAS_NO_FACTURABLES,
 };

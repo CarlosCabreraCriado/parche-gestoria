@@ -43,8 +43,7 @@ function buildDescripcion(tipoTramite, observacion) {
   return base.slice(0, 250);
 }
 
-async function transform(inputPath, mapeos, outputDir, fechaDefault) {
-  const fecha0 = fechaDefault || new Date();
+async function transform(inputPath, mapeos, outputDir) {
   ensureDir(outputDir);
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
@@ -68,7 +67,7 @@ async function transform(inputPath, mapeos, outputDir, fechaDefault) {
     const tipoTramite = _str(row[COLS.TIPO_TRAMITE]);
     const conceptoRaw = _str(row[COLS.CONCEPTO_FACT]) || CODIGO_CONCEPTO_DEFAULT;
     const nombreTrab = _str(row[COLS.NOMBRE_TRAB]);
-    const fecha = _toDate(row[COLS.FECHA], fecha0);
+    const fecha = _toDate(row[COLS.FECHA], null);
 
     if (empresaRaw === "" && importeOrigen === null && exptCorto === null) continue;
 
@@ -91,6 +90,10 @@ async function transform(inputPath, mapeos, outputDir, fechaDefault) {
     }
     if (importeOrigen === null || importeOrigen <= 0) {
       addInc("Sin IMPORTE");
+      continue;
+    }
+    if (!fecha) {
+      addInc("Sin FECHA válida en el archivo");
       continue;
     }
 

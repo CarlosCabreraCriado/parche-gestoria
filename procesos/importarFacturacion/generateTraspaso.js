@@ -2,7 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const XlsxPopulate = require("xlsx-populate");
 
-const DEFAULT_TEMPLATE = "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX";
+const DEFAULT_TEMPLATE = path.join(
+  __dirname,
+  "..",
+  "inputs",
+  "PLANTILLA DE TRASPASO DE DATOS A A3GES.xlsx"
+);
 const DATA_START_ROW = 3;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

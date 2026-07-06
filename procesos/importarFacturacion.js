@@ -8,13 +8,16 @@ const notificaciones = require("./importarFacturacion/notificaciones");
 const tramites = require("./importarFacturacion/tramites");
 const generateTraspaso = require("./importarFacturacion/generateTraspaso");
 const {
-  _toDate,
   ensureDir,
   stampYYYYMMDDHHmm,
 } = require("./importarFacturacion/utils");
 
-const DEFAULT_MAPEOS_DIR = path.join(__dirname, "inputs", "mapeos");
-const DEFAULT_PLANTILLA = "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX";
+// Plantilla A3: siempre la misma, versionada en el propio proyecto (no configurable por el usuario).
+const PLANTILLA_A3 = path.join(
+  __dirname,
+  "inputs",
+  "PLANTILLA DE TRASPASO DE DATOS A A3GES.xlsx"
+);
 
 class ProcesosImportarFacturacion {
   constructor(pathToDbFolder, nombreProyecto, proyectoDB) {
@@ -36,15 +39,12 @@ class ProcesosImportarFacturacion {
 
   _parseArgs(argumentos, tipo) {
     // Orden esperado (procesos.configuracion.ts):
-    // [0] archivoInput, [1] rutaSalida, [2] fechaFactura,
-    // [3] carpetaMapeos, [4] rutaPlantillaA3
+    // [0] archivoInput, [1] rutaSalida, [2] archivoMapeos
     const c = argumentos?.formularioControl || [];
     return {
       archivoInput: c[0],
       rutaSalida: c[1],
-      fechaFactura: c[2],
-      carpetaMapeos: c[3] && String(c[3]).trim() ? String(c[3]) : DEFAULT_MAPEOS_DIR,
-      rutaPlantillaA3: c[4] && String(c[4]).trim() ? String(c[4]) : DEFAULT_PLANTILLA,
+      archivoMapeos: c[2],
       tipo,
     };
   }
@@ -58,12 +58,12 @@ class ProcesosImportarFacturacion {
       this.logErr("Ruta de salida vacía.");
       return false;
     }
-    if (!fs.existsSync(args.carpetaMapeos)) {
-      this.logErr(`Carpeta de mapeos no encontrada: ${args.carpetaMapeos}`);
+    if (!args.archivoMapeos || !fs.existsSync(args.archivoMapeos)) {
+      this.logErr(`Archivo de mapeos no encontrado: ${args.archivoMapeos}`);
       return false;
     }
-    if (!fs.existsSync(args.rutaPlantillaA3)) {
-      this.logErr(`Plantilla A3 no encontrada: ${args.rutaPlantillaA3}`);
+    if (!fs.existsSync(PLANTILLA_A3)) {
+      this.logErr(`Plantilla A3 no encontrada en el proyecto: ${PLANTILLA_A3}`);
       return false;
     }
     return true;
@@ -83,16 +83,14 @@ class ProcesosImportarFacturacion {
         );
         ensureDir(outDir);
 
-        const fechaFactura = _toDate(args.fechaFactura, now);
-
         this.log(`Iniciando importación tipo=${tipo}`);
         this.log(`  Input:    ${args.archivoInput}`);
         this.log(`  Output:   ${outDir}`);
-        this.log(`  Mapeos:   ${args.carpetaMapeos}`);
-        this.log(`  Plantilla:${args.rutaPlantillaA3}`);
+        this.log(`  Mapeos:   ${args.archivoMapeos}`);
+        this.log(`  Plantilla:${PLANTILLA_A3}`);
 
         // 1. Cargar mapeos
-        const mapeos = await Mapeos.fromDir(args.carpetaMapeos);
+        const mapeos = await Mapeos.fromFile(args.archivoMapeos);
         const summary = mapeos.summary();
         this.log(`Mapeos cargados: ${JSON.stringify(summary)}`);
         for (const w of mapeos.allWarnings()) this.logWarn(w);
@@ -101,19 +99,14 @@ class ProcesosImportarFacturacion {
         const result = await transformer.transform(
           path.normalize(args.archivoInput),
           mapeos,
-          outDir,
-          fechaFactura
+          outDir
         );
         this.log(`Transformación: ${JSON.stringify(result)}`);
 
         // 3. Generar XLSX de traspaso
         const xlsxOut = path.join(outDir, `TRASPASO_A3_${tipo}_${stamp}.xlsx`);
         this.log(`Inyectando plantilla A3 → ${xlsxOut}`);
-        const gen = await generateTraspaso.run(
-          outDir,
-          xlsxOut,
-          path.normalize(args.rutaPlantillaA3)
-        );
+        const gen = await generateTraspaso.run(outDir, xlsxOut, PLANTILLA_A3);
         this.log(`Plantilla generada: ${gen.total_rows} filas en ${gen.sheets.length} hoja(s).`);
 
         // 4. Resumen JSON

@@ -1652,38 +1652,16 @@ var libreriaProcesos: LibreriaProcesos[] = [
                 },
               },
               {
-                tipo: "fecha",
-                obligado: false,
-                identificador: "fechaFactura",
-                formulario: {
-                  titulo: "Fecha por defecto",
-                  tipo: "fecha",
-                  placeholder: "Fecha a aplicar si el archivo no la trae",
-                  valorDefault: "",
-                },
-              },
-              {
                 tipo: "texto",
-                obligado: false,
-                identificador: "carpetaMapeos",
+                obligado: true,
+                identificador: "archivoMapeos",
                 formulario: {
-                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
-                  tipo: "ruta",
-                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
-                  valorDefault: "",
-                },
-              },
-              {
-                tipo: "texto",
-                obligado: false,
-                identificador: "rutaPlantillaA3",
-                formulario: {
-                  titulo: "Plantilla A3 (XLSX)",
+                  titulo: "Archivo de mapeos (XLSX, 3 hojas)",
                   tipo: "archivo",
                   accept: ".xlsx, .XLSX",
-                  placeholder: "Ruta a la plantilla oficial de A3GES",
-                  valorDefault:
-                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                  placeholder:
+                    "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
                 },
               },
             ],
@@ -1722,38 +1700,16 @@ var libreriaProcesos: LibreriaProcesos[] = [
                 },
               },
               {
-                tipo: "fecha",
-                obligado: false,
-                identificador: "fechaFactura",
-                formulario: {
-                  titulo: "Fecha por defecto",
-                  tipo: "fecha",
-                  placeholder: "Fecha a aplicar si el archivo no la trae",
-                  valorDefault: "",
-                },
-              },
-              {
                 tipo: "texto",
-                obligado: false,
-                identificador: "carpetaMapeos",
+                obligado: true,
+                identificador: "archivoMapeos",
                 formulario: {
-                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
-                  tipo: "ruta",
-                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
-                  valorDefault: "",
-                },
-              },
-              {
-                tipo: "texto",
-                obligado: false,
-                identificador: "rutaPlantillaA3",
-                formulario: {
-                  titulo: "Plantilla A3 (XLSX)",
+                  titulo: "Archivo de mapeos (XLSX, 3 hojas)",
                   tipo: "archivo",
                   accept: ".xlsx, .XLSX",
-                  placeholder: "Ruta a la plantilla oficial de A3GES",
-                  valorDefault:
-                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                  placeholder:
+                    "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
                 },
               },
             ],
@@ -1792,38 +1748,16 @@ var libreriaProcesos: LibreriaProcesos[] = [
                 },
               },
               {
-                tipo: "fecha",
-                obligado: false,
-                identificador: "fechaFactura",
-                formulario: {
-                  titulo: "Fecha por defecto",
-                  tipo: "fecha",
-                  placeholder: "Fecha a aplicar si el archivo no la trae",
-                  valorDefault: "",
-                },
-              },
-              {
                 tipo: "texto",
-                obligado: false,
-                identificador: "carpetaMapeos",
+                obligado: true,
+                identificador: "archivoMapeos",
                 formulario: {
-                  titulo: "Carpeta con los 3 XLSX de mapeos (opcional)",
-                  tipo: "ruta",
-                  placeholder: "Vacío = usar carpeta por defecto del proyecto",
-                  valorDefault: "",
-                },
-              },
-              {
-                tipo: "texto",
-                obligado: false,
-                identificador: "rutaPlantillaA3",
-                formulario: {
-                  titulo: "Plantilla A3 (XLSX)",
+                  titulo: "Archivo de mapeos (XLSX, 3 hojas)",
                   tipo: "archivo",
                   accept: ".xlsx, .XLSX",
-                  placeholder: "Ruta a la plantilla oficial de A3GES",
-                  valorDefault:
-                    "M:\\A3\\A3GESW\\PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX",
+                  placeholder:
+                    "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
                 },
               },
             ],

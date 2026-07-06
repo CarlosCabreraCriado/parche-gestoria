@@ -62,8 +62,7 @@ function buildDescAmpliada(descAmpliadaRaw, asunto, emisor) {
   return parts.join(", ").slice(0, 500);
 }
 
-async function transform(inputPath, mapeos, outputDir, fechaDefault) {
-  const fecha0 = fechaDefault || new Date();
+async function transform(inputPath, mapeos, outputDir) {
   ensureDir(outputDir);
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
@@ -154,7 +153,11 @@ async function transform(inputPath, mapeos, outputDir, fechaDefault) {
     }
 
     const unidades = _toInt(row[COLS.UNIDADES]) || 1;
-    const fechaLinea = _toDate(row[COLS.FECHA], fecha0);
+    const fechaLinea = _toDate(row[COLS.FECHA], null);
+    if (!fechaLinea) {
+      addInc("Sin FECHA válida en el archivo");
+      continue;
+    }
 
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
