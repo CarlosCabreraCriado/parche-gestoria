@@ -155,17 +155,17 @@ class ClienteRedirect {
     const rows = readSheetRows(workbook, SHEET_EMPRESAS_NO_FACTURABLES);
     for (const { rowIndex, cells } of rows) {
       if (rowIndex < 2) continue;
-      if (!cells || cells.length < 3) continue;
-      const origen = _toInt(cells[1]);
+      if (!cells || cells.length < 2) continue;
+      const origen = _toInt(cells[0]);
       if (origen === null) {
-        if (cells[1] !== null && cells[1] !== undefined && cells[1] !== "") {
+        if (cells[0] !== null && cells[0] !== undefined && cells[0] !== "") {
           obj.warnings.push(
-            `Fila ${rowIndex}: origen no numérico '${cells[1]}' — ignorado`
+            `Fila ${rowIndex}: origen no numérico '${cells[0]}' — ignorado`
           );
         }
         continue;
       }
-      const destinoRaw = cells[2];
+      const destinoRaw = cells[1];
       let destino;
       if (typeof destinoRaw === "string" && destinoRaw.trim().toUpperCase() === REDIRECT_NADA) {
         destino = REDIRECT_NADA;
