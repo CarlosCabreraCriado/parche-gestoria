@@ -2118,6 +2118,11 @@ class ProcesosFie {
 
                   const detalleCnoe = String(r?.detalleCnoe ?? "");
 
+                  const cotizacionHorasExtras = String(
+                    r?.cotizacionHorasExtras ?? "",
+                  );
+                  const diasCotAnoAnt = String(r?.diasCotAnoAnt ?? "");
+
                   let fechaATEP = "";
                   if (r?.fechaATEP) {
                     try {
@@ -2159,6 +2164,8 @@ class ProcesosFie {
                       diasResto,
                       baseFijoParcial,
                       diasFijoParcial,
+                      cotizacionHorasExtras,
+                      diasCotAnoAnt,
                       fechaATEP,
                     });
                   }
@@ -2221,6 +2228,32 @@ class ProcesosFie {
                           typeDelay: 35,
                         },
                       );
+                  }
+
+                  if (
+                    !(await fillIfPresent(
+                      form2,
+                      "#cotOtrosConcept",
+                      cotizacionHorasExtras,
+                      { tries: 3, typeDelay: 35, digitsOnlyCompare: false },
+                    ))
+                  ) {
+                    logDebug(
+                      "[FIE_2] #cotOtrosConcept ausente o sin valor. Continúo sin error.",
+                    );
+                  }
+
+                  if (
+                    !(await fillIfPresent(
+                      form2,
+                      "#diasCotAnoAntOtrosConcept",
+                      diasCotAnoAnt,
+                      { tries: 3, typeDelay: 35, digitsOnlyCompare: false },
+                    ))
+                  ) {
+                    logDebug(
+                      "[FIE_2] #diasCotAnoAntOtrosConcept ausente o sin valor. Continúo sin error.",
+                    );
                   }
 
                   if (
