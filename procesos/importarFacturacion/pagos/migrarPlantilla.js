@@ -1,13 +1,19 @@
 // Migración one-shot: 4PAGOS2026 (1).xls → plantilla normalizada A3 (.xlsx).
 //
 // Genera un libro nuevo donde cada hoja de modelo fiscal tiene:
-//   - Zona A (cols A–K): bloque estándar idéntico en todas las hojas
-//     MODELO | EXPTE | NIF | EMPRESA | FACTURAR | FRECUENCIA | P1 | P2 | P3 | P4 | OBSERVACIONES
-//   - Col L: separador
-//   - Zona B (col M+): columnas originales no consumidas (incl. F.BAJA), copiadas tal cual
-// OBSERVACIONES unifica bajo un único nombre la columna de notas de cada hoja
-// (que en origen se llama OBS/OBSERV/OBSERVACIONES según el modelo) para que
-// el futuro parser la lea de un sitio fijo en vez de detectarla por hoja.
+//   - Zona A (cols A–F): bloque estándar idéntico en todas las hojas
+//     CONCEPTO FACT | EXPTE | NIF | EMPRESA | FACTURAR | FRECUENCIA
+//   - Col G: separador
+//   - Zona B (col H+): columnas originales no consumidas (incl. P1–P4,
+//     OBSERVACIONES y F.BAJA), copiadas tal cual
+// CONCEPTO FACT es el concepto facturable de la fila (código de la hoja
+// `ConceptosFacturables` de mapeos_facturacion.xlsx: 0.016, 0.012…). Se deriva
+// del modelo fiscal vía `MODELO_CONCEPTO` y es lo que fija el importe a facturar,
+// no el importe que hubiera en el periodo. Por eso P1–P4 (y OBSERVACIONES) dejan
+// de ser campos que lee el importador y vuelven a la zona libre como dato crudo
+// original. Si un modelo no está mapeado, CONCEPTO FACT cae al propio nº de
+// modelo (señal visible de que falta mapearlo).
+// OBSERVACIONES / P1–P4 se copian tal cual del original a la zona libre.
 // FRECUENCIA (TRIMESTRAL/MENSUAL/ANUAL/OTRA) hace explícita la periodicidad de
 // cada fila. Por defecto la hereda la hoja o la sección (igual que FACTURAR),
 // pero en la hoja 111 algunas empresas grandes declaran mensualmente y hoy esa
@@ -34,10 +40,24 @@ const DEFAULT_OUTPUT =
   "C:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/An-lisis-A3---Del-Castillo-Asesores/gesw/inputs/4PAGOS2026 - PLANTILLA A3 v1.xlsx";
 
 const SENTINEL = "A3PAGOS v1";
-const ZONA_A = ["MODELO", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA", "P1", "P2", "P3", "P4", "OBSERVACIONES"];
+const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA"];
 const FRECUENCIAS = ["TRIMESTRAL", "MENSUAL", "ANUAL", "OTRA"];
 const COL_SEP = ZONA_A.length + 1; // separador tras Zona A
 const ZONA_B_START = COL_SEP + 1; // primera columna de Zona B
+
+// Modelo fiscal → código de concepto facturable (hoja `ConceptosFacturables` de
+// mapeos_facturacion.xlsx). Todos son "Modelo N" en esa tabla; el importe se
+// resuelve luego cruzando el código, no desde aquí.
+const MODELO_CONCEPTO = {
+  "130": "0.016", "131": "0.017", "111": "0.012", "115": "0.013", "046": "0.115",
+  "420": "0.014", "421": "0.015", "417": "0.025", "412": "0.096",
+  "202": "0.018", "210": "0.019",
+  "303": "3.186", "349": "3.248", "369": "0.121", "340": "3.183",
+  "123": "3.185", "193": "3.184",
+};
+function conceptoDe(modelo) {
+  return MODELO_CONCEPTO[modelo] || modelo; // fallback: nº de modelo si no está mapeado
+}
 
 // Colores
 const C_HEADER_A = "305496"; // azul oscuro
@@ -276,8 +296,10 @@ function transformSheet(spec, rows, informe) {
   }));
 
   const labels = buildLabels(spec, rows, maxCol);
-  const consumed = new Set([spec.cols.expte, spec.cols.nif, spec.cols.empresa, ...spec.cols.p]);
-  if (spec.cols.obs !== null && spec.cols.obs !== undefined) consumed.add(spec.cols.obs);
+  // La Zona A ya no consume P1..P4 ni OBSERVACIONES: se quedan en su posición
+  // original dentro de la zona libre (dato crudo que el importador no lee), pues
+  // la facturación sale del CONCEPTO FACT y no del importe del periodo.
+  const consumed = new Set([spec.cols.expte, spec.cols.nif, spec.cols.empresa]);
   const zonaBCols = [];
   for (let c = 0; c <= maxCol; c++) {
     if (!consumed.has(c) && !dropped.has(c)) zonaBCols.push(c);
@@ -353,9 +375,6 @@ function transformSheet(spec, rows, informe) {
       }
     });
 
-    const observaciones =
-      spec.cols.obs !== null && spec.cols.obs !== undefined ? str(cells[spec.cols.obs]) : "";
-
     let frecuencia = cur.frecuencia;
     if (spec.frecuenciaDesdeColumna) {
       const { col, valores } = spec.frecuenciaDesdeColumna;
@@ -370,13 +389,13 @@ function transformSheet(spec, rows, informe) {
       tipo: "dato",
       filaOrigen: fila,
       modelo: cur.modelo,
+      concepto: conceptoDe(cur.modelo),
       expte,
       nif,
       empresa: str(cells[spec.cols.empresa]),
       facturar: cur.facturar,
       frecuencia,
-      p,
-      observaciones,
+      // P1..P4 y OBSERVACIONES ya no van en Zona A; salen en zonaB con su valor crudo.
       zonaB: zonaBCols.map((c) => cells[c] ?? null),
     });
   }
@@ -395,24 +414,19 @@ function writeLeeme(sheet, fechaGen, inputName) {
     ["", ""],
     ["CÓMO FUNCIONA", "", true],
     ["Cada hoja de modelo tiene dos zonas:", ""],
-    ["  · ZONA A (columnas A a K): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
-    ["  · ZONA B (columna M en adelante): zona libre de cada modelo (incluye F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
+    ["  · ZONA A (columnas A a F): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
+    ["  · ZONA B (columna H en adelante): zona libre de cada modelo (incluye P1–P4, OBSERVACIONES, F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
     ["", ""],
     ["COLUMNAS DE LA ZONA A", "", true],
-    ["  MODELO", "Modelo fiscal de la fila (130, 420, 111…). Determina concepto y tarifa vía mapeos."],
+    ["  CONCEPTO FACT", "Concepto facturable de la fila (código de la hoja ConceptosFacturables: 0.016, 0.012…). Es lo que fija el importe a facturar al cruzarlo con mapeos_facturacion.xlsx. Se deriva del modelo fiscal (130, 111…)."],
     ["  EXPTE", "Código de cliente (número corto). Sin él la fila no se factura."],
     ["  NIF", "Informativo / control de calidad."],
     ["  EMPRESA", "Informativo."],
     ["  FACTURAR", "Única fuente de verdad sobre si la fila se factura: SI = se factura si el periodo tiene valor · NO = nunca · REVISAR = no se factura y sale en incidencias. Ningún otro campo (p. ej. una fecha de baja en Zona B) se cruza para decidir esto."],
     ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente)."],
-    ["  P1..P4", "Periodos. Trimestrales: P1=1T…P4=4T. Modelo 202: P1=abril, P2=octubre, P3=diciembre (P4 no se usa). En filas MENSUAL/ANUAL su significado exacto lo definirá el futuro parser."],
-    ["  OBSERVACIONES", "Nota de la fila, copiada de la columna OBS/OBSERV/OBSERVACIONES del archivo original (nombre unificado). Vacía si esa hoja no traía columna de notas."],
     ["", ""],
-    ["VALORES PERMITIDOS EN P1..P4", "", true],
-    ["  · número  = modelo presentado (el importe del impuesto queda como dato informativo)", ""],
-    ["  · X       = modelo presentado, sin importe", ""],
-    ["  · vacío   = no presentado (no se factura)", ""],
-    ["  Cualquier otro texto se marca como incidencia en la importación. Las anotaciones van a Zona B / Observaciones.", ""],
+    ["P1..P4 y OBSERVACIONES (ahora en la ZONA LIBRE)", "", true],
+    ["  Se copian tal cual del archivo original y el importador NO las lee: son dato informativo. Periodos trimestrales P1=1T…P4=4T (modelo 202: P1=abril, P2=octubre, P3=diciembre). La facturación la fija CONCEPTO FACT, no el importe del periodo.", ""],
     ["", ""],
     ["FILAS NARANJAS", "Separadores de sección heredados del original. El importador las ignora (no tienen EXPTE)."],
     ["FILAS GRISES AL FINAL", "Notas y leyendas del archivo original, conservadas para no perder información."],
@@ -458,16 +472,12 @@ function writeModelSheet(sheet, spec, t, fechaGen) {
       r++;
       continue;
     }
-    sheet.cell(r, 1).value(row.modelo);
+    sheet.cell(r, 1).value(row.concepto);
     if (row.expte !== null) sheet.cell(r, 2).value(row.expte);
     if (row.nif) sheet.cell(r, 3).value(row.nif);
     if (row.empresa) sheet.cell(r, 4).value(row.empresa);
     sheet.cell(r, 5).value(row.facturar);
     sheet.cell(r, 6).value(row.frecuencia);
-    row.p.forEach((v, i) => {
-      if (v !== null && v !== undefined && String(v).trim() !== "") sheet.cell(r, 7 + i).value(v);
-    });
-    if (row.observaciones) sheet.cell(r, 11).value(row.observaciones);
     sheet.cell(r, COL_SEP).style({ fill: C_SEP });
     row.zonaB.forEach((v, i) => {
       if (v === null || v === undefined || String(v).trim() === "") return;
@@ -509,7 +519,7 @@ function writeModelSheet(sheet, spec, t, fechaGen) {
 
   // Presentación
   sheet.freezePanes(0, 2);
-  const widths = { A: 8, B: 8, C: 13, D: 42, E: 11, F: 12, G: 11, H: 11, I: 11, J: 11, K: 40, L: 2 };
+  const widths = { A: 13, B: 8, C: 13, D: 42, E: 11, F: 12, G: 2 };
   Object.entries(widths).forEach(([col, w]) => sheet.column(col).width(w));
   for (let i = 0; i < nZonaB; i++) {
     sheet.column(colLetter(ZONA_B_START - 1 + i)).width(14);
