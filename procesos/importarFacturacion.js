@@ -16,7 +16,7 @@ const {
 const PLANTILLA_A3 = path.join(
   __dirname,
   "inputs",
-  "PLANTILLA DE TRASPASO DE DATOS A A3GES.xlsx"
+  "PLANTILLA DE TRASPASO DE DATOS A A3GES.XLSX"
 );
 
 class ProcesosImportarFacturacion {
