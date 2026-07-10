@@ -96,6 +96,85 @@ function readAbsoluteRows(sheet) {
   return { rows, startRow };
 }
 
+// Normaliza el texto de una cabecera para poder emparejarla sin depender de
+// mayúsculas, acentos, espacios ni signos: "CONCEPTO FACT" -> "conceptofact".
+function normalizeHeader(value) {
+  if (value === null || value === undefined) return "";
+  let s = String(value).trim().toLowerCase();
+  s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  s = s.replace(/[^0-9a-z]/g, "");
+  return s;
+}
+
+// Dado el array de celdas de una fila de cabecera y un diccionario
+// { campoLogico: [sinonimoNormalizado, ...] }, devuelve:
+//   - cols:    { campoLogico -> índice de columna (0-based) } para los encontrados
+//   - present: Map(cabeceraNormalizada -> índice) de todas las cabeceras
+// Se usa el primer sinónimo presente y la primera aparición de cada cabecera.
+function resolveHeaderColumns(headerCells, synonyms) {
+  const present = new Map();
+  (headerCells || []).forEach((cell, idx) => {
+    const nk = normalizeHeader(cell);
+    if (nk && !present.has(nk)) present.set(nk, idx);
+  });
+  const cols = {};
+  for (const [field, names] of Object.entries(synonyms)) {
+    for (const n of names) {
+      if (present.has(n)) {
+        cols[field] = present.get(n);
+        break;
+      }
+    }
+  }
+  return { cols, present };
+}
+
+// Nº máx. de filas iniciales a escanear en cada hoja buscando la cabecera.
+const HEADER_SCAN_ROWS = 30;
+
+// Localiza, dentro de un libro, la primera hoja cuya fila de cabecera satisface
+// `isHeader(cols)`, resolviendo las columnas por nombre según `synonyms`. Permite
+// que cada importador funcione con distintos formatos/hojas del cliente sin
+// depender de posiciones fijas ni del orden de las hojas.
+// Opciones:
+//   - scanRows: nº de filas iniciales a inspeccionar por hoja.
+//   - mergeUp: cabecera en dos filas. Combina cada fila candidata con la de
+//     arriba usando el texto de la fila SUPERIOR si existe y, si no, el de la
+//     inferior (p.ej. notificaciones: nombres A3 en la fila 1 y nombres A–E en
+//     la fila 2). El `headerRow` devuelto es la fila inferior; los datos
+//     empiezan en headerRow + 1.
+// Devuelve { sheet, sheetName, headerRow, cols } o null si no la encuentra.
+function locateHeaderTable(workbook, synonyms, isHeader, options = {}) {
+  const { scanRows = HEADER_SCAN_ROWS, mergeUp = false } = options;
+  for (const sheet of workbook.sheets()) {
+    const { rows } = readAbsoluteRows(sheet);
+    if (!rows.length) continue;
+    const limit = rows[0].rowIndex + scanRows;
+    for (let i = 0; i < rows.length; i++) {
+      const { rowIndex, cells } = rows[i];
+      if (rowIndex > limit) break;
+      let header = cells;
+      if (mergeUp && i > 0) {
+        const above = rows[i - 1].cells || [];
+        const width = Math.max(cells.length, above.length);
+        header = [];
+        for (let c = 0; c < width; c++) {
+          const upper = above[c];
+          header[c] =
+            upper !== null && upper !== undefined && String(upper).trim() !== ""
+              ? upper
+              : cells[c];
+        }
+      }
+      const { cols } = resolveHeaderColumns(header, synonyms);
+      if (isHeader(cols)) {
+        return { sheet, sheetName: sheet.name(), headerRow: rowIndex, cols };
+      }
+    }
+  }
+  return null;
+}
+
 function csvEscape(value) {
   if (value === null || value === undefined) return "";
   let s = typeof value === "string" ? value : String(value);
@@ -125,5 +204,8 @@ module.exports = {
   stampYYYYMMDDHHmm,
   ensureDir,
   readAbsoluteRows,
+  normalizeHeader,
+  resolveHeaderColumns,
+  locateHeaderTable,
   writeCsv,
 };

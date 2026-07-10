@@ -9,31 +9,46 @@ const {
   isoDate,
   ensureDir,
   readAbsoluteRows,
+  locateHeaderTable,
   writeCsv,
 } = require("./utils");
 
 const EMPRESA_FACTURADORA = 14;
 const CODIGO_CONCEPTO_DEFAULT = "3.010";
 const TIPO_IVA = 3;
-const DATA_START_ROW = 3;
 
-const COLS = {
-  EXPT_CORTO: 0,
-  CLIENTE: 1,
-  EMISOR: 2,
-  F_LECTURA: 3,
-  ASUNTO: 4,
-  EMP_FACT: 5,
-  COD_CLIENTE: 6,
-  COD_CONCEPTO: 7,
-  FECHA: 8,
-  DESCRIPCION: 9,
-  TIPO_IVA: 10,
-  UNIDADES: 11,
-  IMPORTE_RAW: 12,
-  COD_EXPEDIENTE: 13,
-  DESC_AMPLIADA: 14,
+// Cabecera en dos filas: los nombres destino A3 (Código Cliente, Cód. Concepto
+// Facturable, Fecha, Unidades…) están en la fila superior y los de las primeras
+// columnas (Expediente, Cliente, Emisor, Asunto) en la inferior. Se localiza por
+// nombre combinando ambas filas (mergeUp), sin depender de posiciones fijas.
+const HEADER_SYNONYMS = {
+  expediente: ["expediente", "exptcorto", "expt"],
+  cliente: ["cliente", "razonsocial"],
+  emisor: ["emisor"],
+  f_lectura: ["flectura"],
+  asunto: ["asunto"],
+  emp_fact: ["empresafacturadora"],
+  cod_cliente: ["codigocliente", "codcliente"],
+  cod_concepto: ["codconceptofacturable", "codigoconceptofacturable", "codconcepto"],
+  fecha: ["fecha"],
+  descripcion: ["descripcion"],
+  tipo_iva: ["tipodeiva", "tipoiva"],
+  unidades: ["unidades"],
+  importe_gastos: ["importegastos", "importe"],
+  cod_expediente: ["codigoexpediente", "codexpediente"],
+  desc_ampliada: ["descripcionampliada"],
 };
+
+// Cabecera válida: exige un campo que solo aparece en la fila inferior
+// (cliente/expediente) y otro de la superior (cod_concepto) para no confundir la
+// fila 1 sola con la cabecera y desplazar los datos.
+function isNotificacionesHeader(cols) {
+  return (
+    (cols.cliente !== undefined || cols.expediente !== undefined) &&
+    cols.cod_concepto !== undefined &&
+    cols.fecha !== undefined
+  );
+}
 
 function normalizarConcepto(raw) {
   const s = _str(raw);
@@ -66,28 +81,39 @@ async function transform(inputPath, mapeos, outputDir) {
   ensureDir(outputDir);
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
-  const sheetNames = workbook.sheets().map((s) => s.name());
-  const sheetName = sheetNames.includes("Hoja1") ? "Hoja1" : sheetNames[0];
-  const sheet = workbook.sheet(sheetName);
+  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNotificacionesHeader, {
+    mergeUp: true,
+  });
+  if (!table) {
+    throw new Error(
+      `No se encontró la tabla de notificaciones en '${path.basename(inputPath)}'. ` +
+        `Se requiere una hoja con cabeceras Cliente/Expediente, Cód. Concepto Facturable y Fecha.`
+    );
+  }
+  const { sheet, cols, headerRow } = table;
+  const dataStartRow = headerRow + 1;
   const { rows: absRows } = readAbsoluteRows(sheet);
+
+  const get = (row, field) =>
+    cols[field] !== undefined ? row[cols[field]] : undefined;
 
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
 
   for (const { rowIndex: filaIdx, cells } of absRows) {
-    if (filaIdx < DATA_START_ROW) continue;
+    if (filaIdx < dataStartRow) continue;
     const row = cells;
     if (!row.length || row.every((c) => c === null || c === undefined)) continue;
 
-    const exptCortoStr = _str(row[COLS.EXPT_CORTO]);
-    const clienteRazon = _str(row[COLS.CLIENTE]);
-    const emisor = _str(row[COLS.EMISOR]);
-    const asunto = _str(row[COLS.ASUNTO]);
-    const codClienteRaw = _str(row[COLS.COD_CLIENTE]);
-    const codExpedienteInput = _str(row[COLS.COD_EXPEDIENTE]);
-    const descAmpliadaRaw = _str(row[COLS.DESC_AMPLIADA]);
-    const concepto = normalizarConcepto(row[COLS.COD_CONCEPTO]);
+    const exptCortoStr = _str(get(row, "expediente"));
+    const clienteRazon = _str(get(row, "cliente"));
+    const emisor = _str(get(row, "emisor"));
+    const asunto = _str(get(row, "asunto"));
+    const codClienteRaw = _str(get(row, "cod_cliente"));
+    const codExpedienteInput = _str(get(row, "cod_expediente"));
+    const descAmpliadaRaw = _str(get(row, "desc_ampliada"));
+    const concepto = normalizarConcepto(get(row, "cod_concepto"));
 
     if (!(exptCortoStr || clienteRazon || codExpedienteInput || codClienteRaw)) continue;
 
@@ -152,8 +178,8 @@ async function transform(inputPath, mapeos, outputDir) {
       continue;
     }
 
-    const unidades = _toInt(row[COLS.UNIDADES]) || 1;
-    const fechaLinea = _toDate(row[COLS.FECHA], null);
+    const unidades = _toInt(get(row, "unidades")) || 1;
+    const fechaLinea = _toDate(get(row, "fecha"), null);
     if (!fechaLinea) {
       addInc("Sin FECHA válida en el archivo");
       continue;
@@ -187,6 +213,8 @@ async function transform(inputPath, mapeos, outputDir) {
   return {
     input: inputPath,
     output_dir: outputDir,
+    hoja: table.sheetName,
+    fila_cabecera: headerRow,
     conceptos: conceptos.length,
     incidencias: incidencias.length,
     warnings_qc: warningsQc.length,

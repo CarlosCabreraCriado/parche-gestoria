@@ -10,26 +10,36 @@ const {
   isoDate,
   ensureDir,
   readAbsoluteRows,
+  locateHeaderTable,
   writeCsv,
 } = require("./utils");
 
 const EMPRESA_FACTURADORA = 14;
 const CODIGO_CONCEPTO_DEFAULT = "0.010";
 const TIPO_IVA = 3;
-const DATA_START_ROW = 8;
 
-const COLS = {
-  EXPT_FACT: 0,
-  EXPT: 1,
-  EMPRESA: 2,
-  DNI_TRAB: 3,
-  NOMBRE_TRAB: 4,
-  FECHA: 8,
-  OBSERVACION: 9,
-  TIPO_TRAMITE: 11,
-  CONCEPTO_FACT: 12,
-  IMPORTE: 13,
+// Igual que en trámites: el archivo ya no trae la columna EXPT FACT y las
+// columnas pueden variar de posición. Cada campo se localiza por el texto de su
+// cabecera (normalizado). OBSERVACION lleva el nº de nóminas (unidades).
+const HEADER_SYNONYMS = {
+  expt: ["expt"],
+  empresa: ["empresa", "razonsocial"],
+  nombre_trab: ["nombretrabajador", "nombretrab", "trabajador"],
+  fecha: ["fecha"],
+  observacion: ["observacion"],
+  tipo_tramite: ["tipotramite"],
+  concepto: ["conceptofact", "concepto"],
+  importe: ["importe"],
 };
+
+// Cabecera válida de nóminas: EXPT + IMPORTE + CONCEPTO/TIPO TRAMITE.
+function isNominasHeader(cols) {
+  return (
+    cols.expt !== undefined &&
+    cols.importe !== undefined &&
+    (cols.concepto !== undefined || cols.tipo_tramite !== undefined)
+  );
+}
 
 function buildDescripcion(tipoTramite, observacion) {
   const base = (tipoTramite || "").replace(/[ -]+$/, "").trim() || "Nóminas";
@@ -47,27 +57,37 @@ async function transform(inputPath, mapeos, outputDir) {
   ensureDir(outputDir);
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
-  const sheet = workbook.sheets()[0];
+  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNominasHeader);
+  if (!table) {
+    throw new Error(
+      `No se encontró la tabla de nóminas en '${path.basename(inputPath)}'. ` +
+        `Se requiere una hoja con cabeceras EXPT, IMPORTE y CONCEPTO FACT/TIPO TRAMITE.`
+    );
+  }
+  const { sheet, cols, headerRow } = table;
+  const dataStartRow = headerRow + 1;
   const { rows: absRows } = readAbsoluteRows(sheet);
+
+  const get = (row, field) =>
+    cols[field] !== undefined ? row[cols[field]] : undefined;
 
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
 
   for (const { rowIndex: filaIdx, cells } of absRows) {
-    if (filaIdx < DATA_START_ROW) continue;
+    if (filaIdx < dataStartRow) continue;
     const row = cells;
     if (!row.length || row.every((c) => c === null || c === undefined)) continue;
 
-    const empresaRaw = _str(row[COLS.EMPRESA]);
-    const importeOrigen = _toFloat(row[COLS.IMPORTE]);
-    const exptFactInput = _str(row[COLS.EXPT_FACT]);
-    const exptCorto = _toInt(row[COLS.EXPT]);
-    const observacion = row[COLS.OBSERVACION];
-    const tipoTramite = _str(row[COLS.TIPO_TRAMITE]);
-    const conceptoRaw = _str(row[COLS.CONCEPTO_FACT]) || CODIGO_CONCEPTO_DEFAULT;
-    const nombreTrab = _str(row[COLS.NOMBRE_TRAB]);
-    const fecha = _toDate(row[COLS.FECHA], null);
+    const empresaRaw = _str(get(row, "empresa"));
+    const importeOrigen = _toFloat(get(row, "importe"));
+    const exptCorto = _toInt(get(row, "expt"));
+    const observacion = get(row, "observacion");
+    const tipoTramite = _str(get(row, "tipo_tramite"));
+    const conceptoRaw = _str(get(row, "concepto")) || CODIGO_CONCEPTO_DEFAULT;
+    const nombreTrab = _str(get(row, "nombre_trab"));
+    const fecha = _toDate(get(row, "fecha"), null);
 
     if (empresaRaw === "" && importeOrigen === null && exptCorto === null) continue;
 
@@ -76,7 +96,6 @@ async function transform(inputPath, mapeos, outputDir) {
         fila_origen: filaIdx,
         motivo,
         empresa: empresaRaw,
-        expt_fact: exptFactInput,
         expt: exptCorto !== null ? String(exptCorto) : "",
         concepto: conceptoRaw,
         importe: importeOrigen,
@@ -119,18 +138,7 @@ async function transform(inputPath, mapeos, outputDir) {
       continue;
     }
 
-    // 3. QC: expt_fact input vs mapeo
-    if (
-      exptFactInput &&
-      exptFactInput !== codigoExpediente &&
-      redirectTarget === null
-    ) {
-      warningsQc.push(
-        `Fila ${filaIdx}: EXPT FACT del input '${exptFactInput}' difiere del mapeo '${codigoExpediente}' — se usa el mapeo`
-      );
-    }
-
-    // 4. Tarifa
+    // 3. Tarifa
     const tarifa = mapeos.tarifas.resolve(conceptoRaw);
     if (tarifa === null) {
       const motivo = mapeos.tarifas.missReason(conceptoRaw);
@@ -140,7 +148,7 @@ async function transform(inputPath, mapeos, outputDir) {
 
     const unidades = _toInt(observacion) || 1;
 
-    // 5. QC importe origen vs tarifa × unidades
+    // 4. QC importe origen vs tarifa × unidades
     const esperado = Math.round(tarifa * unidades * 100) / 100;
     if (Math.abs(importeOrigen - esperado) > Math.max(0.01, esperado * 0.01)) {
       warningsQc.push(
@@ -176,6 +184,8 @@ async function transform(inputPath, mapeos, outputDir) {
   return {
     input: inputPath,
     output_dir: outputDir,
+    hoja: table.sheetName,
+    fila_cabecera: headerRow,
     conceptos: conceptos.length,
     incidencias: incidencias.length,
     warnings_qc: warningsQc.length,
@@ -219,7 +229,6 @@ function writeIncidencias(filePath, rows) {
     "fila_origen",
     "motivo",
     "EMPRESA",
-    "EXPT FACT",
     "EXPT",
     "CONCEPTO",
     "IMPORTE",
@@ -229,7 +238,6 @@ function writeIncidencias(filePath, rows) {
     r.fila_origen,
     r.motivo,
     r.empresa,
-    r.expt_fact,
     r.expt,
     r.concepto,
     r.importe,
