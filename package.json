@@ -1,6 +1,6 @@
 {
   "name": "GestoriaCastillo",
-  "version": "0.93.5",
+  "version": "0.93.6",
   "description": "Programa de gestión de la gestoría Castillo",
   "main": "main.js",
   "scripts": {
