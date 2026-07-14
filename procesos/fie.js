@@ -4,6 +4,7 @@ const readline = require("readline");
 const axios = require("axios");
 const moment = require("moment");
 const XlsxPopulate = require("xlsx-populate");
+const XLSX = require("xlsx");
 const Datastore = require("nedb");
 const _ = require("lodash");
 const { DateTime } = require("luxon");
@@ -148,7 +149,7 @@ class ProcesosFie {
         const bajas = [];
         const confirmacion = [];
 
-        XlsxPopulate.fromFileAsync(path.normalize(pathArchivoEmpresas))
+        cargarWorkbookLecturaAsync(pathArchivoEmpresas)
           .then(async (archivoEmpresas) => {
             console.log("Archivo Cargado: Empresas");
             datosEmpresas = extraccionExcel(archivoEmpresas, 0); //1
@@ -158,7 +159,7 @@ class ProcesosFie {
             console.log("EMPRESAS:");
             console.log(datosEmpresas[0]);
 
-            XlsxPopulate.fromFileAsync(path.normalize(pathArchivoFIE))
+            cargarWorkbookLecturaAsync(pathArchivoFIE)
               .then(async (workbook) => {
                 console.log("Archivo Cargado: FIE");
                 archivoFIE = workbook;
@@ -223,10 +224,17 @@ class ProcesosFie {
                     continue;
                   }
 
-                  //Buscamos parte de confirmacion:
+                  //Buscamos parte de confirmacion (NAF normalizado a texto y
+                  //sin espacios, para evitar desajustes numero/texto):
                   partesDetectados = [];
+                  const nafIncapacidad = String(
+                    datosIncapacidad[i].naf ?? "",
+                  ).trim();
                   for (var j = 0; j < partesConfirmacion.length; j++) {
-                    if (partesConfirmacion[j].naf == datosIncapacidad[i].naf) {
+                    const nafParte = String(
+                      partesConfirmacion[j].naf ?? "",
+                    ).trim();
+                    if (nafIncapacidad && nafParte && nafParte === nafIncapacidad) {
                       partesDetectados.push(partesConfirmacion[j]);
                     }
                   }
@@ -1482,7 +1490,7 @@ class ProcesosFie {
         // 3) Lectura Excel
         const rutaNormalizada = path.normalize(pathArchivoFIE_2);
         console.log(`[FIE_2] Cargando Excel: ${rutaNormalizada}`);
-        const workbook = await XlsxPopulate.fromFileAsync(rutaNormalizada);
+        const workbook = await cargarWorkbookLecturaAsync(rutaNormalizada);
         logDebug("[FIE_2] Archivo Excel cargado correctamente.");
 
         // --- Lectura de las dos hojas ---
@@ -2683,6 +2691,63 @@ class ProcesosFie {
   }
 } //Fin Procesos Fie
 
+// Carga un archivo de ENTRADA (solo lectura) de forma tolerante al formato.
+// xlsx-populate ^1.21.0 no sabe abrir los .xlsx generados por herramientas tipo
+// ClosedXML/OpenXML-SDK (prefijo de namespace "x:", sharedStrings vacio, sin
+// docProps/calcChain...), que es el formato en el que llegan ultimamente los
+// FIE por las incidencias con A3. SheetJS (xlsx) los lee sin problema, tanto los
+// nativos de Excel/A3 como los nuevos. Se expone la minima superficie que usan
+// extraccionExcel/deteccionCabeceras:
+//   workbook.sheet(i).usedRange()._numRows / ._numColumns
+//   workbook.sheet(i).cell(fila, columna).value()   (1-indexado)
+function cargarWorkbookLectura(filePath) {
+  const wb = XLSX.readFile(path.normalize(filePath), { cellDates: false });
+
+  function envolverHoja(ws) {
+    var numRows = 0;
+    var numCols = 0;
+    if (ws && ws["!ref"]) {
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      numRows = range.e.r + 1;
+      numCols = range.e.c + 1;
+    }
+    return {
+      usedRange() {
+        return { _numRows: numRows, _numColumns: numCols };
+      },
+      cell(fila, columna) {
+        return {
+          value() {
+            if (!ws) return undefined;
+            const dir = XLSX.utils.encode_cell({
+              r: fila - 1,
+              c: columna - 1,
+            });
+            const celda = ws[dir];
+            return celda ? celda.v : undefined;
+          },
+        };
+      },
+    };
+  }
+
+  const hojas = wb.SheetNames.map((n) => envolverHoja(wb.Sheets[n]));
+
+  return {
+    sheets() {
+      return hojas;
+    },
+    sheet(indice) {
+      return hojas[indice];
+    },
+  };
+}
+
+// Version async para encajar en las cadenas de promesas existentes.
+function cargarWorkbookLecturaAsync(filePath) {
+  return Promise.resolve(cargarWorkbookLectura(filePath));
+}
+
 function extraccionExcel(workbook, sheet, opts = null) {
   var filaCabecera = null;
   var columnaCabecera = null;
@@ -2766,19 +2831,21 @@ function deteccionCabeceras(workbook, sheet) {
     contadoresFilas.push(contadorCampoRelleno);
   }
 
-  //Analisis de filas:
-  var valorMedio = 0;
-  for (var i = 0; i < contadoresFilas.length; i++) {
-    valorMedio += contadoresFilas[i];
-  }
-  valorMedio = valorMedio / contadoresFilas.length;
-
-  //Detecta primera fila con campos rellenos superior al valor medio -1:
+  //Detecta la fila de cabecera como la fila con MAS campos rellenos
+  //(primera aparicion en caso de empate).
+  //Antes se usaba "primera fila por encima de la media - 1", pero en hojas
+  //con pocas filas de datos (p.ej. "Continuacion situacion en IT" con 1-2
+  //partes de confirmacion) la media caia por debajo de la fila de rotulos de
+  //seccion ("Datos del Proceso | Datos de la Empresa | Datos del Empleado") y
+  //se elegia esa fila como cabecera, perdiendose columnas clave como NAF. Eso
+  //provocaba que los partes de confirmacion no se pudieran cruzar por NAF y
+  //acabaran clasificados como bajas.
   var filaCabecera = 0;
+  var maxRelleno = -1;
   for (var i = 0; i < contadoresFilas.length; i++) {
-    if (contadoresFilas[i] > valorMedio - 1) {
+    if (contadoresFilas[i] > maxRelleno) {
+      maxRelleno = contadoresFilas[i];
       filaCabecera = i + 1;
-      break;
     }
   }
 
