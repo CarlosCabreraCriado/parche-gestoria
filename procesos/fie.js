@@ -1280,7 +1280,8 @@ class ProcesosFie {
                             .value(
                               accidentes[i].partesConfirmacion[0]
                                 .fechaSiguienteRevisionMedica,
-                            );
+                            )
+                            .style("numberFormat", "dd/mm/yyyy");
                         }
 
                         //COMENTARIO:
