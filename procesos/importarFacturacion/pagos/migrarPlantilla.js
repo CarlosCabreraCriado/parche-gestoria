@@ -1,4 +1,4 @@
-// Migración one-shot: 4PAGOS2026 (1).xls → plantilla normalizada A3 (.xlsx).
+// Migración: 4PAGOS<año>.xls → plantilla normalizada A3 (.xlsx).
 //
 // Genera un libro nuevo donde cada hoja de modelo fiscal tiene:
 //   - Zona A (cols A–F): bloque estándar idéntico en todas las hojas
@@ -24,20 +24,25 @@
 // ningún otro campo (p. ej. F.BAJA) que el importador cruce o use de fallback.
 // Las hojas sin estructura tabular (alcohol, 184, EXP) se copian literalmente.
 // Las secciones internas del original (BAJAS, EXENTOS, MOROSOS, sub-bloques de
-// otro modelo…) están ancladas por número de fila EXACTO de este archivo: el
-// script no sirve para otro 4PAGOS sin revisar los specs.
+// otro modelo…) se localizan por el TEXTO de su título (`match` en el spec).
+// El invariante que lo sustenta: una fila de sección nunca lleva expte numérico.
+// Si un título no aparece, o aparece más de una vez, el script falla: el archivo
+// del cliente cambia cada trimestre y un ancla que se desplaza sin avisar se
+// come filas de datos (las convierte en separador) y deja de facturarlas.
+// Quedan specs con anclas legacy por número de fila exacto (`fila`), calibradas
+// contra 4PAGOS2026 (1).xls; se validan igual contra ese invariante y hay que
+// migrarlas a `match` antes de procesar esas hojas con otro 4PAGOS.
 //
-// Uso: node migrarPlantilla.js [input.xls] [output.xlsx]
+// Uso: node migrarPlantilla.js [input.xls] [output.xlsx] [--hojas 111,130]
 
 const path = require("path");
 const fs = require("fs");
 const XLSX = require("xlsx");
 const XlsxPopulate = require("xlsx-populate");
 
-const DEFAULT_INPUT =
-  "C:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/An-lisis-A3---Del-Castillo-Asesores/gesw/inputs/4PAGOS2026 (1).xls";
-const DEFAULT_OUTPUT =
-  "C:/Users/gonza/OneDrive/Nodus/Proyectos/Nodus-app/An-lisis-A3---Del-Castillo-Asesores/gesw/inputs/4PAGOS2026 - PLANTILLA A3 v1.xlsx";
+const INPUTS_DIR = path.join(__dirname, "..", "inputs", "pagos");
+const DEFAULT_INPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T.xls");
+const DEFAULT_OUTPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T - PLANTILLA A3 v2.xlsx");
 
 const SENTINEL = "A3PAGOS v1";
 const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA"];
@@ -97,8 +102,14 @@ function colLetter(n0) {
 // ---------------------------------------------------------------- specs
 //
 // cols: índices 0-based del archivo ORIGINAL.
-// secciones: anclas por fila exacta (1-based). La fila ancla nunca es dato.
-//   { fila, titulo, facturar, modelo?, skip? }  — skip=true: cabecera repetida, se descarta sin emitir separador.
+// secciones: anclas. La fila ancla nunca es dato. Dos formas:
+//   { match: /regex/i, titulo, facturar, modelo?, frecuencia?, skip? }
+//       localiza la sección por el texto de su título — resiste que el archivo
+//       gane o pierda filas entre trimestres. Preferir siempre esta.
+//   { fila, titulo, ... }
+//       legacy: número de fila exacto (1-based) de 4PAGOS2026 (1).xls. Solo vale
+//       para ese archivo; migrar a `match` al procesar la hoja con otro 4PAGOS.
+//   skip=true: cabecera repetida, se descarta sin emitir separador.
 // El estado inicial (antes de la primera ancla) es `inicial`.
 
 const SPECS = [
@@ -190,7 +201,6 @@ const SPECS = [
     headerRow: 2,
     labelRows: [2, 1],
     dataFrom: 3,
-    skipRows: [3],
     cols: { expte: 1, nif: 4, empresa: 5, p: [12, 13, 14, 15], obs: 17 },
     drop: [18, 19, 20, 21, 22, 23, 24, 25, 26, 27], // bloque A3 manual (ejemplo hecho a mano)
     // Algunas empresas grandes declaran el 111 mensualmente. Hoy esa excepción
@@ -199,8 +209,8 @@ const SPECS = [
     frecuenciaDesdeColumna: { col: 8, valores: { MENSUAL: "MENSUAL" } },
     inicial: { modelo: "111", facturar: "SI", frecuencia: "TRIMESTRAL", titulo: "MODELO 111 TRIMESTRAL" },
     secciones: [
-      { fila: 205, titulo: "BAJA ASESORIA 2026", facturar: "NO" },
-      { fila: 223, titulo: "EMPRESAS REALIZAN ELLOS MODELOS 111 - 190", facturar: "NO" },
+      { match: /BAJA\s+ASESORIA/i, titulo: "BAJA ASESORIA 2026", facturar: "NO" },
+      { match: /EMPRESAS\s+REALIZAN\s+ELLOS/i, titulo: "EMPRESAS REALIZAN ELLOS MODELOS 111 - 190", facturar: "NO" },
     ],
   },
   {
@@ -264,7 +274,118 @@ const VERBATIM = [
 // ---------------------------------------------------------------- lectura y transformación
 
 function readSheet(wb, name) {
+  // sheet_to_json(undefined) devuelve [] en vez de lanzar: sin esta guarda, una
+  // hoja que el original ya no trae se convierte en una hoja vacía sin avisar.
+  if (!wb.Sheets[name]) throw new Error(`Hoja '${name}' no encontrada en el original`);
   return XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: null });
+}
+
+function filaVacia(cells) {
+  return !cells.some((c) => c !== null && String(c).trim() !== "");
+}
+
+// ¿La fila describe un cliente o es una nota suelta? Solo para filas ya
+// conocidas como no vacías: con `cells` vacío devuelve true (los undefined
+// cuentan en nonNull). Da falsos positivos con las cabeceras repetidas (su NIF
+// trae el literal "N.I.F." / "CIF."), que es lo que parchean los `skip:true`;
+// por eso decidir si una fila es sección se hace con `esFilaSeccionCandidata`.
+function esDato(spec, cells) {
+  if (toInt(cells[spec.cols.expte]) !== null) return true;
+  const p = spec.cols.p.map((i) => (i !== null && i !== undefined ? cells[i] : null));
+  const mapped = [cells[spec.cols.nif], cells[spec.cols.empresa], ...p];
+  const nonNull = mapped.filter((c) => c !== null && String(c).trim() !== "").length;
+  return str(cells[spec.cols.nif]) !== "" || nonNull >= 3;
+}
+
+// Invariante del formato: una fila de sección nunca lleva expte numérico.
+function esFilaSeccionCandidata(spec, cells) {
+  return !filaVacia(cells) && toInt(cells[spec.cols.expte]) === null;
+}
+
+function textoFila(cells, dropped) {
+  return cells
+    .map((c, j) => (c !== null && !dropped.has(j) ? str(c) : ""))
+    .filter(Boolean)
+    .join(" ");
+}
+
+// Localiza cada sección del spec en el archivo concreto y devuelve la lista
+// resuelta [{...seccion, fila, textoMatch}]. Falla antes de transformar nada:
+// un ancla mal resuelta se come una fila de datos en silencio y esa fila deja de
+// facturarse, así que aquí todo lo dudoso es error, no warning.
+function resolveSecciones(spec, rows, warnings) {
+  const dropped = new Set(spec.drop || []);
+  const resueltas = [];
+
+  for (const s of spec.secciones || []) {
+    if (s.fila !== undefined) {
+      // Fuera de rango no lanzaría por sí solo (rows[...] → undefined) y el bucle
+      // de transformSheet nunca alcanzaría la fila: el separador no se emitiría y
+      // sus clientes heredarían el FACTURAR de la sección anterior, en silencio.
+      if (s.fila < 1 || s.fila > rows.length) {
+        throw new Error(
+          `[${spec.hoja}] el ancla legacy de la fila ${s.fila} ("${s.titulo}") queda fuera del archivo ` +
+            `(${rows.length} filas): el archivo ha cambiado respecto al que calibró el spec. ` +
+            `Migra esta sección a { match: /.../ }.`
+        );
+      }
+      const cells = rows[s.fila - 1] || [];
+      if (toInt(cells[spec.cols.expte]) !== null) {
+        throw new Error(
+          `[${spec.hoja}] el ancla legacy de la fila ${s.fila} ("${s.titulo}") cae sobre una fila con EXPTE ` +
+            `${str(cells[spec.cols.expte])}: el archivo ha cambiado respecto al que calibró el spec. ` +
+            `Migra esta sección a { match: /.../ }.`
+        );
+      }
+      resueltas.push({ ...s, fila: s.fila, textoMatch: textoFila(cells, dropped) });
+      continue;
+    }
+
+    const hits = [];
+    for (let fila = spec.dataFrom; fila <= rows.length; fila++) {
+      if (fila === spec.headerRow) continue;
+      const cells = rows[fila - 1] || [];
+      if (!esFilaSeccionCandidata(spec, cells)) continue;
+      const texto = textoFila(cells, dropped);
+      if (s.match.test(texto)) hits.push({ fila, texto });
+    }
+    if (hits.length === 0) {
+      throw new Error(`[${spec.hoja}] sección "${s.titulo}" no encontrada (patrón ${s.match}).`);
+    }
+    if (hits.length > 1) {
+      throw new Error(
+        `[${spec.hoja}] sección "${s.titulo}" ambigua (patrón ${s.match}): ` +
+          `filas ${hits.map((h) => h.fila).join(", ")}. Afina el patrón.`
+      );
+    }
+    resueltas.push({ ...s, fila: hits[0].fila, textoMatch: hits[0].texto });
+  }
+
+  // Dos secciones en la misma fila colapsarían en el Map de anclas y una
+  // desaparecería sin ruido: cada `match` puede tener 1 hit y aun así chocar.
+  const porFila = new Map();
+  for (const s of resueltas) {
+    if (porFila.has(s.fila)) {
+      throw new Error(
+        `[${spec.hoja}] las secciones "${porFila.get(s.fila).titulo}" y "${s.titulo}" resuelven ambas a la fila ${s.fila}.`
+      );
+    }
+    porFila.set(s.fila, s);
+  }
+
+  // Si el orden se altera, cada patrón sigue teniendo 1 hit pero las secciones
+  // quedan cruzadas: mismo separador, título equivocado.
+  for (let i = 1; i < resueltas.length; i++) {
+    if (resueltas[i].fila <= resueltas[i - 1].fila) {
+      warnings.push(
+        `[${spec.hoja}] las secciones no salen en el orden del spec: "${resueltas[i - 1].titulo}" (fila ` +
+          `${resueltas[i - 1].fila}) va antes que "${resueltas[i].titulo}" (fila ${resueltas[i].fila}). ` +
+          `Revisa que cada patrón matchee el título que le toca.`
+      );
+    }
+  }
+
+  return resueltas;
 }
 
 function buildLabels(spec, rows, maxCol) {
@@ -285,15 +406,22 @@ function buildLabels(spec, rows, maxCol) {
   return labels;
 }
 
-function transformSheet(spec, rows, informe) {
+function transformSheet(spec, rows, informe, warnings) {
   const dropped = new Set(spec.drop || []);
   const skipRows = new Set(spec.skipRows || []);
-  const anchors = new Map((spec.secciones || []).map((s) => [s.fila, s]));
+  const secciones = resolveSecciones(spec, rows, warnings);
+  const anchors = new Map(secciones.map((s) => [s.fila, s]));
 
   let maxCol = 0;
   rows.forEach((r) => (r || []).forEach((c, j) => {
     if (c !== null && !dropped.has(j) && j > maxCol) maxCol = j;
   }));
+
+  // Qué columnas de `drop` traían datos de verdad en este archivo: el informe no
+  // debe presumir de descartar un bloque que el original ya no trae.
+  const dropConDatos = [...dropped]
+    .filter((j) => rows.some((r) => (r || [])[j] !== null && (r || [])[j] !== undefined && String((r || [])[j]).trim() !== ""))
+    .sort((a, b) => a - b);
 
   const labels = buildLabels(spec, rows, maxCol);
   // La Zona A ya no consume P1..P4 ni OBSERVACIONES: se quedan en su posición
@@ -328,22 +456,15 @@ function transformSheet(spec, rows, informe) {
     if (fila === spec.headerRow || skipRows.has(fila)) continue;
 
     const cells = rows[fila - 1] || [];
-    if (!cells.some((c) => c !== null && String(c).trim() !== "")) continue;
+    if (filaVacia(cells)) continue;
 
     const expte = toInt(cells[spec.cols.expte]);
     const nif = str(cells[spec.cols.nif]);
     const p = spec.cols.p.map((i) => (i !== null && i !== undefined ? cells[i] : null));
     while (p.length < 4) p.push(null);
 
-    let esDato = expte !== null;
-    if (!esDato) {
-      // fila sin expte: ¿cliente sin código o nota suelta?
-      const mapped = [cells[spec.cols.nif], cells[spec.cols.empresa], ...p];
-      const nonNull = mapped.filter((c) => c !== null && String(c).trim() !== "").length;
-      esDato = nif !== "" || nonNull >= 3;
-    }
-
-    if (!esDato) {
+    // fila sin expte: ¿cliente sin código o nota suelta?
+    if (!esDato(spec, cells)) {
       const texto = cells
         .map((c, j) => (c !== null && !dropped.has(j) ? str(c) : ""))
         .filter(Boolean)
@@ -400,40 +521,49 @@ function transformSheet(spec, rows, informe) {
     });
   }
 
-  return { out, notas, labels, zonaBCols, stats, porPeriodo, maxCol };
+  return { out, notas, labels, zonaBCols, stats, porPeriodo, maxCol, secciones, dropConDatos };
 }
 
 // ---------------------------------------------------------------- escritura
 
 // Tercer elemento `true` = línea de título (negrita). Evita indexar filas a
 // mano: añadir/quitar una línea ya no desalinea qué queda en negrita.
-function writeLeeme(sheet, fechaGen, inputName) {
+function writeLeeme(sheet, fechaGen, inputName, specsSel, verbatimSel) {
+  const hojasModelo = specsSel.map((s) => s.hoja).join(", ") || "ninguna";
   const lines = [
     ["PLANTILLA 4PAGOS → IMPORTACIÓN A3GES", "", true],
     [`Generada el ${fechaGen} a partir de "${inputName}".`, ""],
+    [`Hojas de modelo que cubre esta plantilla: ${hojasModelo}.`, ""],
     ["", ""],
     ["CÓMO FUNCIONA", "", true],
     ["Cada hoja de modelo tiene dos zonas:", ""],
     ["  · ZONA A (columnas A a F): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
     ["  · ZONA B (columna H en adelante): zona libre de cada modelo (incluye P1–P4, OBSERVACIONES, F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
     ["", ""],
+    ["EL MODELO EN UNA LÍNEA", "CONCEPTO FACT = qué y cuánto · FACTURAR = si sí o no · FRECUENCIA = cuándo · EXPTE = a quién.", true],
+    ["", ""],
     ["COLUMNAS DE LA ZONA A", "", true],
     ["  CONCEPTO FACT", "Concepto facturable de la fila (código de la hoja ConceptosFacturables: 0.016, 0.012…). Es lo que fija el importe a facturar al cruzarlo con mapeos_facturacion.xlsx. Se deriva del modelo fiscal (130, 111…)."],
-    ["  EXPTE", "Código de cliente (número corto). Sin él la fila no se factura."],
+    ["  EXPTE", "Código de cliente (número corto). No decide si la fila se factura (eso es FACTURAR), pero una fila SI sin EXPTE no se puede facturar: se migra vacía y sale en incidencias hasta que se le asigne."],
     ["  NIF", "Informativo / control de calidad."],
     ["  EMPRESA", "Informativo."],
-    ["  FACTURAR", "Única fuente de verdad sobre si la fila se factura: SI = se factura si el periodo tiene valor · NO = nunca · REVISAR = no se factura y sale en incidencias. Ningún otro campo (p. ej. una fecha de baja en Zona B) se cruza para decidir esto."],
-    ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente)."],
+    ["  FACTURAR", "Única fuente de verdad sobre la decisión de facturar la fila: SI = se factura · NO = nunca · REVISAR = no se factura y sale en incidencias para decidir a mano. El importador no cruza ningún otro campo para decidirlo: ni P1–P4, ni la fecha de baja de la Zona B."],
+    ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente). Cada ejecución factura las filas cuya frecuencia toca en el periodo elegido: en un cierre de trimestre entran tanto las TRIMESTRAL como las MENSUAL; en un mes intermedio, solo las MENSUAL."],
     ["", ""],
     ["P1..P4 y OBSERVACIONES (ahora en la ZONA LIBRE)", "", true],
-    ["  Se copian tal cual del archivo original y el importador NO las lee: son dato informativo. Periodos trimestrales P1=1T…P4=4T (modelo 202: P1=abril, P2=octubre, P3=diciembre). La facturación la fija CONCEPTO FACT, no el importe del periodo.", ""],
+    ["  Se copian tal cual del archivo original y el importador NO las lee: son dato informativo. Periodos trimestrales P1=1T…P4=4T (modelo 202: P1=abril, P2=octubre, P3=diciembre). La facturación la fija CONCEPTO FACT; el importe del periodo no interviene.", ""],
     ["", ""],
     ["FILAS NARANJAS", "Separadores de sección heredados del original. El importador las ignora (no tienen EXPTE)."],
     ["FILAS GRISES AL FINAL", "Notas y leyendas del archivo original, conservadas para no perder información."],
-    ["HOJAS alcohol / 184 / EXP", "Copiadas tal cual del original; el importador no las procesa por ahora."],
-    ["", ""],
-    ["El importador solo procesa hojas cuya celda A1 contenga: " + SENTINEL, ""],
   ];
+  if (verbatimSel.length) {
+    lines.push([
+      `HOJAS ${verbatimSel.map((v) => v.hoja).join(" / ")}`,
+      "Copiadas tal cual del original; el importador no las procesa por ahora.",
+    ]);
+  }
+  lines.push(["", ""]);
+  lines.push(["El importador solo procesa hojas cuya celda A1 contenga: " + SENTINEL, ""]);
   lines.forEach(([label, detail, isTitle], i) => {
     const cell = sheet.cell(i + 1, 1).value(label);
     if (detail) sheet.cell(i + 1, 2).value(detail);
@@ -540,13 +670,21 @@ function writeVerbatimSheet(sheet, rows, dateCols) {
 // ---------------------------------------------------------------- informe
 
 function writeInforme(informePath, ctx) {
-  const { inputName, outputName, fechaGen, resumen, informe, verbatims, omitidas } = ctx;
+  const { inputName, outputName, fechaGen, resumen, informe, verbatims,
+    omitidasVacias, sinSpecConDatos, noSeleccionadas, warnings } = ctx;
   const L = [];
   L.push(`# Informe de migración — 4PAGOS → plantilla A3`);
   L.push("");
   L.push(`- **Origen:** \`${inputName}\``);
   L.push(`- **Generado:** \`${outputName}\` (${fechaGen})`);
+  L.push(`- **Hojas migradas:** ${[...resumen.map((r) => r.hoja), ...verbatims.map((v) => v.hoja)].join(", ") || "ninguna"}`);
   L.push("");
+  if (warnings.length) {
+    L.push(`## Avisos`);
+    L.push("");
+    for (const w of warnings) L.push(`- ${w}`);
+    L.push("");
+  }
   L.push(`## Resumen por hoja`);
   L.push("");
   L.push(`| Hoja | Filas SI | Filas NO | Filas REVISAR | Sin expte | Notas conservadas | P1 | P2 | P3 | P4 |`);
@@ -555,7 +693,7 @@ function writeInforme(informePath, ctx) {
     L.push(`| ${r.hoja} | ${r.stats.SI} | ${r.stats.NO} | ${r.stats.REVISAR} | ${r.stats.sinExpte} | ${r.stats.notas} | ${r.porPeriodo.join(" | ")} |`);
   }
   L.push("");
-  L.push(`Las columnas P1–P4 cuentan filas con FACTURAR=SI y el periodo relleno en el archivo original (aproximación de conceptos a facturar por periodo).`);
+  L.push(`P1–P4 es un **diagnóstico del archivo original**: cuenta las filas con FACTURAR=SI que traían el periodo relleno. No es una regla de facturación — el importador no lee esas columnas (ver LEEME).`);
   L.push("");
 
   L.push(`## Columna FRECUENCIA`);
@@ -566,8 +704,11 @@ function writeInforme(informePath, ctx) {
     L.push(`| ${r.hoja} | ${r.spec.inicial.frecuencia} | ${r.stats.frecuenciaOverrides} |`);
   }
   L.push("");
-  L.push(`En la hoja 111, ${resumen.find((r) => r.hoja === "111").stats.frecuenciaOverrides} empresas tenían "MENSUAL" escrito en la columna BAJA del original — se promovió a FRECUENCIA=MENSUAL y F.BAJA se dejó intacta en Zona B.`);
-  L.push("");
+  const r111 = resumen.find((r) => r.hoja === "111");
+  if (r111) {
+    L.push(`En la hoja 111, ${r111.stats.frecuenciaOverrides} empresas tenían "MENSUAL" escrito en la columna BAJA del original — se promovió a FRECUENCIA=MENSUAL y F.BAJA se dejó intacta en Zona B.`);
+    L.push("");
+  }
 
   const sinObs = resumen.filter((r) => r.spec.cols.obs === null || r.spec.cols.obs === undefined).map((r) => r.hoja);
   L.push(`## Columna OBSERVACIONES`);
@@ -582,20 +723,28 @@ function writeInforme(informePath, ctx) {
 
   L.push(`## Secciones aplicadas (decisión FACTURAR heredada del bloque del original)`);
   L.push("");
+  L.push(`Cada sección se localiza por el texto de su título en el archivo de origen. Se listan la fila donde se resolvió y el texto crudo que hizo match: es el rastro para comprobar que el bloque es el que se esperaba.`);
+  L.push("");
+  L.push(`| Hoja | Sección | → FACTURAR | Fila en el origen | Texto encontrado |`);
+  L.push(`|---|---|---|---:|---|`);
   for (const r of resumen) {
-    L.push(`- **${r.hoja}**: ${r.spec.inicial.titulo} → ${r.spec.inicial.facturar}` +
-      (r.spec.secciones.filter((s) => !s.skip).map((s) => `; fila ${s.fila} "${s.titulo}" → ${s.facturar}`).join("") || ""));
+    L.push(`| ${r.hoja} | ${r.spec.inicial.titulo} _(inicial)_ | ${r.spec.inicial.facturar} | ${r.spec.dataFrom} | — |`);
+    for (const s of r.secciones.filter((s) => !s.skip)) {
+      L.push(`| ${r.hoja} | ${s.titulo} | ${s.facturar} | ${s.fila} | \`${s.textoMatch.slice(0, 60)}\` |`);
+    }
   }
   L.push("");
 
-  L.push(`## Celdas de periodo con texto (a normalizar a número / X / vacío)`);
+  L.push(`## Celdas de periodo con texto (revisar FACTURAR a mano)`);
+  L.push("");
+  L.push(`Diagnóstico del archivo original: el importador no lee P1–P4, así que estas celdas no bloquean nada por sí solas. Importan porque contradicen la fila: una empresa con FACTURAR=SI cuyo periodo pone "NO" o "??" es candidata a poner en REVISAR o NO. La decisión es manual — el script no la toma.`);
   L.push("");
   const pRelevantes = informe.pNoConformes.filter((p) => p.facturar !== "NO");
   const pEnNo = informe.pNoConformes.filter((p) => p.facturar === "NO");
   if (pRelevantes.length === 0) {
     L.push(`Ninguna en filas SI/REVISAR.`);
   } else {
-    L.push(`En filas **SI/REVISAR** (estas sí bloquean facturación — normalizar antes de importar): ${pRelevantes.length}`);
+    L.push(`En filas **SI/REVISAR**: ${pRelevantes.length}`);
     L.push("");
     L.push(`| Hoja | Fila original | Periodo | Valor | Empresa | FACTURAR |`);
     L.push(`|---|---|---|---|---|---|`);
@@ -628,15 +777,24 @@ function writeInforme(informePath, ctx) {
 
   L.push(`## Hojas copiadas tal cual (sin Zona A)`);
   L.push("");
-  for (const v of verbatims) L.push(`- **${v.hoja}** — ${v.motivo}`);
+  L.push(verbatims.length ? verbatims.map((v) => `- **${v.hoja}** — ${v.motivo}`).join("\n") : "Ninguna.");
   L.push("");
-  L.push(`## Hojas omitidas (vacías en el original)`);
+  L.push(`## Hojas del original no migradas`);
   L.push("");
-  L.push(omitidas.length ? omitidas.map((h) => `- ${h}`).join("\n") : "Ninguna.");
+  L.push(`- **No seleccionadas** (tienen spec, excluidas con \`--hojas\`): ${noSeleccionadas.join(", ") || "ninguna"}`);
+  L.push(`- **Vacías en el original**: ${omitidasVacias.join(", ") || "ninguna"}`);
+  L.push(`- **Con datos y sin spec** (se pierden si hacen falta): ${sinSpecConDatos.join(", ") || "ninguna"}`);
   L.push("");
   L.push(`## Columnas descartadas`);
   L.push("");
-  L.push(`- Hoja **111**, columnas S–AB del original: bloque "Empresa Facturadora … Descripción Ampliada" construido a mano (ejemplo del output A3). Se descarta porque es dato derivado que ahora genera el proceso.`);
+  const conDrop = resumen.filter((r) => r.dropConDatos.length);
+  if (conDrop.length === 0) {
+    L.push(`Ninguna: las columnas marcadas para descartar en los specs no traían datos en este archivo.`);
+  } else {
+    for (const r of conDrop) {
+      L.push(`- Hoja **${r.hoja}**, columnas ${r.dropConDatos.map(colLetter).join(", ")} del original: bloque construido a mano (ejemplo del output A3). Se descarta porque es dato derivado que ahora genera el proceso.`);
+    }
+  }
   L.push("");
 
   fs.writeFileSync(informePath, L.join("\n"), "utf8");
@@ -644,25 +802,55 @@ function writeInforme(informePath, ctx) {
 
 // ---------------------------------------------------------------- main
 
+// Separa los flags de los posicionales: leer process.argv[2] a pelo hace que
+// `--hojas 111` acabe como ruta de entrada.
+function parseArgs(argv) {
+  const pos = [];
+  let hojas = null;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--hojas") {
+      hojas = argv[++i];
+      if (hojas === undefined) throw new Error("--hojas necesita un valor: --hojas 111,130");
+    } else if (a.startsWith("--hojas=")) hojas = a.slice("--hojas=".length);
+    else if (a.startsWith("--")) throw new Error(`Opción desconocida: ${a}`);
+    else pos.push(a);
+  }
+  const sel = hojas === null ? null : hojas.split(",").map((h) => h.trim()).filter(Boolean);
+  if (sel && sel.length === 0) throw new Error("--hojas no puede ir vacío");
+  if (sel) {
+    const conocidas = new Set([...SPECS.map((s) => s.hoja), ...VERBATIM.map((v) => v.hoja)]);
+    const desconocidas = sel.filter((h) => !conocidas.has(h));
+    if (desconocidas.length) {
+      throw new Error(
+        `--hojas: sin spec para ${desconocidas.join(", ")}. Disponibles: ${[...conocidas].join(", ")}`
+      );
+    }
+  }
+  return { input: pos[0] || DEFAULT_INPUT, output: pos[1] || DEFAULT_OUTPUT, hojas: sel };
+}
+
 async function main() {
-  const input = process.argv[2] || DEFAULT_INPUT;
-  const output = process.argv[3] || DEFAULT_OUTPUT;
+  const { input, output, hojas } = parseArgs(process.argv.slice(2));
   const informePath = output.replace(/\.xlsx$/i, "") + " - informe migracion.md";
   const fechaGen = new Date().toISOString().slice(0, 10);
+
+  const specsSel = hojas ? SPECS.filter((s) => hojas.includes(s.hoja)) : SPECS;
+  const verbatimSel = hojas ? VERBATIM.filter((v) => hojas.includes(v.hoja)) : VERBATIM;
 
   console.log(`Leyendo ${input}`);
   const wb = XLSX.readFile(input);
 
   const informe = { pNoConformes: [], sinExpte: [] };
+  const warnings = [];
   const resumen = [];
   const transformadas = new Map();
 
-  for (const spec of SPECS) {
-    if (!wb.Sheets[spec.hoja]) throw new Error(`Hoja '${spec.hoja}' no encontrada en el original`);
+  for (const spec of specsSel) {
     const rows = readSheet(wb, spec.hoja);
-    const t = transformSheet(spec, rows, informe);
+    const t = transformSheet(spec, rows, informe, warnings);
     transformadas.set(spec.hoja, t);
-    resumen.push({ hoja: spec.hoja, stats: t.stats, porPeriodo: t.porPeriodo, spec });
+    resumen.push({ hoja: spec.hoja, stats: t.stats, porPeriodo: t.porPeriodo, spec, secciones: t.secciones, dropConDatos: t.dropConDatos });
     console.log(
       `  ${spec.hoja.padEnd(18)} SI=${String(t.stats.SI).padStart(4)}  NO=${String(t.stats.NO).padStart(4)}  ` +
       `REVISAR=${String(t.stats.REVISAR).padStart(3)}  sinExpte=${t.stats.sinExpte}  notas=${t.stats.notas}` +
@@ -670,19 +858,28 @@ async function main() {
     );
   }
 
-  const procesadas = new Set([...SPECS.map((s) => s.hoja), ...VERBATIM.map((v) => v.hoja)]);
-  const omitidas = wb.SheetNames.filter((n) => !procesadas.has(n));
+  // Tres cosas distintas que antes se agrupaban como "omitidas (vacías)":
+  const generadas = new Set([...specsSel.map((s) => s.hoja), ...verbatimSel.map((v) => v.hoja)]);
+  const conSpec = new Set([...SPECS.map((s) => s.hoja), ...VERBATIM.map((v) => v.hoja)]);
+  const noSeleccionadas = [...conSpec].filter((n) => !generadas.has(n));
+  const sinSpec = wb.SheetNames.filter((n) => !conSpec.has(n));
+  const hojaVacia = (n) => readSheet(wb, n).every((r) => !r || filaVacia(r));
+  const omitidasVacias = sinSpec.filter(hojaVacia);
+  const sinSpecConDatos = sinSpec.filter((n) => !hojaVacia(n));
+  for (const n of sinSpecConDatos) {
+    warnings.push(`La hoja '${n}' del original tiene datos y no está en SPECS ni en VERBATIM: no se migra.`);
+  }
 
   console.log(`Escribiendo ${output}`);
   const outWb = await XlsxPopulate.fromBlankAsync();
   outWb.sheet(0).name("LEEME");
-  writeLeeme(outWb.sheet(0), fechaGen, path.basename(input));
+  writeLeeme(outWb.sheet(0), fechaGen, path.basename(input), specsSel, verbatimSel);
 
-  for (const spec of SPECS) {
+  for (const spec of specsSel) {
     const sheet = outWb.addSheet(spec.hoja);
     writeModelSheet(sheet, spec, transformadas.get(spec.hoja), fechaGen);
   }
-  for (const v of VERBATIM) {
+  for (const v of verbatimSel) {
     const sheet = outWb.addSheet(v.hoja);
     writeVerbatimSheet(sheet, readSheet(wb, v.hoja), v.dateCols);
   }
@@ -690,14 +887,20 @@ async function main() {
   await outWb.toFileAsync(output);
   writeInforme(informePath, {
     inputName: path.basename(input), outputName: path.basename(output),
-    fechaGen, resumen, informe, verbatims: VERBATIM, omitidas,
+    fechaGen, resumen, informe, verbatims: verbatimSel,
+    omitidasVacias, sinSpecConDatos, noSeleccionadas, warnings,
   });
 
   console.log(`Informe: ${informePath}`);
-  console.log(`Hojas omitidas (vacías): ${omitidas.join(", ") || "ninguna"}`);
+  if (noSeleccionadas.length) console.log(`Hojas no seleccionadas (--hojas): ${noSeleccionadas.join(", ")}`);
+  console.log(`Hojas omitidas (vacías): ${omitidasVacias.join(", ") || "ninguna"}`);
   console.log(
     `P con texto a normalizar: ${informe.pNoConformes.length} · filas sin expte: ${informe.sinExpte.length}`
   );
+  if (warnings.length) {
+    console.log(`\nAvisos (${warnings.length}):`);
+    for (const w of warnings) console.log(`  · ${w}`);
+  }
 }
 
 main().catch((err) => {
