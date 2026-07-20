@@ -19,7 +19,15 @@ const UNIDADES = 1;
 // Centinela de A1 que marca las hojas que este importador lee. Lo escribe
 // `pagos/migrarPlantilla.js` y lo documenta el LEEME de la plantilla: las hojas
 // que no lo llevan (LEEME, hojas copiadas tal cual) se ignoran sin ruido.
-const SENTINEL = "A3PAGOS v1";
+//
+// Se aceptan todas las versiones hasta SENTINEL_VERSION: la v2 añadió la columna
+// IMPORTE, pero como la Zona A se resuelve por nombre una v1 se lee igual (sin
+// override). Una versión MAYOR que la del importador es plantilla más nueva que
+// el código y se rechaza con mensaje claro en vez de leerla a medias. `SENTINEL`
+// se conserva como texto que escribe la migración actual.
+const SENTINEL_VERSION = 2;
+const SENTINEL = `A3PAGOS v${SENTINEL_VERSION}`;
+const SENTINEL_RX = /A3PAGOS\s*v\s*(\d+)/i;
 
 // Zona A de la plantilla (cols A–F): el bloque estándar que lee el importador. Se
 // localiza por el texto de la cabecera, como el resto de importadores. La Zona B
@@ -33,6 +41,12 @@ const HEADER_SYNONYMS = {
   empresa: ["empresa", "razonsocial"],
   facturar: ["facturar"],
   frecuencia: ["frecuencia"],
+  // Precio puntual por fila. OPCIONAL: no entra en isZonaAHeader, así que una
+  // plantilla sin esta columna (todas las v1) funciona igual que antes. Vacío =
+  // tarifa de catálogo; con valor = manda ese importe. Se resuelve por nombre,
+  // no por posición, y se ha verificado que ninguna cabecera de la Zona B de las
+  // hojas actuales colisiona con estos sinónimos.
+  importe: ["importe", "importemanual", "precio"],
 };
 
 const HEADER_SCAN_ROWS = 10;
@@ -97,10 +111,41 @@ function finDeMes(anio, mes) {
   return new Date(anio, mes, 0);
 }
 
-function tieneCentinela(rows) {
+// null si la hoja no lleva centinela (se ignora sin ruido). Si lo lleva pero es
+// de una versión futura, lanza: es una plantilla más nueva que este importador y
+// leerla por las bravas facturaría mal.
+function versionCentinela(sheetName, rows) {
   const fila1 = rows.find((r) => r.rowIndex === 1);
-  if (!fila1) return false;
-  return _str(fila1.cells[0]).toUpperCase().includes(SENTINEL.toUpperCase());
+  if (!fila1) return null;
+  const m = _str(fila1.cells[0]).match(SENTINEL_RX);
+  if (!m) return null;
+  const version = Number(m[1]);
+  if (version > SENTINEL_VERSION) {
+    throw new Error(
+      `Hoja '${sheetName}': plantilla A3PAGOS v${version}, más nueva que este importador ` +
+        `(admite hasta v${SENTINEL_VERSION}). Actualiza la aplicación.`
+    );
+  }
+  return version;
+}
+
+// Precio puntual escrito a mano en la columna IMPORTE de la fila. Devuelve
+// { valor:número } si hay precio, { valor:null } si la celda está vacía, o
+// { error:texto } si hay algo escrito que no es un número. Un IMPORTE ilegible
+// NO cae a la tarifa de catálogo: facturaría un importe distinto del que el
+// usuario quiso teclear y nadie lo notaría.
+function leerImporte(raw) {
+  if (raw === null || raw === undefined) return { valor: null };
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) ? { valor: raw } : { error: String(raw) };
+  }
+  const original = _str(raw);
+  if (original === "") return { valor: null };
+  let s = original.replace(/[€\s]/g, "");
+  // Con coma se asume formato español: el punto es separador de millares.
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? { valor: n } : { error: original };
 }
 
 function isZonaAHeader(cols) {
@@ -134,8 +179,11 @@ function buildDescripcion(nombreConcepto, concepto, periodo) {
   return `${base} - ${periodo.etiqueta}`.slice(0, 250);
 }
 
-function buildDescAmpliada(empresa, nif) {
-  return [empresa, nif].filter(Boolean).join(", ").slice(0, 500);
+// Solo la razón social. El NIF se quitó a petición del cliente: es dato de
+// control que ya vive en la Zona B de la plantilla, no en la factura. Sigue
+// llegando a `transform` para incidencias, pero no se escribe en la línea.
+function buildDescAmpliada(empresa) {
+  return _str(empresa).slice(0, 500);
 }
 
 async function transform(inputPath, mapeos, outputDir, options = {}) {
@@ -160,6 +208,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
+  const preciosManuales = [];
   const hojas = [];
   // EXPTE+concepto ya emitido en esta corrida -> dónde salió. La plantilla se
   // corrige a mano y la misma empresa repetida con el mismo modelo se facturaría
@@ -172,14 +221,18 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   for (const sheet of workbook.sheets()) {
     const { rows } = readAbsoluteRows(sheet);
     if (!rows.length) continue;
-    if (!tieneCentinela(rows)) continue;
 
     const nombreHoja = sheet.name();
+    if (versionCentinela(nombreHoja, rows) === null) continue;
+
     const { headerRow, cols } = locateZonaA(nombreHoja, rows);
     const get = (cells, field) =>
       cols[field] !== undefined ? cells[cols[field]] : undefined;
 
-    const stats = { conceptos: 0, si: 0, no: 0, revisar: 0, fuera_de_periodo: 0, incidencias: 0 };
+    const stats = {
+      conceptos: 0, si: 0, no: 0, revisar: 0,
+      fuera_de_periodo: 0, precios_manuales: 0, incidencias: 0,
+    };
 
     for (const { rowIndex: filaIdx, cells } of rows) {
       if (filaIdx <= headerRow) continue;
@@ -277,11 +330,44 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
         continue;
       }
 
-      // 3. Tarifa
-      const tarifa = mapeos.tarifas.resolve(concepto);
-      if (tarifa === null) {
-        const motivo = mapeos.tarifas.missReason(concepto);
-        addInc(`Tarifa concepto '${concepto}' no resoluble: ${motivo}`);
+      // Aviso de deriva: la FRECUENCIA de la fila manda siempre, pero si el
+      // catálogo declara frecuencias para el concepto y la de la fila no está
+      // entre ellas, es señal de que alguien la tecleó mal (p. ej. el 130
+      // marcado MENSUAL). Solo informa; no cambia qué se factura.
+      const frecuenciasCatalogo = mapeos.tarifas.frecuencias(concepto);
+      if (frecuenciasCatalogo && !frecuenciasCatalogo.has(frecuencia)) {
+        warningsQc.push(
+          `Hoja ${nombreHoja} fila ${filaIdx}: FRECUENCIA=${frecuencia} en la fila, pero el catálogo ` +
+            `declara ${[...frecuenciasCatalogo].join("/")} para el concepto ${concepto} (${empresa}) — revisar`
+        );
+      }
+
+      // 3. Precio: manda el IMPORTE puntual de la fila; si viene vacío, la
+      // tarifa del catálogo. El override se evalúa ANTES de que el catálogo
+      // pueda fallar, así que rescata los ESCALADO/sin precio (347, 190, 415),
+      // que sin él iban siempre a incidencias por no tener precio calculable.
+      const override = leerImporte(get(cells, "importe"));
+      if (override.error !== undefined) {
+        addInc(`IMPORTE '${override.error}' no es un número válido — corrige la celda o déjala vacía`);
+        continue;
+      }
+      const tarifaCatalogo = mapeos.tarifas.resolve(concepto);
+      let importeAplicado;
+      let origenPrecio;
+      if (override.valor !== null) {
+        if (override.valor <= 0) {
+          addInc(
+            `IMPORTE ${override.valor} no válido: debe ser mayor que 0 (para no facturar, usa FACTURAR=NO)`
+          );
+          continue;
+        }
+        importeAplicado = override.valor;
+        origenPrecio = "MANUAL";
+      } else if (tarifaCatalogo !== null) {
+        importeAplicado = tarifaCatalogo;
+        origenPrecio = "CATALOGO";
+      } else {
+        addInc(`Tarifa concepto '${concepto}' no resoluble: ${mapeos.tarifas.missReason(concepto)}`);
         continue;
       }
 
@@ -297,6 +383,27 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
         vistos.set(clave, { hoja: nombreHoja, fila: filaIdx });
       }
 
+      // Traza de todos los precios puntuales de la corrida. La plantilla se
+      // reutiliza entre trimestres, así que un IMPORTE olvidado se arrastraría
+      // en silencio: este CSV y el recuento del resumen obligan a revisarlos
+      // cada corrida. `motivo_catalogo` distingue "le cobro distinto" (ok) de
+      // "el catálogo no tenía precio" (escalado/sin_precio).
+      if (origenPrecio === "MANUAL") {
+        preciosManuales.push({
+          hoja: nombreHoja,
+          fila_origen: filaIdx,
+          concepto,
+          expte: String(expte),
+          empresa,
+          precio_catalogo: tarifaCatalogo === null ? "" : tarifaCatalogo.toFixed(2),
+          motivo_catalogo: tarifaCatalogo === null ? mapeos.tarifas.missReason(concepto) : "ok",
+          precio_aplicado: importeAplicado.toFixed(2),
+          diferencia:
+            tarifaCatalogo === null ? "" : (importeAplicado - tarifaCatalogo).toFixed(2),
+        });
+        stats.precios_manuales++;
+      }
+
       conceptos.push({
         empresa: EMPRESA_FACTURADORA,
         codigo_cliente: pad5(clienteEfectivo),
@@ -306,9 +413,9 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
         tipo_iva: TIPO_IVA,
         unidades: UNIDADES,
         importe_gastos: "",
-        importe_honorarios: Math.round(tarifa * 100) / 100,
+        importe_honorarios: Math.round(importeAplicado * 100) / 100,
         codigo_expediente: codigoExpediente,
-        descripcion_ampliada: buildDescAmpliada(empresa, nif),
+        descripcion_ampliada: buildDescAmpliada(empresa),
       });
       stats.conceptos++;
     }
@@ -327,6 +434,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   writeConceptos(path.join(outputDir, "Conceptos Pendientes Facturar.csv"), conceptos);
   writeIncidencias(path.join(outputDir, "incidencias.csv"), incidencias);
   writeWarnings(path.join(outputDir, "warnings_qc.csv"), warningsQc);
+  writePreciosManuales(path.join(outputDir, "precios_manuales.csv"), preciosManuales);
 
   const total = conceptos.reduce((a, c) => a + c.importe_honorarios * c.unidades, 0);
 
@@ -344,6 +452,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     conceptos: conceptos.length,
     incidencias: incidencias.length,
     warnings_qc: warningsQc.length,
+    precios_manuales: preciosManuales.length,
     importe_total: Math.round(total * 100) / 100,
   };
 }
@@ -408,4 +517,30 @@ function writeWarnings(filePath, rows) {
   writeCsv(filePath, ["mensaje"], rows.map((m) => [m]));
 }
 
-module.exports = { transform, parsePeriodo, SENTINEL };
+function writePreciosManuales(filePath, rows) {
+  const hdr = [
+    "hoja",
+    "fila_origen",
+    "CONCEPTO FACT",
+    "EXPTE",
+    "EMPRESA",
+    "precio_catalogo",
+    "motivo_catalogo",
+    "precio_aplicado",
+    "diferencia",
+  ];
+  const data = rows.map((r) => [
+    r.hoja,
+    r.fila_origen,
+    r.concepto,
+    r.expte,
+    r.empresa,
+    r.precio_catalogo,
+    r.motivo_catalogo,
+    r.precio_aplicado,
+    r.diferencia,
+  ]);
+  writeCsv(filePath, hdr, data);
+}
+
+module.exports = { transform, parsePeriodo, SENTINEL, SENTINEL_VERSION };

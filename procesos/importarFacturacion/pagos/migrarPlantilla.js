@@ -44,9 +44,12 @@ const INPUTS_DIR = path.join(__dirname, "..", "inputs", "pagos");
 const DEFAULT_INPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T.xls");
 const DEFAULT_OUTPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T - PLANTILLA A3 v2.xlsx");
 
-const SENTINEL = "A3PAGOS v1";
-const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA"];
+// v2 añadió la columna IMPORTE (precio puntual por fila). El importador acepta
+// v1 y v2; ver SENTINEL_VERSION en pagos.js.
+const SENTINEL = "A3PAGOS v2";
+const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA", "IMPORTE"];
 const FRECUENCIAS = ["TRIMESTRAL", "MENSUAL", "ANUAL", "OTRA"];
+const COL_IMPORTE = 7; // dentro de Zona A; se deja vacía (opt-in del usuario)
 const COL_SEP = ZONA_A.length + 1; // separador tras Zona A
 const ZONA_B_START = COL_SEP + 1; // primera columna de Zona B
 
@@ -537,10 +540,10 @@ function writeLeeme(sheet, fechaGen, inputName, specsSel, verbatimSel) {
     ["", ""],
     ["CÓMO FUNCIONA", "", true],
     ["Cada hoja de modelo tiene dos zonas:", ""],
-    ["  · ZONA A (columnas A a F): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
-    ["  · ZONA B (columna H en adelante): zona libre de cada modelo (incluye P1–P4, OBSERVACIONES, F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
+    ["  · ZONA A (columnas A a G): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
+    ["  · ZONA B (columna I en adelante): zona libre de cada modelo (incluye P1–P4, OBSERVACIONES, F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
     ["", ""],
-    ["EL MODELO EN UNA LÍNEA", "CONCEPTO FACT = qué y cuánto · FACTURAR = si sí o no · FRECUENCIA = cuándo · EXPTE = a quién.", true],
+    ["EL MODELO EN UNA LÍNEA", "CONCEPTO FACT = qué · FACTURAR = si sí o no · FRECUENCIA = cuándo · EXPTE = a quién · IMPORTE = cuánto (opcional).", true],
     ["", ""],
     ["COLUMNAS DE LA ZONA A", "", true],
     ["  CONCEPTO FACT", "Concepto facturable de la fila (código de la hoja ConceptosFacturables: 0.016, 0.012…). Es lo que fija el importe a facturar al cruzarlo con mapeos_facturacion.xlsx. Se deriva del modelo fiscal (130, 111…)."],
@@ -549,6 +552,7 @@ function writeLeeme(sheet, fechaGen, inputName, specsSel, verbatimSel) {
     ["  EMPRESA", "Informativo."],
     ["  FACTURAR", "Única fuente de verdad sobre la decisión de facturar la fila: SI = se factura · NO = nunca · REVISAR = no se factura y sale en incidencias para decidir a mano. El importador no cruza ningún otro campo para decidirlo: ni P1–P4, ni la fecha de baja de la Zona B."],
     ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente). Cada ejecución factura las filas cuya frecuencia toca en el periodo elegido: en un cierre de trimestre entran tanto las TRIMESTRAL como las MENSUAL; en un mes intermedio, solo las MENSUAL."],
+    ["  IMPORTE", "Precio puntual de ESTA fila. Vacío (lo normal) = se factura la tarifa del catálogo. Con un número = se factura ese importe, ignorando el catálogo (sirve para cobrar más o menos a un cliente concreto, o para dar precio a un concepto ESCALADO). OJO: la plantilla se reutiliza entre trimestres — un importe que se deja escrito se vuelve a facturar. Cada ejecución lista todos los importes puntuales usados en precios_manuales.csv para poder revisarlos."],
     ["", ""],
     ["P1..P4 y OBSERVACIONES (ahora en la ZONA LIBRE)", "", true],
     ["  Se copian tal cual del archivo original y el importador NO las lee: son dato informativo. Periodos trimestrales P1=1T…P4=4T (modelo 202: P1=abril, P2=octubre, P3=diciembre). La facturación la fija CONCEPTO FACT; el importe del periodo no interviene.", ""],
@@ -649,8 +653,12 @@ function writeModelSheet(sheet, spec, t, fechaGen) {
 
   // Presentación
   sheet.freezePanes(0, 2);
-  const widths = { A: 13, B: 8, C: 13, D: 42, E: 11, F: 12, G: 2 };
+  // G = IMPORTE (Zona A), H = separador. El resto de Zona B se dimensiona abajo.
+  const widths = { A: 13, B: 8, C: 13, D: 42, E: 11, F: 12, G: 11, H: 2 };
   Object.entries(widths).forEach(([col, w]) => sheet.column(col).width(w));
+  // Formato moneda solo de display: el importador lee el valor numérico, no el
+  // texto. Deja vacías las celdas hasta que el usuario escriba un precio.
+  sheet.column(colLetter(COL_IMPORTE)).style("numberFormat", "#,##0.00 €");
   for (let i = 0; i < nZonaB; i++) {
     sheet.column(colLetter(ZONA_B_START - 1 + i)).width(14);
   }
