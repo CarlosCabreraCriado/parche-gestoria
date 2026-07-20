@@ -6,6 +6,7 @@ const {
   _toInt,
   _toFloat,
   _toDate,
+  conFecha,
   pad5,
   isoDate,
   ensureDir,
@@ -41,20 +42,33 @@ function isNominasHeader(cols) {
   );
 }
 
-function buildDescripcion(tipoTramite, observacion) {
+// La fecha es la de la fila del archivo del cliente: ya no decide cuándo se
+// factura (eso lo fija el formulario), solo documenta a qué día corresponde el
+// trabajo. Si la fila no la trae, la descripción sale sin ella.
+function buildDescripcion(tipoTramite, observacion, fecha) {
   const base = (tipoTramite || "").replace(/[ -]+$/, "").trim() || "Nóminas";
   const obsInt = _toInt(observacion);
+  let texto = base;
   if (obsInt && obsInt > 0) {
     const plural = obsInt !== 1 ? "s" : "";
-    return `${base} - ${obsInt} nómina${plural}`.slice(0, 250);
+    texto = `${base} - ${obsInt} nómina${plural}`;
+  } else {
+    const obs = _str(observacion);
+    if (obs) texto = `${base} - ${obs}`;
   }
-  const obs = _str(observacion);
-  if (obs) return `${base} - ${obs}`.slice(0, 250);
-  return base.slice(0, 250);
+  return conFecha(texto, fecha);
 }
 
-async function transform(inputPath, mapeos, outputDir) {
+async function transform(inputPath, mapeos, outputDir, options = {}) {
   ensureDir(outputDir);
+  // Sin ella todas las líneas saldrían sin Fecha y el fallo no aparecería hasta
+  // escribir el CSV, como un críptico error de getFullYear.
+  const fechaFactura = options.fechaFactura;
+  if (!fechaFactura) {
+    throw new Error(
+      "Falta la fecha de facturación: la elige el usuario en el formulario y es obligatoria."
+    );
+  }
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
   const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNominasHeader);
@@ -111,10 +125,6 @@ async function transform(inputPath, mapeos, outputDir) {
       addInc("Sin IMPORTE");
       continue;
     }
-    if (!fecha) {
-      addInc("Sin FECHA válida en el archivo");
-      continue;
-    }
 
     // 1. Redirección
     const redirectTarget = mapeos.redirect.resolve(exptCorto);
@@ -156,12 +166,21 @@ async function transform(inputPath, mapeos, outputDir) {
       );
     }
 
+    // La fila se factura igual sin fecha; solo se pierde el dato en la
+    // descripción. Se avisa aquí y no antes para no reportar filas que después
+    // se descartan por otro motivo.
+    if (!fecha) {
+      warningsQc.push(
+        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la descripción sale sin fecha`
+      );
+    }
+
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
       codigo_cliente: pad5(clienteEfectivo),
       codigo_concepto: conceptoRaw,
-      fecha,
-      descripcion: buildDescripcion(tipoTramite, observacion),
+      fecha: fechaFactura,
+      descripcion: buildDescripcion(tipoTramite, observacion, fecha),
       tipo_iva: TIPO_IVA,
       unidades,
       importe_gastos: "",

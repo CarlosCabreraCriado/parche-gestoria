@@ -11,6 +11,8 @@ const generateTraspaso = require("./importarFacturacion/generateTraspaso");
 const {
   ensureDir,
   stampYYYYMMDDHHmm,
+  fechaDesdeFormulario,
+  isoDate,
 } = require("./importarFacturacion/utils");
 
 // Plantilla A3: siempre la misma, versionada en el propio proyecto (no configurable por el usuario).
@@ -39,15 +41,20 @@ class ProcesosImportarFacturacion {
   }
 
   _parseArgs(argumentos, tipo) {
-    // Orden esperado (procesos.configuracion.ts):
+    // `formularioControl` es POSICIONAL: el índice es el orden en que
+    // procesos.configuracion.ts declara los argumentos. Si se reordenan allí,
+    // hay que actualizar esto.
     // [0] archivoInput, [1] rutaSalida, [2] archivoMapeos
-    // [3] periodo — solo lo declara PAGOS; el resto de tipos no lo tienen.
+    // [3] depende del tipo: PAGOS declara `periodo` (del que deriva la fecha);
+    //     el resto declara `fechaFacturacion`, elegida en el formulario.
     const c = argumentos?.formularioControl || [];
+    const esPagos = tipo === "pagos";
     return {
       archivoInput: c[0],
       rutaSalida: c[1],
       archivoMapeos: c[2],
-      periodo: c[3],
+      periodo: esPagos ? c[3] : undefined,
+      fechaFacturacion: esPagos ? undefined : c[3],
       tipo,
     };
   }
@@ -78,6 +85,20 @@ class ProcesosImportarFacturacion {
         const args = this._parseArgs(argumentos, tipo);
         if (!this._validate(args)) return resolve(false);
 
+        // La fecha que llevarán las líneas en A3 la elige el usuario en el
+        // formulario; la fecha que trae cada fila del archivo del cliente pasa a
+        // la descripción. PAGOS es la excepción: todavía la deriva de `periodo`.
+        let fechaFactura = null;
+        if (tipo !== "pagos") {
+          fechaFactura = fechaDesdeFormulario(args.fechaFacturacion);
+          if (!fechaFactura) {
+            this.logErr(
+              `Fecha de facturación no válida o no indicada: ${args.fechaFacturacion}`
+            );
+            return resolve(false);
+          }
+        }
+
         const now = new Date();
         const stamp = stampYYYYMMDDHHmm(now);
         const outDir = path.join(
@@ -99,13 +120,12 @@ class ProcesosImportarFacturacion {
         for (const w of mapeos.allWarnings()) this.logWarn(w);
 
         // 2. Transformar. Las opciones las lee cada transformador según lo que
-        // declare su formulario: hoy solo PAGOS usa `periodo` (el resto de tipos
-        // sacan la fecha de cada fila del archivo del cliente).
+        // declare su formulario: PAGOS usa `periodo` y el resto `fechaFactura`.
         const result = await transformer.transform(
           path.normalize(args.archivoInput),
           mapeos,
           outDir,
-          { periodo: args.periodo }
+          { periodo: args.periodo, fechaFactura }
         );
         this.log(`Transformación: ${JSON.stringify(result)}`);
 
@@ -119,6 +139,7 @@ class ProcesosImportarFacturacion {
         const resumen = {
           tipo,
           timestamp: now.toISOString(),
+          fecha_facturacion: fechaFactura ? isoDate(fechaFactura) : null,
           input: args.archivoInput,
           output_dir: outDir,
           xlsx_generado: xlsxOut,

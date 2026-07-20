@@ -53,6 +53,37 @@ function _toDate(value, fallback) {
   return fallback;
 }
 
+// La fecha de facturación la elige el usuario en el formulario (datepicker de
+// Material). Llega como Date, pero al cruzar el IPC de Electron se serializa a
+// ISO en UTC: se reconstruye desde los componentes LOCALES para que no se
+// desplace un día. Devuelve null si no hay valor o no es interpretable.
+function fechaDesdeFormulario(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") {
+    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function fechaCorta(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+// Añade la fecha del archivo de origen al final de la descripción. Recorta la
+// BASE dejando hueco al sufijo: concatenar y recortar después se come la fecha
+// justo en las descripciones largas, que es cuando más falta hace.
+function conFecha(base, fecha, max = 250) {
+  const texto = String(base ?? "");
+  if (!fecha) return texto.slice(0, max);
+  const sufijo = ` - ${fechaCorta(fecha)}`;
+  return texto.slice(0, Math.max(0, max - sufijo.length)) + sufijo;
+}
+
 function pad5(n) {
   const s = String(n);
   return s.length >= 5 ? s : "0".repeat(5 - s.length) + s;
@@ -199,6 +230,9 @@ module.exports = {
   _toFloat,
   _toDate,
   excelSerialToDate,
+  fechaDesdeFormulario,
+  fechaCorta,
+  conFecha,
   pad5,
   isoDate,
   stampYYYYMMDDHHmm,

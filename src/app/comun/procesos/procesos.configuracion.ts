@@ -1664,6 +1664,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
                   valorDefault: "",
                 },
               },
+              {
+                tipo: "fecha",
+                obligado: true,
+                identificador: "fechaFacturacion",
+                formulario: {
+                  titulo: "Fecha de facturación",
+                  tipo: "fecha",
+                  placeholder: "Fecha que llevarán las líneas en A3",
+                  valorDefault: "",
+                },
+              },
             ],
             opciones: null,
             salida: [{ tipo: "boolean", valor: false }],
@@ -1712,6 +1723,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
                   valorDefault: "",
                 },
               },
+              {
+                tipo: "fecha",
+                obligado: true,
+                identificador: "fechaFacturacion",
+                formulario: {
+                  titulo: "Fecha de facturación",
+                  tipo: "fecha",
+                  placeholder: "Fecha que llevarán las líneas en A3",
+                  valorDefault: "",
+                },
+              },
             ],
             opciones: null,
             salida: [{ tipo: "boolean", valor: false }],
@@ -1757,6 +1779,17 @@ var libreriaProcesos: LibreriaProcesos[] = [
                   accept: ".xlsx, .XLSX",
                   placeholder:
                     "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "fecha",
+                obligado: true,
+                identificador: "fechaFacturacion",
+                formulario: {
+                  titulo: "Fecha de facturación",
+                  tipo: "fecha",
+                  placeholder: "Fecha que llevarán las líneas en A3",
                   valorDefault: "",
                 },
               },

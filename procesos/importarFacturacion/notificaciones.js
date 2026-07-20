@@ -5,6 +5,7 @@ const {
   _str,
   _toInt,
   _toDate,
+  conFecha,
   pad5,
   isoDate,
   ensureDir,
@@ -59,14 +60,14 @@ function normalizarConcepto(raw) {
   return s;
 }
 
+// La fecha es la de la fila del archivo del cliente (F. LECTURA): ya no decide
+// cuándo se factura (eso lo fija el formulario), solo documenta a qué día
+// corresponde el aviso. Si la fila no la trae, la descripción sale sin ella.
 function buildDescripcion(asunto, fecha) {
-  const fechaStr = `${String(fecha.getDate()).padStart(2, "0")}/${String(
-    fecha.getMonth() + 1
-  ).padStart(2, "0")}/${fecha.getFullYear()}`;
   let base = "Aviso Notificacion";
   const a = (asunto || "").trim();
   if (a) base = `${base} - ${a}`;
-  return `${base} - ${fechaStr}`.slice(0, 250);
+  return conFecha(base, fecha);
 }
 
 function buildDescAmpliada(descAmpliadaRaw, asunto, emisor) {
@@ -77,8 +78,16 @@ function buildDescAmpliada(descAmpliadaRaw, asunto, emisor) {
   return parts.join(", ").slice(0, 500);
 }
 
-async function transform(inputPath, mapeos, outputDir) {
+async function transform(inputPath, mapeos, outputDir, options = {}) {
   ensureDir(outputDir);
+  // Sin ella todas las líneas saldrían sin Fecha y el fallo no aparecería hasta
+  // escribir el CSV, como un críptico error de getFullYear.
+  const fechaFactura = options.fechaFactura;
+  if (!fechaFactura) {
+    throw new Error(
+      "Falta la fecha de facturación: la elige el usuario en el formulario y es obligatoria."
+    );
+  }
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
   const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNotificacionesHeader, {
@@ -180,16 +189,21 @@ async function transform(inputPath, mapeos, outputDir) {
 
     const unidades = _toInt(get(row, "unidades")) || 1;
     const fechaLinea = _toDate(get(row, "fecha"), null);
+
+    // La fila se factura igual sin fecha; solo se pierde el dato en la
+    // descripción. Se avisa aquí y no antes para no reportar filas que después
+    // se descartan por otro motivo.
     if (!fechaLinea) {
-      addInc("Sin FECHA válida en el archivo");
-      continue;
+      warningsQc.push(
+        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la descripción sale sin fecha`
+      );
     }
 
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
       codigo_cliente: pad5(clienteEfectivo),
       codigo_concepto: concepto,
-      fecha: fechaLinea,
+      fecha: fechaFactura,
       descripcion: buildDescripcion(asunto, fechaLinea),
       tipo_iva: TIPO_IVA,
       unidades,

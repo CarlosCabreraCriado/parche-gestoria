@@ -6,6 +6,7 @@ const {
   _toInt,
   _toFloat,
   _toDate,
+  conFecha,
   pad5,
   isoDate,
   ensureDir,
@@ -42,13 +43,24 @@ function isTramitesHeader(cols) {
   );
 }
 
-function buildDescripcion(tipoTramite) {
+// La fecha es la de la fila del archivo del cliente: ya no decide cuándo se
+// factura (eso lo fija el formulario), solo documenta a qué día corresponde el
+// trámite. Si la fila no la trae, la descripción sale sin ella.
+function buildDescripcion(tipoTramite, fecha) {
   const base = (tipoTramite || "").replace(/[ \-.]+$/, "").trim() || "Trámite laboral";
-  return base.slice(0, 250);
+  return conFecha(base, fecha);
 }
 
-async function transform(inputPath, mapeos, outputDir) {
+async function transform(inputPath, mapeos, outputDir, options = {}) {
   ensureDir(outputDir);
+  // Sin ella todas las líneas saldrían sin Fecha y el fallo no aparecería hasta
+  // escribir el CSV, como un críptico error de getFullYear.
+  const fechaFactura = options.fechaFactura;
+  if (!fechaFactura) {
+    throw new Error(
+      "Falta la fecha de facturación: la elige el usuario en el formulario y es obligatoria."
+    );
+  }
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
   const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isTramitesHeader);
@@ -112,10 +124,6 @@ async function transform(inputPath, mapeos, outputDir) {
       addInc("Sin CONCEPTO FACT");
       continue;
     }
-    if (!fecha) {
-      addInc("Sin FECHA válida en el archivo");
-      continue;
-    }
 
     // 1. Redirección
     const redirectTarget = mapeos.redirect.resolve(exptCorto);
@@ -154,12 +162,21 @@ async function transform(inputPath, mapeos, outputDir) {
       );
     }
 
+    // La fila se factura igual sin fecha; solo se pierde el dato en la
+    // descripción. Se avisa aquí y no antes para no reportar filas que después
+    // se descartan por otro motivo.
+    if (!fecha) {
+      warningsQc.push(
+        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la descripción sale sin fecha`
+      );
+    }
+
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
       codigo_cliente: pad5(clienteEfectivo),
       codigo_concepto: conceptoRaw,
-      fecha,
-      descripcion: buildDescripcion(tipoTramite),
+      fecha: fechaFactura,
+      descripcion: buildDescripcion(tipoTramite, fecha),
       tipo_iva: TIPO_IVA,
       unidades: 1,
       importe_gastos: "",
