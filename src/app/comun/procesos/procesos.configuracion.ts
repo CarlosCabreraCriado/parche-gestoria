@@ -56,7 +56,13 @@ interface FormularioArgumento {
   placeholder: string;
   valorDefault: any;
   accept?: string;
-  mostrarSi?: { indice: number; valor: boolean };
+  // Opciones de un campo `tipo: "seleccion"`. `valor` es lo que se envía al
+  // backend; `etiqueta` lo que ve el usuario.
+  opciones?: { valor: any; etiqueta: string }[];
+  // Visibilidad condicional: el campo solo se muestra si el control en `indice`
+  // vale `valor`. `valor` admite string (p. ej. un valor de seleccion) además de
+  // boolean, para desplegables dependientes (frecuencia -> periodo).
+  mostrarSi?: { indice: number; valor: any };
   siempreOculto?: boolean;
 }
 
@@ -1842,15 +1848,97 @@ var libreriaProcesos: LibreriaProcesos[] = [
                   valorDefault: "",
                 },
               },
+              // [3] Frecuencia: manda qué se factura y qué periodo se ofrece
+              // abajo (los campos de trimestre/mes se muestran según su valor).
               {
                 tipo: "texto",
                 obligado: true,
-                identificador: "periodo",
+                identificador: "frecuencia",
                 formulario: {
-                  titulo: "Periodo a facturar",
-                  tipo: "texto",
-                  placeholder:
-                    "2026-2T (cierre trimestral: factura TRIMESTRAL + MENSUAL) · 2026-05 (mes intermedio: solo MENSUAL)",
+                  titulo: "Frecuencia",
+                  tipo: "seleccion",
+                  placeholder: "Trimestral o mensual",
+                  valorDefault: "",
+                  opciones: [
+                    { valor: "TRIMESTRAL", etiqueta: "Trimestral" },
+                    { valor: "MENSUAL", etiqueta: "Mensual" },
+                  ],
+                },
+              },
+              // [4] Año del periodo (para la etiqueta de la descripción).
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "anio",
+                formulario: {
+                  titulo: "Año",
+                  tipo: "seleccion",
+                  placeholder: "Año a facturar",
+                  valorDefault: "",
+                  opciones: [
+                    { valor: "2024", etiqueta: "2024" },
+                    { valor: "2025", etiqueta: "2025" },
+                    { valor: "2026", etiqueta: "2026" },
+                    { valor: "2027", etiqueta: "2027" },
+                  ],
+                },
+              },
+              // [5] Periodo trimestral. Solo visible con Frecuencia = Trimestral.
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "periodoTrimestre",
+                formulario: {
+                  titulo: "Trimestre",
+                  tipo: "seleccion",
+                  placeholder: "Trimestre a facturar",
+                  valorDefault: "",
+                  mostrarSi: { indice: 3, valor: "TRIMESTRAL" },
+                  opciones: [
+                    { valor: "1T", etiqueta: "1T (ene–mar)" },
+                    { valor: "2T", etiqueta: "2T (abr–jun)" },
+                    { valor: "3T", etiqueta: "3T (jul–sep)" },
+                    { valor: "4T", etiqueta: "4T (oct–dic)" },
+                  ],
+                },
+              },
+              // [6] Periodo mensual. Solo visible con Frecuencia = Mensual. El
+              // valor es el mes en dos dígitos, que es lo que espera parsePeriodo.
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "periodoMes",
+                formulario: {
+                  titulo: "Mes",
+                  tipo: "seleccion",
+                  placeholder: "Mes a facturar",
+                  valorDefault: "",
+                  mostrarSi: { indice: 3, valor: "MENSUAL" },
+                  opciones: [
+                    { valor: "01", etiqueta: "Enero" },
+                    { valor: "02", etiqueta: "Febrero" },
+                    { valor: "03", etiqueta: "Marzo" },
+                    { valor: "04", etiqueta: "Abril" },
+                    { valor: "05", etiqueta: "Mayo" },
+                    { valor: "06", etiqueta: "Junio" },
+                    { valor: "07", etiqueta: "Julio" },
+                    { valor: "08", etiqueta: "Agosto" },
+                    { valor: "09", etiqueta: "Septiembre" },
+                    { valor: "10", etiqueta: "Octubre" },
+                    { valor: "11", etiqueta: "Noviembre" },
+                    { valor: "12", etiqueta: "Diciembre" },
+                  ],
+                },
+              },
+              // [7] Fecha que llevarán las líneas en A3 (la elige el usuario).
+              {
+                tipo: "fecha",
+                obligado: true,
+                identificador: "fechaFacturacion",
+                formulario: {
+                  titulo: "Fecha de facturación",
+                  tipo: "fecha",
+                  placeholder: "Fecha que llevarán las líneas en A3",
                   valorDefault: "",
                 },
               },

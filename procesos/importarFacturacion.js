@@ -44,19 +44,30 @@ class ProcesosImportarFacturacion {
     // `formularioControl` es POSICIONAL: el índice es el orden en que
     // procesos.configuracion.ts declara los argumentos. Si se reordenan allí,
     // hay que actualizar esto.
-    // [0] archivoInput, [1] rutaSalida, [2] archivoMapeos
-    // [3] depende del tipo: PAGOS declara `periodo` (del que deriva la fecha);
-    //     el resto declara `fechaFacturacion`, elegida en el formulario.
+    // [0] archivoInput, [1] rutaSalida, [2] archivoMapeos son comunes.
     const c = argumentos?.formularioControl || [];
-    const esPagos = tipo === "pagos";
-    return {
+    const base = {
       archivoInput: c[0],
       rutaSalida: c[1],
       archivoMapeos: c[2],
-      periodo: esPagos ? c[3] : undefined,
-      fechaFacturacion: esPagos ? undefined : c[3],
       tipo,
     };
+
+    if (tipo !== "pagos") {
+      // El resto declara solo [3] fechaFacturacion.
+      return { ...base, fechaFacturacion: c[3] };
+    }
+
+    // PAGOS declara [3] frecuencia, [4] año, [5] periodoTrimestre,
+    // [6] periodoMes y [7] fechaFacturacion. El periodo que consume el
+    // importador ("2026-2T" o "2026-05") se reconstruye aquí a partir de la
+    // frecuencia (que decide si se toma el trimestre o el mes) y el año.
+    const frecuencia = String(c[3] || "").toUpperCase();
+    const anio = String(c[4] || "").trim();
+    const codigoPeriodo = frecuencia === "MENSUAL" ? c[6] : c[5];
+    const periodo =
+      anio && codigoPeriodo ? `${anio}-${String(codigoPeriodo).trim()}` : "";
+    return { ...base, frecuencia, periodo, fechaFacturacion: c[7] };
   }
 
   _validate(args) {
@@ -86,17 +97,21 @@ class ProcesosImportarFacturacion {
         if (!this._validate(args)) return resolve(false);
 
         // La fecha que llevarán las líneas en A3 la elige el usuario en el
-        // formulario; la fecha que trae cada fila del archivo del cliente pasa a
-        // la descripción. PAGOS es la excepción: todavía la deriva de `periodo`.
-        let fechaFactura = null;
-        if (tipo !== "pagos") {
-          fechaFactura = fechaDesdeFormulario(args.fechaFacturacion);
-          if (!fechaFactura) {
-            this.logErr(
-              `Fecha de facturación no válida o no indicada: ${args.fechaFacturacion}`
-            );
-            return resolve(false);
-          }
+        // formulario en todos los procesos, PAGOS incluido. El periodo (solo
+        // PAGOS) decide qué frecuencias se facturan y la etiqueta de la
+        // descripción, pero ya no fija la fecha de la línea.
+        const fechaFactura = fechaDesdeFormulario(args.fechaFacturacion);
+        if (!fechaFactura) {
+          this.logErr(
+            `Fecha de facturación no válida o no indicada: ${args.fechaFacturacion}`
+          );
+          return resolve(false);
+        }
+        if (tipo === "pagos" && !args.periodo) {
+          this.logErr(
+            "Falta la frecuencia, el año o el periodo (trimestre/mes) a facturar."
+          );
+          return resolve(false);
         }
 
         const now = new Date();

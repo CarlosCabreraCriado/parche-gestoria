@@ -191,6 +191,17 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const periodo = parsePeriodo(options.periodo);
   const facturables = FACTURA_EN[periodo.tipo];
 
+  // La fecha de la línea la elige el usuario en el formulario (igual que el
+  // resto de importadores); el periodo solo decide qué frecuencias entran y la
+  // etiqueta de la descripción. Sin fecha, todas las líneas saldrían sin Fecha y
+  // el fallo no aparecería hasta escribir el CSV.
+  const fechaLinea = options.fechaFactura;
+  if (!fechaLinea) {
+    throw new Error(
+      "Falta la fecha de facturación: la elige el usuario en el formulario y es obligatoria."
+    );
+  }
+
   // El 4PAGOS original (.xls) y la plantilla (.xlsx) viven en la misma carpeta con
   // nombres casi idénticos, así que elegir el de origen es el error fácil. Sin esta
   // guarda el fallo sale como un críptico "Cannot read properties of null" de
@@ -408,7 +419,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
         empresa: EMPRESA_FACTURADORA,
         codigo_cliente: pad5(clienteEfectivo),
         codigo_concepto: concepto,
-        fecha: periodo.fecha,
+        fecha: fechaLinea,
         descripcion: buildDescripcion(mapeos.tarifas.describe(concepto), concepto, periodo),
         tipo_iva: TIPO_IVA,
         unidades: UNIDADES,
@@ -445,9 +456,9 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       valor: _str(options.periodo).toUpperCase(),
       tipo: periodo.tipo,
       etiqueta: periodo.etiqueta,
-      fecha_linea: isoDate(periodo.fecha),
       frecuencias_facturadas: [...facturables],
     },
+    fecha_linea: isoDate(fechaLinea),
     hojas,
     conceptos: conceptos.length,
     incidencias: incidencias.length,
