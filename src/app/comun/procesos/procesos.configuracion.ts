@@ -1618,7 +1618,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
         categoria: "Facturacion",
         tipo: "directorio",
         descripcion:
-          "Importa Excel de cliente (NÓMINAS / NOTIFICACIONES / TRÁMITES) y genera CSVs + XLSX de traspaso listo para A3GES.",
+          "Importa Excel de cliente (NÓMINAS / NOTIFICACIONES / TRÁMITES / PAGOS) y genera CSVs + XLSX de traspaso listo para A3GES.",
         subCategoria: [
           {
             nombre: "Importar Nóminas",
@@ -1757,6 +1757,67 @@ var libreriaProcesos: LibreriaProcesos[] = [
                   accept: ".xlsx, .XLSX",
                   placeholder:
                     "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
+                },
+              },
+            ],
+            opciones: null,
+            salida: [{ tipo: "boolean", valor: false }],
+          },
+          {
+            nombre: "Importar Pagos",
+            categoria: "Facturacion",
+            tipo: "proceso",
+            descripcion:
+              "Transforma la PLANTILLA A3 de pagos (4PAGOS) en conceptos facturables del periodo indicado y genera la plantilla A3.",
+            autor: "Integración A3",
+            argumentos: [
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "archivoInput",
+                formulario: {
+                  titulo: "Archivo PLANTILLA A3 de pagos",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder:
+                    "Selecciona 4PAGOS<año>_<trimestre> - PLANTILLA A3.xlsx (no el 4PAGOS original)",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "rutaSalida",
+                formulario: {
+                  titulo: "Directorio de salida",
+                  tipo: "ruta",
+                  placeholder: "Carpeta donde escribir CSVs y XLSX",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "archivoMapeos",
+                formulario: {
+                  titulo: "Archivo de mapeos (XLSX, 3 hojas)",
+                  tipo: "archivo",
+                  accept: ".xlsx, .XLSX",
+                  placeholder:
+                    "XLSX con las hojas ClientesXExptes, ConceptosFacturables y EmpresasNoFacturables",
+                  valorDefault: "",
+                },
+              },
+              {
+                tipo: "texto",
+                obligado: true,
+                identificador: "periodo",
+                formulario: {
+                  titulo: "Periodo a facturar",
+                  tipo: "texto",
+                  placeholder:
+                    "2026-2T (cierre trimestral: factura TRIMESTRAL + MENSUAL) · 2026-05 (mes intermedio: solo MENSUAL)",
                   valorDefault: "",
                 },
               },

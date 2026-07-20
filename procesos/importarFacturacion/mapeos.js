@@ -69,6 +69,7 @@ class ExpteShortLookup {
 class TarifaCatalog {
   constructor() {
     this._prices = new Map();
+    this._names = new Map();
     this._escalado = new Set();
     this._sinPrecio = new Set();
     this.warnings = [];
@@ -89,6 +90,7 @@ class TarifaCatalog {
         );
       }
       seen.set(code, rowIndex);
+      obj._names.set(code, _str(cells[1]));
       const priceRaw = cells.length > 2 ? cells[2] : null;
       obj._prices.delete(code);
       obj._escalado.delete(code);
@@ -124,6 +126,13 @@ class TarifaCatalog {
   resolve(codigo) {
     const key = String(codigo ?? "").trim();
     return this._prices.get(key) ?? null;
+  }
+
+  // Descripción del catálogo ("Modelo 111 -"). Cadena vacía si no está: quien la
+  // use decide el texto alternativo.
+  describe(codigo) {
+    const key = String(codigo ?? "").trim();
+    return this._names.get(key) ?? "";
   }
 
   missReason(codigo) {

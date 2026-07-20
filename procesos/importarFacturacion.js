@@ -6,6 +6,7 @@ const { Mapeos } = require("./importarFacturacion/mapeos");
 const nominas = require("./importarFacturacion/nominas");
 const notificaciones = require("./importarFacturacion/notificaciones");
 const tramites = require("./importarFacturacion/tramites");
+const pagos = require("./importarFacturacion/pagos");
 const generateTraspaso = require("./importarFacturacion/generateTraspaso");
 const {
   ensureDir,
@@ -40,11 +41,13 @@ class ProcesosImportarFacturacion {
   _parseArgs(argumentos, tipo) {
     // Orden esperado (procesos.configuracion.ts):
     // [0] archivoInput, [1] rutaSalida, [2] archivoMapeos
+    // [3] periodo — solo lo declara PAGOS; el resto de tipos no lo tienen.
     const c = argumentos?.formularioControl || [];
     return {
       archivoInput: c[0],
       rutaSalida: c[1],
       archivoMapeos: c[2],
+      periodo: c[3],
       tipo,
     };
   }
@@ -95,11 +98,14 @@ class ProcesosImportarFacturacion {
         this.log(`Mapeos cargados: ${JSON.stringify(summary)}`);
         for (const w of mapeos.allWarnings()) this.logWarn(w);
 
-        // 2. Transformar
+        // 2. Transformar. Las opciones las lee cada transformador según lo que
+        // declare su formulario: hoy solo PAGOS usa `periodo` (el resto de tipos
+        // sacan la fecha de cada fila del archivo del cliente).
         const result = await transformer.transform(
           path.normalize(args.archivoInput),
           mapeos,
-          outDir
+          outDir,
+          { periodo: args.periodo }
         );
         this.log(`Transformación: ${JSON.stringify(result)}`);
 
@@ -158,6 +164,10 @@ class ProcesosImportarFacturacion {
 
   async importarTramites(argumentos) {
     return this._run("tramites", tramites, argumentos);
+  }
+
+  async importarPagos(argumentos) {
+    return this._run("pagos", pagos, argumentos);
   }
 }
 

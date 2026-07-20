@@ -1261,13 +1261,14 @@ ipc.handle("onEjecutarProceso", async (event, proceso, argumentos) => {
       result = await procesosPipeline[identificador](argumentos);
       break;
       case "facturacion": {
-        // Procesos "Importar facturación" (NÓMINAS / NOTIFICACIONES / TRÁMITES)
-        // se identifican por su identificador camelizado y se delegan a la
+        // Procesos "Importar facturación" (NÓMINAS / NOTIFICACIONES / TRÁMITES /
+        // PAGOS) se identifican por su identificador camelizado y se delegan a la
         // clase ProcesosImportarFacturacion.
         if (
           identificador === "importarNominas" ||
           identificador === "importarNotificaciones" ||
-          identificador === "importarTramites"
+          identificador === "importarTramites" ||
+          identificador === "importarPagos"
         ) {
           result = await procesosImportarFacturacion[identificador](argumentos);
           break;
