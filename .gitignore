@@ -101,3 +101,6 @@ dist/
 
 # Claude Code local config (puede contener credenciales en permisos)
 .claude/settings.local.json
+
+# Ficheros de bloqueo que Excel crea mientras un libro esta abierto
+~$*
