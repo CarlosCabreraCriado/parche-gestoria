@@ -911,7 +911,14 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Solo corre como CLI: `actualizarLeeme.js` requiere este módulo para reutilizar
+// `writeLeeme` (el texto del LEEME vive aquí y en un solo sitio), y sin esta
+// guarda el simple require lanzaría la migración completa.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { writeLeeme, SPECS, VERBATIM, SENTINEL };
