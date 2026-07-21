@@ -5,7 +5,12 @@ Ejecutar desde local -> Doble consola
 
 Lanzar un despliegue .exe
 
-1. Actualizar versiones en (src/app/app.service.ts) y (package.json)
+1. Actualizar la versión:
+   - npm version <nueva-version> --no-git-tag-version
+     (actualiza package.json y package-lock.json a la vez; si se edita
+     package.json a mano, el lock queda desfasado y npm lo reescribe
+     durante el build, dejándolo pendiente en git)
+   - Actualizar a mano la misma versión en (src/app/app.service.ts)
 2. Desde powersheel administrador(ir a la ruta del repositorio)
 3. cd C:\Users\gonza\OneDrive\Nodus\Proyectos\Nodus-app\parche-gestoria
 
