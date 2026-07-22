@@ -18,10 +18,16 @@ const EMPRESA_FACTURADORA = 14;
 const CODIGO_CONCEPTO_DEFAULT = "3.010";
 const TIPO_IVA = 3;
 
-// Cabecera en dos filas: los nombres destino A3 (Código Cliente, Cód. Concepto
-// Facturable, Fecha, Unidades…) están en la fila superior y los de las primeras
-// columnas (Expediente, Cliente, Emisor, Asunto) en la inferior. Se localiza por
-// nombre combinando ambas filas (mergeUp), sin depender de posiciones fijas.
+// El cliente manda dos formatos de listado y ambos deben funcionar:
+//   - v1 ("FACT NOTIFICACIONES"): cabecera en DOS filas, con los nombres destino
+//     A3 (Código Cliente, Cód. Concepto Facturable, Fecha, Unidades…) en la
+//     superior y los del listado (Expediente, Cliente, Emisor, Asunto) en la
+//     inferior. Se combinan con mergeUp.
+//   - v2 ("Notificaciones v2"): export en crudo con UNA fila de cabecera y solo
+//     las cinco columnas del listado (Expediente, Cliente, Emisor, F. Lectura,
+//     Asunto). Todo lo demás (concepto, importe, expediente A3) lo pone este
+//     proceso desde los mapeos y las constantes de arriba.
+// En ambos casos se localiza por nombre, sin depender de posiciones fijas.
 const HEADER_SYNONYMS = {
   expediente: ["expediente", "exptcorto", "expt"],
   cliente: ["cliente", "razonsocial"],
@@ -40,15 +46,20 @@ const HEADER_SYNONYMS = {
   desc_ampliada: ["descripcionampliada"],
 };
 
-// Cabecera válida: exige un campo que solo aparece en la fila inferior
-// (cliente/expediente) y otro de la superior (cod_concepto) para no confundir la
-// fila 1 sola con la cabecera y desplazar los datos.
+// Cabecera válida: quién es el cliente (cliente/expediente) MÁS algún dato
+// propio del listado de notificaciones (emisor, asunto o F. Lectura). No se
+// exigen las columnas A3 (cod_concepto, fecha) porque el formato v2 no las trae;
+// pedirlas dejaba el proceso sin encontrar la tabla. Exigir la parte del listado
+// evita además confundir la fila 1 sola de la v1 —que solo tiene nombres A3— con
+// la cabecera y desplazar los datos.
 function isNotificacionesHeader(cols) {
-  return (
-    (cols.cliente !== undefined || cols.expediente !== undefined) &&
-    cols.cod_concepto !== undefined &&
-    cols.fecha !== undefined
-  );
+  const identificaCliente =
+    cols.cliente !== undefined || cols.expediente !== undefined;
+  const esListadoNotificaciones =
+    cols.asunto !== undefined ||
+    cols.emisor !== undefined ||
+    cols.f_lectura !== undefined;
+  return identificaCliente && esListadoNotificaciones;
 }
 
 function normalizarConcepto(raw) {
@@ -96,7 +107,8 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   if (!table) {
     throw new Error(
       `No se encontró la tabla de notificaciones en '${path.basename(inputPath)}'. ` +
-        `Se requiere una hoja con cabeceras Cliente/Expediente, Cód. Concepto Facturable y Fecha.`
+        `Se requiere una hoja con cabeceras Cliente o Expediente y, al menos, ` +
+        `Asunto, Emisor o F. Lectura.`
     );
   }
   const { sheet, cols, headerRow } = table;
@@ -188,14 +200,16 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     }
 
     const unidades = _toInt(get(row, "unidades")) || 1;
-    const fechaLinea = _toDate(get(row, "fecha"), null);
+    // La v1 duplica la fecha en una columna FECHA propia de A3; la v2 solo trae
+    // F. LECTURA. Son el mismo dato, así que vale cualquiera de las dos.
+    const fechaLinea = _toDate(get(row, "fecha") ?? get(row, "f_lectura"), null);
 
     // La fila se factura igual sin fecha; solo se pierde el dato en la
     // descripción. Se avisa aquí y no antes para no reportar filas que después
     // se descartan por otro motivo.
     if (!fechaLinea) {
       warningsQc.push(
-        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la descripción sale sin fecha`
+        `Fila ${filaIdx}: sin FECHA / F. LECTURA válida en el archivo — se factura igual, la descripción sale sin fecha`
       );
     }
 
