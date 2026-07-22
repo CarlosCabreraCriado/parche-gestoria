@@ -1,13 +1,14 @@
 // Reescribe la hoja LEEME de una plantilla A3 de pagos ya generada, dejando el
 // resto del libro intacto.
 //
-// Existe porque la columna IMPORTE (v2) se añadió a mano sobre una plantilla v1:
-// las hojas de modelo quedaron bien (centinela A3PAGOS v2 + columna IMPORTE),
-// pero el LEEME siguió siendo el de la v1, documentando una Zona A de A–F, una
-// Zona B desde H, ninguna columna IMPORTE y un centinela "A3PAGOS v1" que
-// contradice el que llevan las hojas. Regenerar la plantilla entera no es opción
-// hoy: las anclas legacy por número de fila de los specs están calibradas contra
-// 4PAGOS2026 (1).xls y `migrarPlantilla.js` falla contra el 4PAGOS del 2T.
+// Existe porque las columnas de la Zona A se han ido cambiando a mano sobre
+// plantillas ya generadas: primero IMPORTE (v2) sobre una v1, y después
+// Nº EMPLEADOS (v3) en lugar de IMPORTE. Cada vez, las hojas de modelo quedaron
+// bien pero el LEEME siguió documentando la versión anterior — columnas que ya no
+// existen y un centinela que contradice el que llevan las hojas. Regenerar la
+// plantilla entera no es opción hoy: las anclas legacy por número de fila de los
+// specs están calibradas contra 4PAGOS2026 (1).xls y `migrarPlantilla.js` falla
+// contra el 4PAGOS del 2T.
 //
 // El texto NO se duplica aquí: se reutiliza `writeLeeme` de migrarPlantilla.js,
 // así que este script y una plantilla recién generada dicen exactamente lo mismo.
@@ -17,9 +18,10 @@
 
 const path = require("path");
 const XlsxPopulate = require("xlsx-populate");
-const { writeLeeme, SPECS, VERBATIM } = require("./migrarPlantilla");
+const { writeLeeme, SPECS, VERBATIM, SENTINEL } = require("./migrarPlantilla");
 
 const HOJA_LEEME = "LEEME";
+const SENTINEL_RX = /A3PAGOS\s*v\s*(\d+)/i;
 
 // "Generada el 2026-07-09 a partir de "4PAGOS2026 (1).xls"." — la escribe
 // `writeLeeme` y es el único dato del LEEME que no se puede deducir del libro.
@@ -57,6 +59,21 @@ async function main() {
   const specsSel = SPECS.filter((s) => presentes.has(s.hoja));
   const verbatimSel = VERBATIM.filter((v) => presentes.has(v.hoja));
 
+  // El centinela de A1 de cada hoja de modelo, al día. El LEEME que se escribe
+  // abajo afirma "el importador solo procesa hojas cuya celda A1 contenga
+  // <SENTINEL>": dejar las hojas en una versión anterior haría que el LEEME
+  // desmintiera al libro que documenta. Es la misma deriva que motivó este
+  // script, ahora en la otra dirección.
+  const centinelas = [];
+  for (const sheet of wb.sheets()) {
+    if (sheet === leemeViejo) continue;
+    const a1 = sheet.cell(1, 1).value();
+    const m = typeof a1 === "string" ? a1.match(SENTINEL_RX) : null;
+    if (!m || a1 === SENTINEL) continue;
+    sheet.cell(1, 1).value(SENTINEL);
+    centinelas.push(`${sheet.name()}: ${a1} → ${SENTINEL}`);
+  }
+
   // Hoja nueva en lugar de sobrescribir celda a celda: el LEEME viejo tiene
   // negritas en filas que en el nuevo texto son otra cosa, y esos estilos
   // sobrevivirían a la reescritura.
@@ -70,7 +87,7 @@ async function main() {
   const hoy = new Date().toISOString().slice(0, 10);
   leeme
     .cell(ultima + 2, 1)
-    .value(`LEEME actualizado el ${hoy}: documenta la columna IMPORTE (plantilla A3PAGOS v2).`)
+    .value(`LEEME actualizado el ${hoy}: documenta la columna Nº EMPLEADOS y la ejecución anual (plantilla A3PAGOS v3).`)
     .style({ italic: true, fontColor: "595959" });
   leeme
     .cell(ultima + 3, 1)
@@ -83,6 +100,12 @@ async function main() {
   console.log(`  Procedencia conservada: ${fechaGen} · ${inputName}`);
   console.log(`  Hojas de modelo documentadas: ${specsSel.map((s) => s.hoja).join(", ") || "ninguna"}`);
   console.log(`  Hojas copiadas tal cual: ${verbatimSel.map((v) => v.hoja).join(", ") || "ninguna"}`);
+  if (centinelas.length) {
+    console.log(`  Centinelas actualizados (${centinelas.length}):`);
+    for (const c of centinelas) console.log(`    · ${c}`);
+  } else {
+    console.log(`  Centinelas: ya estaban en ${SENTINEL}`);
+  }
 }
 
 main().catch((err) => {

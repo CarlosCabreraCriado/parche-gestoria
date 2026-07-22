@@ -60,10 +60,15 @@ class ProcesosImportarFacturacion {
 
     // PAGOS declara [3] frecuencia, [4] año, [5] periodoTrimestre,
     // [6] periodoMes y [7] fechaFacturacion. El periodo que consume el
-    // importador ("2026-2T" o "2026-05") se reconstruye aquí a partir de la
-    // frecuencia (que decide si se toma el trimestre o el mes) y el año.
+    // importador ("2026-2T", "2026-05" o "2026") se reconstruye aquí a partir de
+    // la frecuencia (que decide si se toma el trimestre, el mes o ninguno de los
+    // dos) y el año. En ANUAL el formulario oculta trimestre y mes: el año solo
+    // ya identifica el periodo.
     const frecuencia = String(c[3] || "").toUpperCase();
     const anio = String(c[4] || "").trim();
+    if (frecuencia === "ANUAL") {
+      return { ...base, frecuencia, periodo: anio, fechaFacturacion: c[7] };
+    }
     const codigoPeriodo = frecuencia === "MENSUAL" ? c[6] : c[5];
     const periodo =
       anio && codigoPeriodo ? `${anio}-${String(codigoPeriodo).trim()}` : "";
@@ -178,8 +183,17 @@ class ProcesosImportarFacturacion {
           registrosProcesados: result.conceptos,
         });
 
+        // Los precios que no salen de la tarifa fija del catálogo se destacan en
+        // el log para que el usuario sepa cuántos ha habido y los revise:
+        // `importes_puntuales` son los escritos a mano (nóminas y trámites) y
+        // `precios_escalados` los calculados por tramos (pagos, cierre anual).
+        const extras = [
+          result.importes_puntuales ? `ImportesPuntuales=${result.importes_puntuales}` : null,
+          result.precios_escalados ? `PreciosEscalados=${result.precios_escalados}` : null,
+        ].filter(Boolean);
         this.log(
-          `Fin importación tipo=${tipo}. Conceptos=${result.conceptos}, Incidencias=${result.incidencias}, WarningsQC=${result.warnings_qc}`
+          `Fin importación tipo=${tipo}. Conceptos=${result.conceptos}, Incidencias=${result.incidencias}, ` +
+            `WarningsQC=${result.warnings_qc}${extras.length ? ", " + extras.join(", ") : ""}`
         );
         return resolve(true);
       } catch (err) {

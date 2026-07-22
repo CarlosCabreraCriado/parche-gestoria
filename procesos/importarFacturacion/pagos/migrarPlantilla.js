@@ -1,11 +1,14 @@
 // Migración: 4PAGOS<año>.xls → plantilla normalizada A3 (.xlsx).
 //
 // Genera un libro nuevo donde cada hoja de modelo fiscal tiene:
-//   - Zona A (cols A–F): bloque estándar idéntico en todas las hojas
-//     CONCEPTO FACT | EXPTE | NIF | EMPRESA | FACTURAR | FRECUENCIA
-//   - Col G: separador
-//   - Zona B (col H+): columnas originales no consumidas (incl. P1–P4,
+//   - Zona A (cols A–G): bloque estándar idéntico en todas las hojas
+//     CONCEPTO FACT | EXPTE | NIF | EMPRESA | FACTURAR | FRECUENCIA | Nº EMPLEADOS
+//   - Col H: separador
+//   - Zona B (col I+): columnas originales no consumidas (incl. P1–P4,
 //     OBSERVACIONES y F.BAJA), copiadas tal cual
+// Nº EMPLEADOS se genera vacía: la rellena el usuario y solo la consume la
+// ejecución anual (modelo 190 y certificados), cuyo precio sale de una escala por
+// tramos de trabajadores en vez de una tarifa fija.
 // CONCEPTO FACT es el concepto facturable de la fila (código de la hoja
 // `ConceptosFacturables` de mapeos_facturacion.xlsx: 0.016, 0.012…). Se deriva
 // del modelo fiscal vía `MODELO_CONCEPTO` y es lo que fija el importe a facturar,
@@ -44,12 +47,14 @@ const INPUTS_DIR = path.join(__dirname, "..", "inputs", "pagos");
 const DEFAULT_INPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T.xls");
 const DEFAULT_OUTPUT = path.join(INPUTS_DIR, "4PAGOS2026_2T - PLANTILLA A3 v2.xlsx");
 
-// v2 añadió la columna IMPORTE (precio puntual por fila). El importador acepta
-// v1 y v2; ver SENTINEL_VERSION en pagos.js.
-const SENTINEL = "A3PAGOS v2";
-const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA", "IMPORTE"];
+// v2 añadió la columna IMPORTE (precio puntual por fila) y la v3 la sustituyó por
+// Nº EMPLEADOS, que alimenta el precio escalado de la corrida anual (modelo 190 y
+// certificados de retención). El importador acepta v1, v2 y v3 porque resuelve la
+// Zona A por nombre; ver SENTINEL_VERSION en pagos.js.
+const SENTINEL = "A3PAGOS v3";
+const ZONA_A = ["CONCEPTO FACT", "EXPTE", "NIF", "EMPRESA", "FACTURAR", "FRECUENCIA", "Nº EMPLEADOS"];
 const FRECUENCIAS = ["TRIMESTRAL", "MENSUAL", "ANUAL", "OTRA"];
-const COL_IMPORTE = 7; // dentro de Zona A; se deja vacía (opt-in del usuario)
+const COL_EMPLEADOS = 7; // dentro de Zona A; se deja vacía (la rellena el usuario)
 const COL_SEP = ZONA_A.length + 1; // separador tras Zona A
 const ZONA_B_START = COL_SEP + 1; // primera columna de Zona B
 
@@ -540,10 +545,10 @@ function writeLeeme(sheet, fechaGen, inputName, specsSel, verbatimSel) {
     ["", ""],
     ["CÓMO FUNCIONA", "", true],
     ["Cada hoja de modelo tiene dos zonas:", ""],
-    ["  · ZONA A (columnas A a G): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí.", ""],
+    ["  · ZONA A (columnas A a G): bloque estándar que lee el importador. NO insertar, borrar ni renombrar columnas aquí (salvo rellenar Nº EMPLEADOS, que es para eso).", ""],
     ["  · ZONA B (columna I en adelante): zona libre de cada modelo (incluye P1–P4, OBSERVACIONES, F.BAJA y el resto de columnas originales). El importador no la lee; se puede modificar libremente.", ""],
     ["", ""],
-    ["EL MODELO EN UNA LÍNEA", "CONCEPTO FACT = qué · FACTURAR = si sí o no · FRECUENCIA = cuándo · EXPTE = a quién · IMPORTE = cuánto (opcional).", true],
+    ["EL MODELO EN UNA LÍNEA", "CONCEPTO FACT = qué · FACTURAR = si sí o no · FRECUENCIA = cuándo · EXPTE = a quién · Nº EMPLEADOS = con qué se calculan los precios escalados.", true],
     ["", ""],
     ["COLUMNAS DE LA ZONA A", "", true],
     ["  CONCEPTO FACT", "Concepto facturable de la fila (código de la hoja ConceptosFacturables: 0.016, 0.012…). Es lo que fija el importe a facturar al cruzarlo con mapeos_facturacion.xlsx. Se deriva del modelo fiscal (130, 111…)."],
@@ -551,8 +556,11 @@ function writeLeeme(sheet, fechaGen, inputName, specsSel, verbatimSel) {
     ["  NIF", "Informativo / control de calidad."],
     ["  EMPRESA", "Informativo."],
     ["  FACTURAR", "Única fuente de verdad sobre la decisión de facturar la fila: SI = se factura · NO = nunca · REVISAR = no se factura y sale en incidencias para decidir a mano. El importador no cruza ningún otro campo para decidirlo: ni P1–P4, ni la fecha de baja de la Zona B."],
-    ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente). Cada ejecución factura las filas cuya frecuencia toca en el periodo elegido: en un cierre de trimestre entran tanto las TRIMESTRAL como las MENSUAL; en un mes intermedio, solo las MENSUAL."],
-    ["  IMPORTE", "Precio puntual de ESTA fila. Vacío (lo normal) = se factura la tarifa del catálogo. Con un número = se factura ese importe, ignorando el catálogo (sirve para cobrar más o menos a un cliente concreto, o para dar precio a un concepto ESCALADO). OJO: la plantilla se reutiliza entre trimestres — un importe que se deja escrito se vuelve a facturar. Cada ejecución lista todos los importes puntuales usados en precios_manuales.csv para poder revisarlos."],
+    ["  FRECUENCIA", "TRIMESTRAL (por defecto) · MENSUAL · ANUAL · OTRA. Periodicidad real de la fila; puede venir heredada de la hoja/sección o corregida a mano por excepción (p. ej. una empresa grande que declara el 111 mensualmente). Cada ejecución factura las filas cuya frecuencia toca en el periodo elegido: en un cierre de trimestre entran tanto las TRIMESTRAL como las MENSUAL; en un mes intermedio, solo las MENSUAL; en el cierre ANUAL entran todas (ver abajo)."],
+    ["  Nº EMPLEADOS", "Nº de trabajadores de la empresa. Solo lo usa la ejecución ANUAL, y solo para los conceptos de precio escalado (modelo 190 y certificados de retención): es la cantidad con la que se entra en la tabla de tramos de la hoja 'Modelo 190' del archivo de mapeos. En las ejecuciones trimestrales y mensuales se ignora. Vacío NO es lo mismo que 0: vacío significa que falta el dato y la línea sale en incidencias; 0 es una empresa sin trabajadores, que presenta el 190 igual y entra en el primer tramo. OJO: la plantilla se reutiliza entre ejercicios — revisa este número cada cierre anual. Cada ejecución lista el tramo y el precio aplicados a cada línea en precios_escalados.csv."],
+    ["", ""],
+    ["LA EJECUCIÓN ANUAL (modelo 190)", "", true],
+    ["  El modelo 190 no tiene hoja ni filas propias: es el resumen anual de las mismas empresas que presentan el 111, así que se factura desde la hoja 111 SIN tocarla. Al elegir Frecuencia = Anual en el formulario: (1) entran las filas TRIMESTRAL y MENSUAL además de las ANUAL, porque el 190 lo presenta tanto quien declaró el 111 trimestralmente como quien lo hizo mes a mes — no hay que cambiar ninguna FRECUENCIA en la plantilla; (2) cada fila del 111 con FACTURAR=SI genera DOS líneas: el modelo 190 y su certificado de retenciones, cada uno con su precio según el Nº EMPLEADOS; (3) las filas del resto de hojas (130, 420, 202…) no se facturan, porque esos modelos no tienen resumen anual.", ""],
     ["", ""],
     ["P1..P4 y OBSERVACIONES (ahora en la ZONA LIBRE)", "", true],
     ["  Se copian tal cual del archivo original y el importador NO las lee: son dato informativo. Periodos trimestrales P1=1T…P4=4T (modelo 202: P1=abril, P2=octubre, P3=diciembre). La facturación la fija CONCEPTO FACT; el importe del periodo no interviene.", ""],
@@ -653,12 +661,13 @@ function writeModelSheet(sheet, spec, t, fechaGen) {
 
   // Presentación
   sheet.freezePanes(0, 2);
-  // G = IMPORTE (Zona A), H = separador. El resto de Zona B se dimensiona abajo.
-  const widths = { A: 13, B: 8, C: 13, D: 42, E: 11, F: 12, G: 11, H: 2 };
+  // G = Nº EMPLEADOS (Zona A), H = separador. El resto de Zona B se dimensiona
+  // abajo.
+  const widths = { A: 13, B: 8, C: 13, D: 42, E: 11, F: 12, G: 14, H: 2 };
   Object.entries(widths).forEach(([col, w]) => sheet.column(col).width(w));
-  // Formato moneda solo de display: el importador lee el valor numérico, no el
-  // texto. Deja vacías las celdas hasta que el usuario escriba un precio.
-  sheet.column(colLetter(COL_IMPORTE)).style("numberFormat", "#,##0.00 €");
+  // Entero sin decimales: es un recuento de personas, no un importe. Las celdas
+  // quedan vacías hasta que el usuario las rellene.
+  sheet.column(colLetter(COL_EMPLEADOS)).style("numberFormat", "0");
   for (let i = 0; i < nZonaB; i++) {
     sheet.column(colLetter(ZONA_B_START - 1 + i)).width(14);
   }

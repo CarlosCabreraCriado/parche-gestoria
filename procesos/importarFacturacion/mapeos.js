@@ -1,10 +1,25 @@
 const path = require("path");
 const XlsxPopulate = require("xlsx-populate");
-const { _str, _toInt, readAbsoluteRows, resolveHeaderColumns } = require("./utils");
+const {
+  _str,
+  _toInt,
+  normalizeHeader,
+  readAbsoluteRows,
+  resolveHeaderColumns,
+} = require("./utils");
 
 const SHEET_CLIENTES_EXPTES = "ClientesXExptes";
 const SHEET_CONCEPTOS_FACTURABLES = "ConceptosFacturables";
 const SHEET_EMPRESAS_NO_FACTURABLES = "EmpresasNoFacturables";
+
+// Escalas de precio por tramos. Viven en su propia hoja y no en
+// ConceptosFacturables porque son otra entidad: una tabla rango→precio, no un
+// precio. Esa hoja es además la lista con la que la gestoría cotiza al cliente,
+// y trae DOS escalas sobre LOS MISMOS tramos (el modelo 190 y su certificado de
+// retenciones), una por columna. Mantenerlas juntas es justo lo que impide que
+// los tramos deriven entre ambas: si el año que viene "6 A 25" pasa a "6 A 30",
+// se toca una celda y vale para las dos.
+const SHEET_ESCALAS = "Modelo 190";
 
 const REDIRECT_NADA = "NADA";
 
@@ -237,6 +252,204 @@ class TarifaCatalog {
   }
 }
 
+// "0 A 2" → [0,2] · "250 en adelante" → [250,∞) · "7" → [7,7]. Devuelve null si
+// la fila no describe un tramo (títulos, notas, filas vacías de la hoja).
+function parseTramo(texto) {
+  const s = _str(texto).replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  let m = s.match(/^(\d+)\s*(?:A|-|hasta)\s*(\d+)$/i);
+  if (m) return { desde: Number(m[1]), hasta: Number(m[2]) };
+  m = s.match(/^(\d+)\s*(?:en adelante|o m[aá]s|y m[aá]s|\+)$/i);
+  if (m) return { desde: Number(m[1]), hasta: Infinity };
+  m = s.match(/^(\d+)$/);
+  if (m) return { desde: Number(m[1]), hasta: Number(m[1]) };
+  return null;
+}
+
+function precioDeCelda(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  const s = _str(raw).replace(/[€\s]/g, "");
+  if (!s) return null;
+  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Tabla tramo→precio de la hoja `Modelo 190`. Una escala por columna de precio;
+// la clave es el prefijo normalizado de su cabecera ("MODELO 190", "CERTIFICADOS"),
+// no la cabecera entera: así el año del título puede pasar a 2027 sin romper nada.
+//
+// La hoja es OPCIONAL: los otros importadores (nóminas, trámites,
+// notificaciones) comparten este archivo de mapeos y no usan escalas, así que
+// su ausencia no puede impedir cargarlo. Quien necesite una escala y no la
+// encuentre falla en su sitio, con el nombre de la que buscaba.
+class EscalaCatalog {
+  constructor() {
+    this._escalas = new Map(); // clave normalizada -> { nombre, tramos: [...] }
+    this.warnings = [];
+  }
+
+  static fromWorkbook(workbook) {
+    const obj = new EscalaCatalog();
+    const sheet = workbook.sheet(SHEET_ESCALAS);
+    if (!sheet) return obj;
+
+    const rows = readAbsoluteRows(sheet).rows;
+
+    // La cabecera es la última fila con contenido antes del primer tramo. Se
+    // localiza por contenido y no por número de fila porque la hoja lleva un
+    // título encima ("MODELO 190-CERTIFICADOS RETENCION") que podría ganar o
+    // perder líneas.
+    const primerTramo = rows.find((r) => parseTramo((r.cells || [])[0]) !== null);
+    if (!primerTramo) {
+      obj.warnings.push(
+        `Hoja '${SHEET_ESCALAS}': no se encuentra ninguna fila de tramos ("0 A 2", "250 en adelante"…) — no se carga ninguna escala.`
+      );
+      return obj;
+    }
+    const filaCabecera = [...rows]
+      .reverse()
+      .find((r) => r.rowIndex < primerTramo.rowIndex && (r.cells || []).some((c) => _str(c) !== ""));
+    if (!filaCabecera) {
+      obj.warnings.push(
+        `Hoja '${SHEET_ESCALAS}': los tramos empiezan en la fila ${primerTramo.rowIndex} y no hay ninguna fila de cabecera encima que nombre las columnas de precio.`
+      );
+      return obj;
+    }
+
+    // Toda columna de la cabecera salvo la primera (que son los tramos) es una
+    // escala. Así añadir una tercera columna de precio a la hoja no exige tocar
+    // código: basta con que quien la use la nombre.
+    const headerRow = filaCabecera.rowIndex;
+    const cabecera = filaCabecera.cells || [];
+    const columnas = [];
+    cabecera.forEach((celda, idx) => {
+      if (idx === 0) return;
+      const nombre = _str(celda);
+      const clave = normalizeHeader(celda);
+      if (!clave) return;
+      columnas.push({ idx, nombre, clave });
+      obj._escalas.set(clave, { nombre, tramos: [] });
+    });
+
+    for (const { rowIndex, cells } of rows) {
+      if (rowIndex <= headerRow) continue;
+      const tramo = parseTramo((cells || [])[0]);
+      if (tramo === null) continue;
+      const etiqueta = _str((cells || [])[0]).replace(/\s+/g, " ");
+      for (const col of columnas) {
+        const precio = precioDeCelda((cells || [])[col.idx]);
+        if (precio === null) {
+          obj.warnings.push(
+            `Hoja '${SHEET_ESCALAS}' fila ${rowIndex}: el tramo '${etiqueta}' no tiene precio en la columna '${col.nombre}' — ese tramo queda sin cubrir.`
+          );
+          continue;
+        }
+        obj._escalas.get(col.clave).tramos.push({ ...tramo, etiqueta, precio, fila: rowIndex });
+      }
+    }
+
+    for (const escala of obj._escalas.values()) obj._validar(escala);
+    return obj;
+  }
+
+  // Solapes, huecos y falta de tramo abierto al final. Son avisos y no errores:
+  // `resolve` es determinista igualmente (gana el primer tramo que casa, en el
+  // orden de la hoja), así que una corrida no se bloquea por esto. Pero cada uno
+  // significa que alguien cobraría de más o de menos, así que tienen que verse.
+  _validar(escala) {
+    const t = escala.tramos;
+    if (!t.length) {
+      this.warnings.push(`Escala '${escala.nombre}': sin ningún tramo con precio.`);
+      return;
+    }
+    for (let i = 0; i < t.length; i++) {
+      if (t[i].desde > t[i].hasta) {
+        this.warnings.push(
+          `Escala '${escala.nombre}', fila ${t[i].fila}: el tramo '${t[i].etiqueta}' está al revés (${t[i].desde} > ${t[i].hasta}).`
+        );
+      }
+      if (i === 0) continue;
+      const prev = t[i - 1];
+      if (t[i].desde <= prev.hasta) {
+        this.warnings.push(
+          `Escala '${escala.nombre}': los tramos '${prev.etiqueta}' (${prev.precio}) y '${t[i].etiqueta}' (${t[i].precio}) se solapan ` +
+            `en ${t[i].desde}${prev.hasta === Infinity ? " en adelante" : `–${Math.min(prev.hasta, t[i].hasta)}`} — ` +
+            `se aplica el primero (${prev.precio}). Corrígelo en la hoja '${SHEET_ESCALAS}'.`
+        );
+      } else if (t[i].desde > prev.hasta + 1) {
+        this.warnings.push(
+          `Escala '${escala.nombre}': hueco entre '${prev.etiqueta}' y '${t[i].etiqueta}' — ` +
+            `los valores ${prev.hasta + 1}–${t[i].desde - 1} no tienen precio.`
+        );
+      }
+    }
+    const ultimo = t[t.length - 1];
+    if (ultimo.hasta !== Infinity) {
+      this.warnings.push(
+        `Escala '${escala.nombre}': el último tramo ('${ultimo.etiqueta}') está cerrado en ${ultimo.hasta} — ` +
+          `por encima de ese valor no hay precio. Usa "N en adelante".`
+      );
+    }
+    const primero = t[0];
+    if (primero.desde > 0) {
+      this.warnings.push(
+        `Escala '${escala.nombre}': el primer tramo empieza en ${primero.desde} — ` +
+          `por debajo de ese valor no hay precio.`
+      );
+    }
+  }
+
+  _get(escala) {
+    return this._escalas.get(normalizeHeader(escala)) ?? this._porPrefijo(escala);
+  }
+
+  // La cabecera real lleva el año ("MODELO 190 2026"), así que se busca por
+  // prefijo: quien pide "MODELO 190" sigue encontrándola en 2027.
+  _porPrefijo(escala) {
+    const clave = normalizeHeader(escala);
+    if (!clave) return undefined;
+    for (const [k, v] of this._escalas) {
+      if (k.startsWith(clave)) return v;
+    }
+    return undefined;
+  }
+
+  has(escala) {
+    return this._get(escala) !== undefined;
+  }
+
+  // { precio, tramo } o null si la escala no existe o la cantidad no cae en
+  // ningún tramo. Gana el primer tramo que casa, en el orden de la hoja.
+  resolve(escala, cantidad) {
+    const e = this._get(escala);
+    if (!e || !Number.isFinite(cantidad)) return null;
+    const t = e.tramos.find((x) => cantidad >= x.desde && cantidad <= x.hasta);
+    return t ? { precio: t.precio, tramo: t.etiqueta } : null;
+  }
+
+  missReason(escala, cantidad) {
+    const e = this._get(escala);
+    if (!e) {
+      const disponibles = [...this._escalas.values()].map((x) => `'${x.nombre}'`).join(", ");
+      return (
+        `no existe la escala '${escala}' en la hoja '${SHEET_ESCALAS}' del archivo de mapeos` +
+        (disponibles ? ` (hay: ${disponibles})` : " (la hoja no existe o está vacía)")
+      );
+    }
+    if (!Number.isFinite(cantidad)) return `cantidad '${cantidad}' no numérica`;
+    return `${cantidad} no cae en ningún tramo de '${e.nombre}'`;
+  }
+
+  nombres() {
+    return [...this._escalas.values()].map((e) => e.nombre);
+  }
+
+  size() {
+    return this._escalas.size;
+  }
+}
+
 class ClienteRedirect {
   constructor() {
     this._byOrigen = new Map();
@@ -300,10 +513,11 @@ class ClienteRedirect {
 }
 
 class Mapeos {
-  constructor(exptes, tarifas, redirect) {
+  constructor(exptes, tarifas, redirect, escalas) {
     this.exptes = exptes;
     this.tarifas = tarifas;
     this.redirect = redirect;
+    this.escalas = escalas;
   }
 
   static async fromFile(filePath) {
@@ -311,7 +525,8 @@ class Mapeos {
     const exptes = ExpteShortLookup.fromWorkbook(workbook);
     const tarifas = TarifaCatalog.fromWorkbook(workbook);
     const redirect = ClienteRedirect.fromWorkbook(workbook);
-    return new Mapeos(exptes, tarifas, redirect);
+    const escalas = EscalaCatalog.fromWorkbook(workbook);
+    return new Mapeos(exptes, tarifas, redirect, escalas);
   }
 
   allWarnings() {
@@ -319,6 +534,7 @@ class Mapeos {
       ...this.exptes.warnings.map((w) => `[exptes] ${w}`),
       ...this.tarifas.warnings.map((w) => `[tarifas] ${w}`),
       ...this.redirect.warnings.map((w) => `[redirect] ${w}`),
+      ...this.escalas.warnings.map((w) => `[escalas] ${w}`),
     ];
   }
 
@@ -330,6 +546,7 @@ class Mapeos {
       tarifas_sin_precio: this.tarifas._sinPrecio.size,
       tarifas_con_frecuencia: this.tarifas._frecuencias.size,
       redirecciones: this.redirect.size(),
+      escalas_cargadas: this.escalas.size(),
       warnings: this.allWarnings().length,
     };
   }
@@ -339,9 +556,12 @@ module.exports = {
   ExpteShortLookup,
   TarifaCatalog,
   ClienteRedirect,
+  EscalaCatalog,
   Mapeos,
+  parseTramo,
   REDIRECT_NADA,
   SHEET_CLIENTES_EXPTES,
   SHEET_CONCEPTOS_FACTURABLES,
   SHEET_EMPRESAS_NO_FACTURABLES,
+  SHEET_ESCALAS,
 };

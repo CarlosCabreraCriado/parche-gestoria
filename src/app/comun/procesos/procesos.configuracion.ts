@@ -1849,7 +1849,9 @@ var libreriaProcesos: LibreriaProcesos[] = [
                 },
               },
               // [3] Frecuencia: manda qué se factura y qué periodo se ofrece
-              // abajo (los campos de trimestre/mes se muestran según su valor).
+              // abajo (los campos de trimestre/mes se muestran según su valor;
+              // con Anual no se muestra ninguno, porque el año ya identifica el
+              // periodo).
               {
                 tipo: "texto",
                 obligado: true,
@@ -1857,11 +1859,15 @@ var libreriaProcesos: LibreriaProcesos[] = [
                 formulario: {
                   titulo: "Frecuencia",
                   tipo: "seleccion",
-                  placeholder: "Trimestral o mensual",
+                  placeholder: "Trimestral, mensual o anual",
                   valorDefault: "",
                   opciones: [
                     { valor: "TRIMESTRAL", etiqueta: "Trimestral" },
                     { valor: "MENSUAL", etiqueta: "Mensual" },
+                    {
+                      valor: "ANUAL",
+                      etiqueta: "Anual (modelo 190 + certificados)",
+                    },
                   ],
                 },
               },
