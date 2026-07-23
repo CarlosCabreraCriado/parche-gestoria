@@ -1866,7 +1866,7 @@ var libreriaProcesos: LibreriaProcesos[] = [
                     { valor: "MENSUAL", etiqueta: "Mensual" },
                     {
                       valor: "ANUAL",
-                      etiqueta: "Anual (modelo 190 + certificados)",
+                      etiqueta: "Anual (modelos 190 y 180 + certificados)",
                     },
                   ],
                 },

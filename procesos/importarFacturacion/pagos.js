@@ -59,10 +59,10 @@ const HEADER_SCAN_ROWS = 10;
 // Qué frecuencias entran en cada tipo de corrida: manda el periodo de la
 // ejecución, no la fila. En un cierre de trimestre entran las mensuales igual que
 // las trimestrales, todas con Unidades=1 (no se acumulan tres meses); en un mes
-// intermedio solo las mensuales. La corrida ANUAL las barre todas: el modelo 190
-// resume el ejercicio entero, así que lo presenta tanto quien declaró el 111
-// trimestralmente como quien lo hizo mes a mes. Por eso NO hace falta tocar la
-// FRECUENCIA de la plantilla para la corrida anual.
+// intermedio solo las mensuales. La corrida ANUAL las barre todas: un resumen
+// anual cubre el ejercicio entero, así que el 190 lo presenta tanto quien declaró
+// el 111 trimestralmente como quien lo hizo mes a mes. Por eso NO hace falta
+// tocar la FRECUENCIA de la plantilla para la corrida anual.
 const FACTURA_EN = {
   TRIMESTRAL: new Set(["TRIMESTRAL", "MENSUAL"]),
   MENSUAL: new Set(["MENSUAL"]),
@@ -77,25 +77,34 @@ const FRECUENCIAS_CONOCIDAS = new Set(["TRIMESTRAL", "MENSUAL", "ANUAL", "OTRA"]
 // delataría. ANUAL ya no está aquí desde que existe la corrida anual.
 const SIN_CORRIDA = new Set(["OTRA"]);
 
-// Qué factura una corrida ANUAL, según el CONCEPTO FACT de la fila. El modelo 190
-// no es una fila propia de la plantilla: es el resumen anual de las mismas
-// empresas que presentan el 111, así que la hoja "111" no se toca y es la corrida
-// la que traduce 0.012 -> 190 + certificado de retenciones. Ambos van a precio
-// escalado por Nº EMPLEADOS, cada uno con su columna en la hoja `Modelo 190` del
-// archivo de mapeos.
+// Qué factura una corrida ANUAL, según el CONCEPTO FACT de la fila. Ningún
+// resumen anual tiene fila propia en la plantilla: los presentan las mismas
+// empresas que ya declaran su modelo periódico, así que las hojas no se tocan y
+// es la corrida la que traduce el concepto periódico al anual que le toca.
 //
 // Un concepto que no esté aquí simplemente no le toca en anual (el 130, el 420,
 // el 202… no tienen resumen anual que facturar), y eso NO es una incidencia: son
-// las ~630 filas trimestrales del resto de hojas y llenarían el informe de ruido.
+// las ~365 filas trimestrales del resto de hojas y llenarían el informe de ruido.
 //
-// `escala: null` facturaría a la tarifa fija del catálogo, para un futuro concepto
-// anual que no dependa de ninguna cantidad.
+// `escala` nombra una columna de la hoja `Modelo 190` del archivo de mapeos y
+// hace que el precio salga de sus tramos por Nº EMPLEADOS; `escala: null` lo
+// cobra a la tarifa fija del catálogo.
 const CONCEPTO_ANUAL = {
-  // Modelo 111 (retenciones de trabajo) ->
+  // Modelo 111 (retenciones de trabajo) -> su resumen anual y el certificado que
+  // se entrega a cada trabajador. Ambos a precio escalado por nº de empleados,
+  // cada uno con su columna sobre los mismos tramos.
   "0.012": [
     { concepto: "0.260", escala: "MODELO 190" }, // Modelo 190 según nº trabajadores
     { concepto: "0.100", escala: "CERTIFICADOS" }, // Certificado retenciones
   ],
+  // Modelo 115 (retenciones de alquileres) -> Modelo 180, su resumen anual. La
+  // población es la misma: la hoja del original ya los trata como un solo bloque
+  // ("MODELO 115 Y 180 TRIMESTRAL"), así que cada fila del 115 que se factura
+  // presenta su 180. A diferencia del 111 NO arrastra certificado de retenciones
+  // —el 180 no lo lleva—, y va a la tarifa fija del catálogo: su precio no
+  // depende del nº de empleados, así que no mira esa columna ni sale en
+  // precios_escalados.csv.
+  "0.013": [{ concepto: "0.071", escala: null }], // Modelo 180
 };
 
 const FACTURAR_VALIDOS = new Set(["SI", "NO", "REVISAR"]);
@@ -198,11 +207,23 @@ function buildDescripcion(nombreConcepto, concepto, periodo) {
   return `${base} - ${periodo.etiqueta}`.slice(0, 250);
 }
 
+const LIMITE_DESC_AMPLIADA = 500;
+
 // Solo la razón social. El NIF se quitó a petición del cliente: es dato de
 // control que ya vive en la Zona B de la plantilla, no en la factura. Sigue
 // llegando a `transform` para incidencias, pero no se escribe en la línea.
-function buildDescAmpliada(empresa) {
-  return _str(empresa).slice(0, 500);
+//
+// `empleados` solo llega en las líneas de precio escalado (el 190 anual y su
+// certificado): es la cantidad con la que se entró en la escala, así que la
+// factura explica por sí sola de dónde sale el importe. En mensual y trimestral
+// no se pasa, porque ahí el precio no depende de la plantilla. Si hay que
+// recortar por el límite, se recorta la razón social y no el nº de empleados.
+function buildDescAmpliada(empresa, empleados = null) {
+  const base = _str(empresa);
+  if (empleados === null) return base.slice(0, LIMITE_DESC_AMPLIADA);
+  const sufijo = `${empleados} ${empleados === 1 ? "empleado" : "empleados"}`;
+  if (!base) return sufijo;
+  return `${base.slice(0, LIMITE_DESC_AMPLIADA - sufijo.length - 3)} - ${sufijo}`;
 }
 
 async function transform(inputPath, mapeos, outputDir, options = {}) {
@@ -342,8 +363,8 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
 
       // 0. Qué conceptos emite esta fila. En mensual/trimestral, el suyo. En
       // anual, los que declare CONCEPTO_ANUAL (el 111 emite el 190 y su
-      // certificado); si el concepto no tiene versión anual, no le toca esta
-      // corrida y se pasa sin ruido — no es una incidencia.
+      // certificado; el 115, el 180); si el concepto no tiene versión anual, no
+      // le toca esta corrida y se pasa sin ruido — no es una incidencia.
       const lineas =
         periodo.tipo === "ANUAL"
           ? CONCEPTO_ANUAL[concepto]
@@ -433,8 +454,8 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
         }
 
         // 4. QC duplicados. La clave lleva el concepto EMITIDO, no el de la
-        // fila: en anual una misma fila produce dos líneas (190 y certificado)
-        // y son legítimamente distintas.
+        // fila: en anual una misma fila puede producir varias líneas (el 111
+        // emite el 190 y su certificado) y son legítimamente distintas.
         const clave = `${expte}|${cod}`;
         const previo = vistos.get(clave);
         if (previo) {
@@ -476,7 +497,10 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
           importe_gastos: "",
           importe_honorarios: Math.round(importeAplicado * 100) / 100,
           codigo_expediente: codigoExpediente,
-          descripcion_ampliada: buildDescAmpliada(empresa),
+          descripcion_ampliada: buildDescAmpliada(
+            empresa,
+            linea.escala ? empleados : null
+          ),
         });
         stats.conceptos++;
       }
