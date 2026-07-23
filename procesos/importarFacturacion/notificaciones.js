@@ -17,6 +17,7 @@ const {
 const EMPRESA_FACTURADORA = 14;
 const CODIGO_CONCEPTO_DEFAULT = "3.010";
 const TIPO_IVA = 3;
+const LIMITE_DESC_AMPLIADA = 500;
 
 // El cliente manda dos formatos de listado y ambos deben funcionar:
 //   - v1 ("FACT NOTIFICACIONES"): cabecera en DOS filas, con los nombres destino
@@ -71,22 +72,25 @@ function normalizarConcepto(raw) {
   return s;
 }
 
-// La fecha es la de la fila del archivo del cliente (F. LECTURA): ya no decide
+// La descripción que ve el cliente en la factura es fija: prefijo + fecha. El
+// asunto ya no entra aquí porque llega del portal en crudo —códigos ilegibles
+// del tipo "REGIMENES SEG. SOCIAL-NOT.DEUDOR.DIL.LEV.EMB.", interrogantes de
+// una exportación mal codificada y textos de 230 caracteres que se truncaban a
+// mitad de palabra—; su sitio es la descripción ampliada.
+// La fecha es la de la fila del archivo del cliente (F. LECTURA): no decide
 // cuándo se factura (eso lo fija el formulario), solo documenta a qué día
 // corresponde el aviso. Si la fila no la trae, la descripción sale sin ella.
-function buildDescripcion(asunto, fecha) {
-  let base = "Aviso Notificacion";
-  const a = (asunto || "").trim();
-  if (a) base = `${base} - ${a}`;
-  return conFecha(base, fecha);
+function buildDescripcion(fecha) {
+  return conFecha("Aviso Notificación", fecha);
 }
 
+// Aquí va el detalle. Importa más que antes: como la descripción corta ya no
+// lleva asunto, dos avisos del mismo cliente el mismo día salen con líneas
+// idénticas en A3 y esta columna es lo único que permite distinguirlos. Se
+// devuelve entera y la recorta quien llama, que así puede avisar del recorte.
 function buildDescAmpliada(descAmpliadaRaw, asunto, emisor) {
-  if (descAmpliadaRaw) return descAmpliadaRaw.slice(0, 500);
-  const parts = ["Aviso Notificacion"];
-  if (asunto) parts.push(asunto);
-  if (emisor) parts.push(emisor);
-  return parts.join(", ").slice(0, 500);
+  if (descAmpliadaRaw) return descAmpliadaRaw;
+  return [asunto, emisor].filter(Boolean).join(", ");
 }
 
 async function transform(inputPath, mapeos, outputDir, options = {}) {
@@ -121,6 +125,12 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
+  // Para detectar avisos repetidos. Se agrupa por el dato de ORIGEN (cliente +
+  // asunto + día), no por la descripción ya construida: como esta se quedó en
+  // prefijo + fecha, compararla marcaría cualquier par del mismo día y el aviso
+  // sería ruido. Sobre el origen señala justo lo que hay que mirar, que el
+  // listado del portal traiga dos veces la misma notificación.
+  const posiblesRepetidos = new Map();
 
   for (const { rowIndex: filaIdx, cells } of absRows) {
     if (filaIdx < dataStartRow) continue;
@@ -213,19 +223,53 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       );
     }
 
+    const ampliada = buildDescAmpliada(descAmpliadaRaw, asunto, emisor);
+    if (ampliada.length > LIMITE_DESC_AMPLIADA) {
+      warningsQc.push(
+        `Fila ${filaIdx}: descripción ampliada de ${ampliada.length} caracteres — se recorta a ${LIMITE_DESC_AMPLIADA}`
+      );
+    }
+
+    const clienteFinal = pad5(clienteEfectivo);
+    const diaAviso = fechaLinea ? isoDate(fechaLinea) : "sin fecha";
+    const claveRepetido = `${clienteFinal}||${asunto.toLowerCase()}||${diaAviso}`;
+    const grupo = posiblesRepetidos.get(claveRepetido);
+    if (grupo) grupo.filas.push(filaIdx);
+    else {
+      posiblesRepetidos.set(claveRepetido, {
+        filas: [filaIdx],
+        cliente: clienteFinal,
+        asunto,
+        dia: diaAviso,
+      });
+    }
+
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
-      codigo_cliente: pad5(clienteEfectivo),
+      codigo_cliente: clienteFinal,
       codigo_concepto: concepto,
       fecha: fechaFactura,
-      descripcion: buildDescripcion(asunto, fechaLinea),
+      descripcion: buildDescripcion(fechaLinea),
       tipo_iva: TIPO_IVA,
       unidades,
       importe_gastos: "",
       importe_honorarios: Math.round(tarifa * 100) / 100,
       codigo_expediente: codigoExpediente,
-      descripcion_ampliada: buildDescAmpliada(descAmpliadaRaw, asunto, emisor),
+      descripcion_ampliada: ampliada.slice(0, LIMITE_DESC_AMPLIADA),
     });
+  }
+
+  // Se avisa al final y no dentro del bucle porque hasta no recorrerlo entero no
+  // se sabe cuántas veces aparece cada aviso. No es un descarte: las líneas se
+  // facturan igual, solo se marcan para que alguien las mire antes de emitir.
+  for (const g of posiblesRepetidos.values()) {
+    if (g.filas.length < 2) continue;
+    const asuntoCorto =
+      g.asunto.length > 80 ? `${g.asunto.slice(0, 80)}…` : g.asunto;
+    warningsQc.push(
+      `Cliente ${g.cliente}: ${g.filas.length} líneas con el mismo asunto '${asuntoCorto}' el ${g.dia} ` +
+        `(filas ${g.filas.join(", ")}) — se facturan todas; revisar si son avisos distintos o el listado repite la notificación`
+    );
   }
 
   writeConceptos(path.join(outputDir, "Conceptos Pendientes Facturar.csv"), conceptos);
