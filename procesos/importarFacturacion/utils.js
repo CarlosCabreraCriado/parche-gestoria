@@ -18,13 +18,23 @@ function _toInt(value) {
   return Math.trunc(n);
 }
 
-function _toFloat(value) {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const s = String(value).trim();
-  if (s === "") return null;
+// Precio puntual escrito a mano en la columna IMPORTE de una fila (nóminas y
+// trámites). Devuelve { valor:número } si hay precio, { valor:null } si la celda
+// está vacía, o { error:texto } si hay algo escrito que no es un número. Un
+// IMPORTE ilegible NO cae a la tarifa de catálogo: facturaría un importe
+// distinto del que el usuario quiso teclear y nadie lo notaría.
+function leerImporte(raw) {
+  if (raw === null || raw === undefined) return { valor: null };
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) ? { valor: raw } : { error: String(raw) };
+  }
+  const original = _str(raw);
+  if (original === "") return { valor: null };
+  let s = original.replace(/[€\s]/g, "");
+  // Con coma se asume formato español: el punto es separador de millares.
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
   const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? { valor: n } : { error: original };
 }
 
 // xlsx-populate devuelve fechas como número serial de Excel cuando la celda es
@@ -227,8 +237,8 @@ function writeCsv(filePath, headers, rows) {
 module.exports = {
   _str,
   _toInt,
-  _toFloat,
   _toDate,
+  leerImporte,
   excelSerialToDate,
   fechaDesdeFormulario,
   fechaCorta,

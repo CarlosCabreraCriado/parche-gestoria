@@ -4,8 +4,8 @@ const { REDIRECT_NADA } = require("./mapeos");
 const {
   _str,
   _toInt,
-  _toFloat,
   _toDate,
+  leerImporte,
   conFecha,
   pad5,
   isoDate,
@@ -30,6 +30,9 @@ const HEADER_SYNONYMS = {
   observacion: ["observacion"],
   tipo_tramite: ["tipotramite"],
   concepto: ["conceptofact", "concepto"],
+  // Precio puntual POR UNIDAD (por nómina, no total de la fila). Su valor es
+  // opcional: vacío = tarifa del catálogo. La columna sí se exige en la
+  // cabecera porque es parte de la seña de identidad de la hoja de nóminas.
   importe: ["importe"],
 };
 
@@ -88,6 +91,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
+  let importesPuntuales = 0;
 
   for (const { rowIndex: filaIdx, cells } of absRows) {
     if (filaIdx < dataStartRow) continue;
@@ -95,15 +99,21 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     if (!row.length || row.every((c) => c === null || c === undefined)) continue;
 
     const empresaRaw = _str(get(row, "empresa"));
-    const importeOrigen = _toFloat(get(row, "importe"));
+    // IMPORTE es un precio puntual opcional, no un dato obligatorio: lo normal
+    // es que venga vacío y se facture la tarifa del catálogo.
+    const importePuntual = leerImporte(get(row, "importe"));
+    const tieneImporte =
+      importePuntual.valor !== null || importePuntual.error !== undefined;
+    const importeOrigen = importePuntual.error ?? importePuntual.valor;
     const exptCorto = _toInt(get(row, "expt"));
     const observacion = get(row, "observacion");
     const tipoTramite = _str(get(row, "tipo_tramite"));
-    const conceptoRaw = _str(get(row, "concepto")) || CODIGO_CONCEPTO_DEFAULT;
+    const conceptoCelda = _str(get(row, "concepto"));
+    const conceptoRaw = conceptoCelda || CODIGO_CONCEPTO_DEFAULT;
     const nombreTrab = _str(get(row, "nombre_trab"));
     const fecha = _toDate(get(row, "fecha"), null);
 
-    if (empresaRaw === "" && importeOrigen === null && exptCorto === null) continue;
+    if (empresaRaw === "" && !tieneImporte && exptCorto === null) continue;
 
     const addInc = (motivo) => {
       incidencias.push({
@@ -121,8 +131,21 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       addInc("Sin código cliente en columna EXPT");
       continue;
     }
-    if (importeOrigen === null || importeOrigen <= 0) {
-      addInc("Sin IMPORTE");
+    // El concepto por defecto solo se aplica a filas que sean trabajo real. Una
+    // fila con cliente pero sin concepto, sin trámite y sin importe es relleno
+    // de la hoja: antes la descartaba el IMPORTE obligatorio y ahora, sin esa
+    // guarda, se facturaría sola al concepto por defecto.
+    if (!conceptoCelda && !tipoTramite && !tieneImporte) continue;
+    // Un IMPORTE ilegible no cae a la tarifa: facturaría algo distinto de lo
+    // que el usuario quiso teclear y nadie lo notaría.
+    if (importePuntual.error !== undefined) {
+      addInc(
+        `IMPORTE '${importePuntual.error}' no es un número válido — corrige la celda o déjala vacía`
+      );
+      continue;
+    }
+    if (importePuntual.valor !== null && importePuntual.valor <= 0) {
+      addInc(`IMPORTE ${importePuntual.valor} no válido: debe ser mayor que 0`);
       continue;
     }
 
@@ -148,22 +171,36 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       continue;
     }
 
-    // 3. Tarifa
-    const tarifa = mapeos.tarifas.resolve(conceptoRaw);
-    if (tarifa === null) {
-      const motivo = mapeos.tarifas.missReason(conceptoRaw);
-      addInc(`Tarifa concepto '${conceptoRaw}' no resoluble: ${motivo}`);
-      continue;
-    }
-
     const unidades = _toInt(observacion) || 1;
 
-    // 4. QC importe origen vs tarifa × unidades
-    const esperado = Math.round(tarifa * unidades * 100) / 100;
-    if (Math.abs(importeOrigen - esperado) > Math.max(0.01, esperado * 0.01)) {
-      warningsQc.push(
-        `Fila ${filaIdx}: IMPORTE origen ${importeOrigen.toFixed(2)}€ != tarifa×uds ${esperado.toFixed(2)}€ (concepto ${conceptoRaw}, ${unidades} uds × ${tarifa.toFixed(2)}€)`
-      );
+    // 3. Precio unitario: manda el IMPORTE de la fila; si viene vacío, la tarifa
+    // del catálogo. El IMPORTE es por nómina, no el total de la fila: la línea
+    // sale con Unidades = nº de nóminas y A3 multiplica. Con IMPORTE la fila se
+    // factura aunque el concepto no tenga tarifa (ESCALADO o sin precio); sin
+    // él, no hay de dónde sacar el importe.
+    const tarifaCatalogo = mapeos.tarifas.resolve(conceptoRaw);
+    let importeAplicado;
+    if (importePuntual.valor !== null) {
+      importeAplicado = importePuntual.valor;
+      importesPuntuales++;
+      // Se avisa solo de la discrepancia: es el caso que merece revisión.
+      if (
+        tarifaCatalogo !== null &&
+        Math.abs(importeAplicado - tarifaCatalogo) > Math.max(0.01, tarifaCatalogo * 0.01)
+      ) {
+        warningsQc.push(
+          `Fila ${filaIdx}: IMPORTE puntual ${importeAplicado.toFixed(2)}€/ud != tarifa catálogo ${tarifaCatalogo.toFixed(2)}€/ud (concepto ${conceptoRaw}, ${unidades} uds) — se factura el puntual`
+        );
+      }
+    } else {
+      if (tarifaCatalogo === null) {
+        const motivo = mapeos.tarifas.missReason(conceptoRaw);
+        addInc(
+          `Tarifa concepto '${conceptoRaw}' no resoluble: ${motivo} — rellena IMPORTE en la fila para facturarla`
+        );
+        continue;
+      }
+      importeAplicado = tarifaCatalogo;
     }
 
     // La fila se factura igual sin fecha; solo se pierde el dato en la
@@ -184,7 +221,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       tipo_iva: TIPO_IVA,
       unidades,
       importe_gastos: "",
-      importe_honorarios: Math.round(tarifa * 100) / 100,
+      importe_honorarios: Math.round(importeAplicado * 100) / 100,
       codigo_expediente: codigoExpediente,
       descripcion_ampliada: nombreTrab,
     });
@@ -208,6 +245,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     conceptos: conceptos.length,
     incidencias: incidencias.length,
     warnings_qc: warningsQc.length,
+    importes_puntuales: importesPuntuales,
     importe_total_unitario: Math.round(totalUnit * 100) / 100,
     importe_total_efectivo: Math.round(totalEfectivo * 100) / 100,
   };

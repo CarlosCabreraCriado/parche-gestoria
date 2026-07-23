@@ -4,8 +4,8 @@ const { REDIRECT_NADA } = require("./mapeos");
 const {
   _str,
   _toInt,
-  _toFloat,
   _toDate,
+  leerImporte,
   conFecha,
   pad5,
   isoDate,
@@ -28,8 +28,12 @@ const HEADER_SYNONYMS = {
   empresa: ["empresa", "razonsocial"],
   nombre_trab: ["nombretrabajador", "nombretrab", "trabajador"],
   fecha: ["fecha"],
+  observacion: ["observacion"],
   tipo_tramite: ["tipotramite"],
   concepto: ["conceptofact", "concepto"],
+  // Precio puntual de la fila. Su VALOR es opcional: vacío = tarifa del
+  // catálogo, con número = manda ese importe. La columna sí se exige en la
+  // cabecera porque es parte de la seña de identidad de la hoja de trámites.
   importe: ["importe"],
 };
 
@@ -46,9 +50,16 @@ function isTramitesHeader(cols) {
 // La fecha es la de la fila del archivo del cliente: ya no decide cuándo se
 // factura (eso lo fija el formulario), solo documenta a qué día corresponde el
 // trámite. Si la fila no la trae, la descripción sale sin ella.
-function buildDescripcion(tipoTramite, fecha) {
+// La OBSERVACION la pide el cliente en la descripción: es el detalle concreto
+// del trámite ("B Vol - Pte Ss + Cert"), que el TIPO TRAMITE no recoge. Es
+// opcional: si la columna no existe o la celda está vacía, la descripción sale
+// como antes. No se repite cuando ya dice lo mismo que el tipo de trámite.
+function buildDescripcion(tipoTramite, observacion, fecha) {
   const base = (tipoTramite || "").replace(/[ \-.]+$/, "").trim() || "Trámite laboral";
-  return conFecha(base, fecha);
+  const obs = _str(observacion).replace(/[ \-.]+$/, "").trim();
+  const texto =
+    obs && obs.toLowerCase() !== base.toLowerCase() ? `${base} - ${obs}` : base;
+  return conFecha(texto, fecha);
 }
 
 async function transform(inputPath, mapeos, outputDir, options = {}) {
@@ -80,6 +91,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const conceptos = [];
   const incidencias = [];
   const warningsQc = [];
+  let importesPuntuales = 0;
 
   for (const { rowIndex: filaIdx, cells } of absRows) {
     if (filaIdx < dataStartRow) continue;
@@ -87,15 +99,21 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     if (!row.length || row.every((c) => c === null || c === undefined)) continue;
 
     const empresaRaw = _str(get(row, "empresa"));
-    const importeOrigen = _toFloat(get(row, "importe"));
+    // IMPORTE es un precio puntual opcional, no un dato obligatorio: lo normal
+    // es que venga vacío y se facture la tarifa del catálogo.
+    const importePuntual = leerImporte(get(row, "importe"));
+    const tieneImporte =
+      importePuntual.valor !== null || importePuntual.error !== undefined;
+    const importeOrigen = importePuntual.error ?? importePuntual.valor;
     const exptCorto = _toInt(get(row, "expt"));
     const conceptoRaw = _str(get(row, "concepto"));
     const tipoTramite = _str(get(row, "tipo_tramite"));
+    const observacion = get(row, "observacion");
     const nombreTrab = _str(get(row, "nombre_trab"));
     const fecha = _toDate(get(row, "fecha"), null);
 
     // Fila totalmente ruido
-    if (!empresaRaw && importeOrigen === null && !conceptoRaw && !tipoTramite) continue;
+    if (!empresaRaw && !tieneImporte && !conceptoRaw && !tipoTramite) continue;
 
     const addInc = (motivo) => {
       incidencias.push({
@@ -111,17 +129,27 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     };
 
     if (exptCorto === null) {
-      if (empresaRaw || importeOrigen || tipoTramite) {
+      if (empresaRaw || tieneImporte || tipoTramite) {
         addInc("Sin código cliente en columna EXPT");
       }
       continue;
     }
-    if (importeOrigen === null || importeOrigen <= 0) {
-      if (tipoTramite || conceptoRaw) addInc("Sin IMPORTE");
+    // Sin concepto no hay nada que facturar. Las filas que además vienen sin
+    // trámite ni importe son relleno de la hoja y se saltan sin incidencia.
+    if (!conceptoRaw) {
+      if (tipoTramite || tieneImporte) addInc("Sin CONCEPTO FACT");
       continue;
     }
-    if (!conceptoRaw) {
-      addInc("Sin CONCEPTO FACT");
+    // Un IMPORTE ilegible no cae a la tarifa: facturaría algo distinto de lo
+    // que el usuario quiso teclear y nadie lo notaría.
+    if (importePuntual.error !== undefined) {
+      addInc(
+        `IMPORTE '${importePuntual.error}' no es un número válido — corrige la celda o déjala vacía`
+      );
+      continue;
+    }
+    if (importePuntual.valor !== null && importePuntual.valor <= 0) {
+      addInc(`IMPORTE ${importePuntual.valor} no válido: debe ser mayor que 0`);
       continue;
     }
 
@@ -147,19 +175,32 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       continue;
     }
 
-    // 3. Tarifa
-    const tarifa = mapeos.tarifas.resolve(conceptoRaw);
-    if (tarifa === null) {
-      const motivo = mapeos.tarifas.missReason(conceptoRaw);
-      addInc(`Tarifa concepto '${conceptoRaw}' no resoluble: ${motivo}`);
-      continue;
-    }
-
-    // 4. QC importe origen vs tarifa (unidades=1)
-    if (Math.abs(importeOrigen - tarifa) > Math.max(0.01, tarifa * 0.01)) {
-      warningsQc.push(
-        `Fila ${filaIdx}: IMPORTE origen ${importeOrigen.toFixed(2)}€ != tarifa ${tarifa.toFixed(2)}€ (concepto ${conceptoRaw})`
-      );
+    // 3. Precio: manda el IMPORTE de la fila; si viene vacío, la tarifa del
+    // catálogo. Con IMPORTE la fila se factura aunque el concepto no tenga
+    // tarifa (ESCALADO o sin precio); sin él, no hay de dónde sacar el importe.
+    const tarifaCatalogo = mapeos.tarifas.resolve(conceptoRaw);
+    let importeAplicado;
+    if (importePuntual.valor !== null) {
+      importeAplicado = importePuntual.valor;
+      importesPuntuales++;
+      // Se avisa solo de la discrepancia: es el caso que merece revisión.
+      if (
+        tarifaCatalogo !== null &&
+        Math.abs(importeAplicado - tarifaCatalogo) > Math.max(0.01, tarifaCatalogo * 0.01)
+      ) {
+        warningsQc.push(
+          `Fila ${filaIdx}: IMPORTE puntual ${importeAplicado.toFixed(2)}€ != tarifa catálogo ${tarifaCatalogo.toFixed(2)}€ (concepto ${conceptoRaw}) — se factura el puntual`
+        );
+      }
+    } else {
+      if (tarifaCatalogo === null) {
+        const motivo = mapeos.tarifas.missReason(conceptoRaw);
+        addInc(
+          `Tarifa concepto '${conceptoRaw}' no resoluble: ${motivo} — rellena IMPORTE en la fila para facturarla`
+        );
+        continue;
+      }
+      importeAplicado = tarifaCatalogo;
     }
 
     // La fila se factura igual sin fecha; solo se pierde el dato en la
@@ -176,11 +217,11 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       codigo_cliente: pad5(clienteEfectivo),
       codigo_concepto: conceptoRaw,
       fecha: fechaFactura,
-      descripcion: buildDescripcion(tipoTramite, fecha),
+      descripcion: buildDescripcion(tipoTramite, observacion, fecha),
       tipo_iva: TIPO_IVA,
       unidades: 1,
       importe_gastos: "",
-      importe_honorarios: Math.round(tarifa * 100) / 100,
+      importe_honorarios: Math.round(importeAplicado * 100) / 100,
       codigo_expediente: codigoExpediente,
       descripcion_ampliada: nombreTrab,
     });
@@ -200,6 +241,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
     conceptos: conceptos.length,
     incidencias: incidencias.length,
     warnings_qc: warningsQc.length,
+    importes_puntuales: importesPuntuales,
     importe_total: Math.round(total * 100) / 100,
   };
 }
