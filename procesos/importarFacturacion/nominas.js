@@ -6,7 +6,8 @@ const {
   _toInt,
   _toDate,
   leerImporte,
-  conFecha,
+  fechaCorta,
+  repartirDescripcion,
   pad5,
   isoDate,
   ensureDir,
@@ -48,21 +49,26 @@ function isNominasHeader(cols) {
   );
 }
 
-// La fecha es la de la fila del archivo del cliente: ya no decide cuándo se
-// factura (eso lo fija el formulario), solo documenta a qué día corresponde el
-// trabajo. Si la fila no la trae, la descripción sale sin ella.
-function buildDescripcion(tipoTramite, observacion, fecha) {
-  const base = (tipoTramite || "").replace(/[ -]+$/, "").trim() || "Nóminas";
+// A3 solo guarda 50 caracteres en la Descripción. Ahí va el concepto —el tipo de
+// trabajo más, si viene, el número de nóminas, que es parte de la identidad de la
+// línea igual que el periodo en pagos— recortado por palabra. El resto (texto
+// íntegro del concepto si no cupo, nombre del trabajador, observación en texto y
+// fecha de la fila) se conserva en la Descripción Ampliada. La fecha ya no va en
+// la Descripción: A3 trae su propia columna Fecha en la línea.
+function buildLinea(tipoTramite, observacion, nombreTrab, fecha) {
+  const base = _str(tipoTramite).replace(/[ -]+$/, "").trim() || "Nóminas";
   const obsInt = _toInt(observacion);
-  let texto = base;
+  let concepto = base;
+  const extras = [nombreTrab];
   if (obsInt && obsInt > 0) {
     const plural = obsInt !== 1 ? "s" : "";
-    texto = `${base} - ${obsInt} nómina${plural}`;
+    concepto = `${base} - ${obsInt} nómina${plural}`;
   } else {
-    const obs = _str(observacion);
-    if (obs) texto = `${base} - ${obs}`;
+    const obs = _str(observacion).replace(/[ \-.]+$/, "").trim();
+    if (obs && obs.toLowerCase() !== base.toLowerCase()) extras.push(obs);
   }
-  return conFecha(texto, fecha);
+  if (fecha) extras.push(fechaCorta(fecha));
+  return repartirDescripcion(concepto, extras);
 }
 
 async function transform(inputPath, mapeos, outputDir, options = {}) {
@@ -208,27 +214,28 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
       importeAplicado = tarifaCatalogo;
     }
 
-    // La fila se factura igual sin fecha; solo se pierde el dato en la
-    // descripción. Se avisa aquí y no antes para no reportar filas que después
-    // se descartan por otro motivo.
+    // La fila se factura igual sin fecha; solo se pierde ese dato en la
+    // descripción ampliada. Se avisa aquí y no antes para no reportar filas que
+    // después se descartan por otro motivo.
     if (!fecha) {
       warningsQc.push(
-        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la descripción sale sin fecha`
+        `Fila ${filaIdx}: sin FECHA válida en el archivo — se factura igual, la ampliada sale sin la fecha de la nómina`
       );
     }
 
+    const linea = buildLinea(tipoTramite, observacion, nombreTrab, fecha);
     conceptos.push({
       empresa: EMPRESA_FACTURADORA,
       codigo_cliente: pad5(clienteEfectivo),
       codigo_concepto: conceptoRaw,
       fecha: fechaFactura,
-      descripcion: buildDescripcion(tipoTramite, observacion, fecha),
+      descripcion: linea.descripcion,
       tipo_iva: TIPO_IVA,
       unidades,
       importe_gastos: "",
       importe_honorarios: Math.round(importeAplicado * 100) / 100,
       codigo_expediente: codigoExpediente,
-      descripcion_ampliada: nombreTrab,
+      descripcion_ampliada: linea.ampliada,
     });
   }
 

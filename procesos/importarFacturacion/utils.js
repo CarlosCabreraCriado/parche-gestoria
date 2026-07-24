@@ -94,6 +94,47 @@ function conFecha(base, fecha, max = 250) {
   return texto.slice(0, Math.max(0, max - sufijo.length)) + sufijo;
 }
 
+// Límites reales de A3 en la línea de "concepto pendiente" (medidos 2026-07-24,
+// ver procesos/importarFacturacion/prueba-limite-a3/): la Descripción es un campo
+// de ancho fijo de 50 caracteres —lo que pase de ahí lo descarta A3— y la
+// Descripción Ampliada admite del orden de 500.
+const LIMITE_DESC = 50;
+const LIMITE_DESC_AMPLIADA = 500;
+
+// Recorta `texto` a `max` caracteres sin partir palabras: corta en el último
+// espacio que quepa y limpia la puntuación de cola, para que la línea no acabe a
+// mitad de palabra. Si la primera palabra ya excede `max` (no hay ningún
+// espacio), corta a pelo para no devolver una cadena vacía.
+function recortarPorPalabra(texto, max) {
+  const s = String(texto ?? "").trim();
+  if (s.length <= max) return s;
+  const trozo = s.slice(0, max);
+  const corte = trozo.lastIndexOf(" ");
+  const base = corte > 0 ? trozo.slice(0, corte) : trozo;
+  return base.replace(/[\s\-–—.,;:]+$/, "").trim() || trozo.trim();
+}
+
+// Reparte un concepto y su detalle entre Descripción (50) y Descripción Ampliada
+// (500). Como A3 solo guarda 50 caracteres de la Descripción, ahí va el concepto
+// recortado por palabra; si no cupo entero, su texto ÍNTEGRO se conserva al
+// inicio de la Ampliada (así no se pierde nada) seguido del resto del detalle
+// (nombre, observación...). Normaliza espacios y saltos de línea a un solo
+// espacio para que los textos multilínea del catálogo salgan en una sola línea.
+// Devuelve { descripcion, ampliada }.
+function repartirDescripcion(concepto, extras = []) {
+  const norm = (x) => String(x ?? "").replace(/\s+/g, " ").trim();
+  const texto = norm(concepto);
+  const descripcion = recortarPorPalabra(texto, LIMITE_DESC);
+  const partes = [];
+  if (texto.length > LIMITE_DESC) partes.push(texto);
+  for (const e of extras) {
+    const s = norm(e);
+    if (s) partes.push(s);
+  }
+  const ampliada = recortarPorPalabra(partes.join(" · "), LIMITE_DESC_AMPLIADA);
+  return { descripcion, ampliada };
+}
+
 function pad5(n) {
   const s = String(n);
   return s.length >= 5 ? s : "0".repeat(5 - s.length) + s;
@@ -296,6 +337,10 @@ module.exports = {
   fechaDesdeFormulario,
   fechaCorta,
   conFecha,
+  LIMITE_DESC,
+  LIMITE_DESC_AMPLIADA,
+  recortarPorPalabra,
+  repartirDescripcion,
   pad5,
   isoDate,
   stampYYYYMMDDHHmm,

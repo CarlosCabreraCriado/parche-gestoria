@@ -6,6 +6,9 @@ const {
   _toInt,
   _toDate,
   conFecha,
+  recortarPorPalabra,
+  LIMITE_DESC,
+  LIMITE_DESC_AMPLIADA,
   pad5,
   isoDate,
   ensureDir,
@@ -17,7 +20,6 @@ const {
 const EMPRESA_FACTURADORA = 14;
 const CODIGO_CONCEPTO_DEFAULT = "3.010";
 const TIPO_IVA = 3;
-const LIMITE_DESC_AMPLIADA = 500;
 
 // El cliente manda dos formatos de listado y ambos deben funcionar:
 //   - v1 ("FACT NOTIFICACIONES"): cabecera en DOS filas, con los nombres destino
@@ -81,7 +83,9 @@ function normalizarConcepto(raw) {
 // cuándo se factura (eso lo fija el formulario), solo documenta a qué día
 // corresponde el aviso. Si la fila no la trae, la descripción sale sin ella.
 function buildDescripcion(fecha) {
-  return conFecha("Aviso Notificación", fecha);
+  // Fija y corta ("Aviso Notificación - dd/mm/aaaa", ~31); el recorte a 50 solo
+  // blinda el límite de A3, igual que en el resto de importadores.
+  return recortarPorPalabra(conFecha("Aviso Notificación", fecha), LIMITE_DESC);
 }
 
 // Aquí va el detalle. Importa más que antes: como la descripción corta ya no

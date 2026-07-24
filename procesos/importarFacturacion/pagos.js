@@ -10,6 +10,8 @@ const {
   readAbsoluteRows,
   resolveHeaderColumns,
   writeCsv,
+  repartirDescripcion,
+  LIMITE_DESC_AMPLIADA,
 } = require("./utils");
 
 const EMPRESA_FACTURADORA = 14;
@@ -201,13 +203,13 @@ function locateZonaA(sheetName, rows) {
 
 // El catálogo describe el concepto ("Modelo 111 -"); la etiqueta del periodo la
 // pone la corrida. Se limpia la puntuación de cola con la que vienen varios
-// nombres del catálogo para no acabar en "Modelo 111 - - 2T 2026".
-function buildDescripcion(nombreConcepto, concepto, periodo) {
+// nombres del catálogo para no acabar en "Modelo 111 - - 2T 2026". El recorte a
+// 50 (Descripción de A3) y el reparto a la ampliada los hace repartirDescripcion
+// en el punto de llamada; aquí solo se compone la línea completa del concepto.
+function buildConceptoLinea(nombreConcepto, concepto, periodo) {
   const base = _str(nombreConcepto).replace(/[\s\-–—.,;:]+$/, "") || `Concepto ${concepto}`;
-  return `${base} - ${periodo.etiqueta}`.slice(0, 250);
+  return `${base} - ${periodo.etiqueta}`;
 }
-
-const LIMITE_DESC_AMPLIADA = 500;
 
 // Solo la razón social. El NIF se quitó a petición del cliente: es dato de
 // control que ya vive en la Zona B de la plantilla, no en la factura. Sigue
@@ -486,21 +488,22 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
           stats.precios_escalados++;
         }
 
+        const reparto = repartirDescripcion(
+          buildConceptoLinea(mapeos.tarifas.describe(cod), cod, periodo),
+          [buildDescAmpliada(empresa, linea.escala ? empleados : null)]
+        );
         conceptos.push({
           empresa: EMPRESA_FACTURADORA,
           codigo_cliente: pad5(clienteEfectivo),
           codigo_concepto: cod,
           fecha: fechaLinea,
-          descripcion: buildDescripcion(mapeos.tarifas.describe(cod), cod, periodo),
+          descripcion: reparto.descripcion,
           tipo_iva: TIPO_IVA,
           unidades: UNIDADES,
           importe_gastos: "",
           importe_honorarios: Math.round(importeAplicado * 100) / 100,
           codigo_expediente: codigoExpediente,
-          descripcion_ampliada: buildDescAmpliada(
-            empresa,
-            linea.escala ? empleados : null
-          ),
+          descripcion_ampliada: reparto.ampliada,
         });
         stats.conceptos++;
       }
