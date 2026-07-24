@@ -152,21 +152,72 @@ function normalizeHeader(value) {
 //   - cols:    { campoLogico -> índice de columna (0-based) } para los encontrados
 //   - present: Map(cabeceraNormalizada -> índice) de todas las cabeceras
 // Se usa el primer sinónimo presente y la primera aparición de cada cabecera.
-function resolveHeaderColumns(headerCells, synonyms) {
+//
+// El emparejamiento tiene dos niveles. El NIVEL 1 (exacto) es la vía principal:
+// determinista y sin falsos positivos. El NIVEL 2 (por prefijo, opt-in con
+// `fuzzy`) solo actúa sobre lo que el nivel 1 no resolvió, para tolerar variantes
+// del cliente —plural, sufijos— sin listar cada una. Su regla de oro: ante la
+// menor ambigüedad NO asigna. En una importación de facturación es preferible
+// dejar un campo sin resolver (dato de menos, error claro) a capturar la columna
+// equivocada en silencio y facturar mal.
+function resolveHeaderColumns(headerCells, synonyms, options = {}) {
+  const { fuzzy = false, minRoot = 4 } = options;
   const present = new Map();
   (headerCells || []).forEach((cell, idx) => {
     const nk = normalizeHeader(cell);
     if (nk && !present.has(nk)) present.set(nk, idx);
   });
+
   const cols = {};
+  const claimed = new Set(); // índices de columna ya asignados
+
+  // Nivel 1 — coincidencia EXACTA del nombre normalizado con un sinónimo.
   for (const [field, names] of Object.entries(synonyms)) {
     for (const n of names) {
       if (present.has(n)) {
         cols[field] = present.get(n);
+        claimed.add(present.get(n));
         break;
       }
     }
   }
+
+  if (!fuzzy) return { cols, present };
+
+  // Nivel 2 — por prefijo, solo para campos aún sin resolver y columnas aún sin
+  // dueño. Una cabecera es candidata de un campo si EMPIEZA por alguno de sus
+  // sinónimos (raíz de longitud >= minRoot, para que raíces cortas no capturen de
+  // más): así "observacion" capta "OBSERVACIONES" o "OBSERVACION 2" sin enumerar
+  // cada variante. Se asigna solo con correspondencia ÚNICA EN AMBOS SENTIDOS:
+  // una sola columna candidata para el campo Y esa columna no candidata de ningún
+  // otro campo pendiente. Cualquier ambigüedad se deja sin asignar.
+  const unresolved = Object.keys(synonyms).filter((f) => cols[f] === undefined);
+  const avail = [...present.entries()].filter(([, idx]) => !claimed.has(idx));
+
+  const candByField = new Map(); // field -> [idx, ...]
+  const fieldsByIdx = new Map(); // idx -> Set(field) que la reclaman
+  for (const field of unresolved) {
+    const roots = synonyms[field].filter((n) => n.length >= minRoot);
+    const cand = [];
+    for (const [key, idx] of avail) {
+      if (roots.some((r) => key.startsWith(r))) {
+        cand.push(idx);
+        if (!fieldsByIdx.has(idx)) fieldsByIdx.set(idx, new Set());
+        fieldsByIdx.get(idx).add(field);
+      }
+    }
+    candByField.set(field, cand);
+  }
+
+  for (const field of unresolved) {
+    const cand = candByField.get(field);
+    if (cand.length !== 1) continue; // 0 = ninguna; >1 = ambigua para el campo
+    const idx = cand[0];
+    if (fieldsByIdx.get(idx).size !== 1) continue; // otra columna la disputa
+    cols[field] = idx;
+    claimed.add(idx);
+  }
+
   return { cols, present };
 }
 
@@ -184,9 +235,11 @@ const HEADER_SCAN_ROWS = 30;
 //     inferior (p.ej. notificaciones: nombres A3 en la fila 1 y nombres A–E en
 //     la fila 2). El `headerRow` devuelto es la fila inferior; los datos
 //     empiezan en headerRow + 1.
+//   - fuzzy: activa el nivel 2 (por prefijo) de resolveHeaderColumns para
+//     tolerar variantes de nombre del cliente (plural, sufijos). Ver esa función.
 // Devuelve { sheet, sheetName, headerRow, cols } o null si no la encuentra.
 function locateHeaderTable(workbook, synonyms, isHeader, options = {}) {
-  const { scanRows = HEADER_SCAN_ROWS, mergeUp = false } = options;
+  const { scanRows = HEADER_SCAN_ROWS, mergeUp = false, fuzzy = false } = options;
   for (const sheet of workbook.sheets()) {
     const { rows } = readAbsoluteRows(sheet);
     if (!rows.length) continue;
@@ -207,7 +260,7 @@ function locateHeaderTable(workbook, synonyms, isHeader, options = {}) {
               : cells[c];
         }
       }
-      const { cols } = resolveHeaderColumns(header, synonyms);
+      const { cols } = resolveHeaderColumns(header, synonyms, { fuzzy });
       if (isHeader(cols)) {
         return { sheet, sheetName: sheet.name(), headerRow: rowIndex, cols };
       }

@@ -107,6 +107,7 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
   const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNotificacionesHeader, {
     mergeUp: true,
+    fuzzy: true,
   });
   if (!table) {
     throw new Error(

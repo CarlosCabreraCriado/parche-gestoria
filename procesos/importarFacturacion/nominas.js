@@ -27,7 +27,10 @@ const HEADER_SYNONYMS = {
   empresa: ["empresa", "razonsocial"],
   nombre_trab: ["nombretrabajador", "nombretrab", "trabajador"],
   fecha: ["fecha"],
-  observacion: ["observacion"],
+  // Aquí OBSERVACION lleva el nº de nóminas (unidades). Mismas variantes que en
+  // trámites: singular, plural y abreviatura; con `fuzzy` el prefijo capta las
+  // demás "OBSERVACION…" y "obs" va explícito por ser más corta que la raíz.
+  observacion: ["observacion", "observaciones", "obs"],
   tipo_tramite: ["tipotramite"],
   concepto: ["conceptofact", "concepto"],
   // Precio puntual POR UNIDAD (por nómina, no total de la fila). Su valor es
@@ -74,7 +77,9 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   }
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
-  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNominasHeader);
+  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isNominasHeader, {
+    fuzzy: true,
+  });
   if (!table) {
     throw new Error(
       `No se encontró la tabla de nóminas en '${path.basename(inputPath)}'. ` +

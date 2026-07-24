@@ -28,7 +28,11 @@ const HEADER_SYNONYMS = {
   empresa: ["empresa", "razonsocial"],
   nombre_trab: ["nombretrabajador", "nombretrab", "trabajador"],
   fecha: ["fecha"],
-  observacion: ["observacion"],
+  // Variantes reales del cliente: singular, plural y abreviatura. Además, con
+  // `fuzzy` (ver locateHeaderTable) "observacion" capta por prefijo cualquier
+  // "OBSERVACION…" que no esté listada; "obs" se pone explícito porque es más
+  // corta que la raíz mínima y el nivel por prefijo no la alcanzaría.
+  observacion: ["observacion", "observaciones", "obs"],
   tipo_tramite: ["tipotramite"],
   concepto: ["conceptofact", "concepto"],
   // Precio puntual de la fila. Su VALOR es opcional: vacío = tarifa del
@@ -74,7 +78,9 @@ async function transform(inputPath, mapeos, outputDir, options = {}) {
   }
 
   const workbook = await XlsxPopulate.fromFileAsync(path.normalize(inputPath));
-  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isTramitesHeader);
+  const table = locateHeaderTable(workbook, HEADER_SYNONYMS, isTramitesHeader, {
+    fuzzy: true,
+  });
   if (!table) {
     throw new Error(
       `No se encontró la tabla de trámites en '${path.basename(inputPath)}'. ` +
